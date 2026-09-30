@@ -1,0 +1,19 @@
+{
+  "name": "Arduino Rüya Atölyesi",
+  "short_name": "Rüya Atölyesi",
+  "description": "Hayalindeki Arduino projesini yaz, yapay zekâ adım adım yapım rehberi hazırlasın.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a0f1c",
+  "theme_color": "#0a0f1c",
+  "lang": "tr",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

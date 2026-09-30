@@ -1,0 +1,13 @@
+{
+  "app": "arduino-ruya-atolyesi",
+  "kind": "fiyat-katalogu",
+  "version": 1,
+  "note": "Depoda tutulan varsayılan öğretmen kataloğu — okulun fiyatlarıyla güncelleyip dağıtın. Ayarlar > JSON İçe Aktar ile veya bu dosyayı elle düzenleyerek.",
+  "prices": {
+    "Arduino Uno": 8,
+    "SG90 servo motor": 2,
+    "10kΩ direnç": 0.08,
+    "220Ω direnç": 0.08
+  },
+  "budget": 25
+}

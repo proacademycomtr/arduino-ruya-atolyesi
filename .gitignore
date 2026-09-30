@@ -1,0 +1,17 @@
+# Derleme çıktısı (build.py ile yeniden üretilir ama GitHub Pages için dist'te tutulur)
+# dist/ klasörünü repo'da TUTUYORUZ — tek dosyalık dağıtım GitHub Pages'te kullanılıyor.
+
+# macOS
+.DS_Store
+
+# Editör
+.vscode/
+.idea/
+*.swp
+
+# Geçici dosyalar
+*.tmp
+*.log
+
+# Freebuff çalışma alanı
+.freebuff/

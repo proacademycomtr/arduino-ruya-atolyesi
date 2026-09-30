@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Hayalindeki Arduino projesini yaz, yapay zekâ senin için adım adım yapım rehberi hazırlasın." />
+  <title>Arduino Rüya Atölyesi — Hayalindeki Projeyi Gerçekleştir</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0a0f1c" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A4%96%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+
+  <!-- ══════════════════ HEADER ══════════════════ -->
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="logo" href="#top" aria-label="Arduino Rüya Atölyesi">
+        <svg class="logo-mark" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+          <rect x="2" y="10" width="44" height="28" rx="4" fill="var(--teal)" opacity=".15"/>
+          <rect x="2" y="10" width="44" height="28" rx="4" stroke="var(--teal)" stroke-width="2.5"/>
+          <circle cx="15" cy="24" r="6.5" stroke="var(--teal)" stroke-width="2.5"/>
+          <path d="M31 18.5l6.5 11M37.5 18.5l-6.5 11" stroke="var(--teal)" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <span class="logo-text">Arduino <em>Rüya Atölyesi</em></span>
+      </a>
+      <div class="header-actions">
+        <button class="btn btn-ghost theme-toggle" id="themeToggle" type="button" aria-label="Tema değiştir" title="Tema değiştir">🌙</button>
+        <button class="btn btn-ghost theme-toggle lang-toggle" id="langToggle" type="button" aria-label="Dil değiştir" title="Switch language">EN</button>
+        <div class="ai-status" id="aiStatus" data-state="demo" title="">
+          <span class="status-dot"></span>
+          <span class="status-label">Demo Modu</span>
+        </div>
+        <a class="btn btn-ghost" id="libraryBtn" href="#kutuphane">📚 Kütüphane</a>
+        <button class="btn btn-ghost" id="archiveBtn" type="button">🗂️ Arşiv<span class="count-badge" id="archiveCount">0</span></button>
+        <button class="btn btn-ghost" id="badgesBtn" type="button" title="Sertifikalar ve geri bildirimler">🏅 Başarımlar<span class="count-badge" id="badgesCount">0</span></button>
+        <button class="btn btn-ghost" id="classBtn" type="button" title="Öğrenci ilerlemesini takip et">🏫 Sınıf Modu</button>
+        <button class="btn btn-ghost" id="openSettings" type="button">⚙️ Ayarlar</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- ══════════════════ HERO ══════════════════ -->
+    <section class="hero">
+      <div class="circuit-bg" aria-hidden="true">
+        <svg viewBox="0 0 1440 600" preserveAspectRatio="xMidYMid slice">
+          <g class="trace trace-1">
+            <path d="M-40 120 H320 V260 H560 V180 H900"/>
+            <circle cx="900" cy="180" r="5"/>
+          </g>
+          <g class="trace trace-2">
+            <path d="M1480 90 H1120 V300 H840 V430 H500"/>
+            <circle cx="500" cy="430" r="5"/>
+          </g>
+          <g class="trace trace-3">
+            <path d="M-40 480 H240 V380 H520 V520 H880"/>
+            <circle cx="880" cy="520" r="5"/>
+          </g>
+          <g class="trace trace-4">
+            <path d="M1480 540 H1200 V460 H980"/>
+            <circle cx="980" cy="460" r="5"/>
+          </g>
+        </svg>
+      </div>
+      <div class="hero-content">
+        <p class="hero-eyebrow">🤖 Yapay Zekâ Destekli Öğrenme Atölyesi</p>
+        <h1 id="heroH1">Hayalindeki projeyi yaz,<br /><span class="grad-text">gerçekleştirmenin yolunu öğren.</span></h1>
+        <p class="hero-sub" id="heroSub">
+          Robot kol, akıllı sera, çizgi izleyen araç… Aklındaki Arduino projesini tek cümleyle anlat.
+          Sana <strong>malzeme listesi</strong>, <strong>devre bağlantıları</strong>, <strong>adım adım yapım rehberi</strong>
+          ve <strong>çalışan kod</strong> hazırlayalım.
+        </p>
+      </div>
+
+      <!-- ────────── GİRDİ FORMU ────────── -->
+      <div class="idea-panel" id="ideaPanel">
+        <form id="ideaForm" autocomplete="off">
+          <label for="ideaInput" class="idea-label">Senin hayalin hangi proje? ✨</label>
+          <textarea
+            id="ideaInput"
+            name="idea"
+            rows="3"
+            maxlength="1200"
+            placeholder="Örn: Sıcaklığı ölçüp fanı otomatik çalıştıran bir akıllı sera yapabilir miyim?"
+            required
+          ></textarea>
+          <div class="panel-footer">
+            <div class="hint-row">
+              <span class="char-count" id="charCount">0 / 1200</span>
+              <span class="hint">İpucu: Amaç, sensör ve ortam bilgisi verirsen rehber çok daha isabetli olur.</span>
+            </div>
+            <div class="cost-hint" id="costHint" aria-live="polite"></div>
+            <div class="voice-row" id="voiceRow" hidden>
+              <button type="button" class="voice-btn" id="voiceBtn" title="Mikrofonla anlat" aria-label="Sesli giriş">🎤</button>
+              <span class="voice-status" id="voiceStatus"></span>
+            </div>
+            <button class="btn btn-primary btn-generate" id="generateBtn" type="submit">
+              <span class="btn-text">🚀 Rehberi Oluştur</span>
+            </button>
+          </div>
+        </form>
+
+        <!-- ────────── YÜKLEME DURUMU ────────── -->
+        <div class="loader" id="loader" hidden>
+          <div class="loader-chip"><span class="pulse"></span><span id="loaderText">Hayalin analiz ediliyor…</span></div>
+        </div>
+
+        <div class="error-banner" id="errorBanner" hidden>
+          <strong>Oops! Bir sorun oldu.</strong>
+          <p id="errorText"></p>
+          <button type="button" class="btn btn-ghost btn-small" id="dismissError">Kapat</button>
+        </div>
+      </div>
+
+      <!-- ────────── HIZLI FİKİR ÇİPLERİ ────────── -->
+      <div class="chips-row" aria-label="Örnek proje fikirleri">
+        <span class="chips-title">Fikirine mi bakıyorsun?</span>
+        <button class="chip" type="button">🚗 Çizgi izleyen yarış arabası</button>
+        <button class="chip" type="button">🌡️ Odam için akıllı termostat</button>
+        <button class="chip" type="button">🌱 Otomatik sulayan akıllı saksı</button>
+        <button class="chip" type="button">🚨 Hareket algılayan güvenlik sistemi</button>
+        <button class="chip" type="button">🦾 Basit robot kol</button>
+      </div>
+    </section>
+
+    <!-- ══════════════════ SONUÇ ══════════════════ -->
+    <section class="result-section" id="resultSection" hidden>
+      <div class="result-card" id="resultCard" aria-live="polite">
+        <!-- Rehber buraya doldurulur -->
+      </div>
+    </section>
+
+    <!-- ══════════════════ NASIL ÇALIŞIR ══════════════════ -->
+    <section class="how-it-works">
+      <h2>Nasıl çalışır?</h2>
+      <div class="steps-grid">
+        <div class="step-card">
+          <div class="step-num">1</div>
+          <h3>Hayalini Anlat</h3>
+          <p>Yapmak istediğin projeyi kendi cümlelerinle yaz. Detay ne kadar fazlaysa rehber o kadar özelleşir.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-num">2</div>
+          <h3>Yapay Zekâ Planlasın</h3>
+          <p>AI; malzeme listesi, bağlantı şeması, güvenlik notları ve adım adım rehberi hazırlar.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-num">3</div>
+          <h3>Uygula &amp; Öğren</h3>
+          <p>Kodu kopyala, devreyi kur, çalıştır. Her adımda ne yaptığını ve neden yaptığını anla.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ══════════════════ AYARLAR MODALI ══════════════════ -->
+  <div class="modal-overlay" id="settingsModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="modal-head">
+        <h2 id="settingsTitle">⚙️ Yapay Zekâ Ayarları</h2>
+        <button class="modal-close" id="closeSettings" type="button" aria-label="Kapat">✕</button>
+      </div>
+      <p class="modal-desc" id="settingsDesc">
+        Gerçek yapay zekâ yanıtları için bir API anahtarı gir. Anahtarın <strong>yalnızca bu tarayıcıda</strong>
+        saklanır, hiçbir sunucuya gönderilmez.
+      </p>
+      <form id="settingsForm">
+        <div class="field-group">
+          <label for="providerSelect">AI Sağlayıcısı</label>
+          <select id="providerSelect">
+            <option value="gemini">Google Gemini</option>
+            <option value="openai">OpenAI (ChatGPT)</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label for="apiKeyInput">API Anahtarı</label>
+          <input type="password" id="apiKeyInput" placeholder="API anahtarını buraya yapıştır" autocomplete="off" />
+          <p class="field-hint" id="keyHint">Gemini anahtarı almak için: aistudio.google.com → “Get API key”</p>
+        </div>
+        <div class="field-group">
+          <label for="modelInput" data-noI18n style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem">
+            <span>Model <span style="font-weight:400;color:var(--text-dim)">(isteğe bağlı)</span></span>
+            <button type="button" class="btn btn-ghost inline-btn" id="fetchModelsBtn">⬇️ Getir</button>
+          </label>
+          <input type="text" id="modelInput" placeholder="varsayılan model kullanılır" autocomplete="off" spellcheck="false" />
+          <div class="model-picker" id="modelPicker" hidden>
+            <input type="text" id="modelSearch" placeholder="🔍 Ara…" autocomplete="off" />
+            <div class="model-rows" id="modelRows"></div>
+          </div>
+          <p class="field-hint" id="modelHint">Boş bırak → varsayılan model kullanılır</p>
+        </div>
+        <div class="field-group" id="baseURLGroup" hidden>
+          <label for="baseURLInput">Sunucu Adresi (Base URL)</label>
+          <input type="text" id="baseURLInput" placeholder="http://localhost:11434/v1" autocomplete="off" spellcheck="false" />
+          <p class="field-hint">OpenAI uyumlu /v1/chat/completions uç noktası olmalı. Örn: Ollama → <code>http://localhost:11434/v1</code>, LM Studio → <code>http://localhost:1234/v1</code></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="testConnBtn">🔌 Bağlantıyı Test Et</button>
+          <button type="button" class="btn btn-ghost" id="clearKeyBtn">Anahtarı Temizle</button>
+          <button type="submit" class="btn btn-primary">Kaydet</button>
+        </div>
+        <p class="test-result" id="testResult" hidden></p>
+      </form>
+      <div class="field-group" style="margin-top:1.25rem">
+        <h4 style="margin:0 0 0.5rem;font-family:var(--font-display);font-size:0.95rem">💾 Veri Yedeği</h4>
+        <p class="field-hint" style="margin:0 0 0.6rem">Tüm uygulama verini (rehber arşivi, adımlar, sınıf gönderileri, rozetler, geri bildirimler, özel bileşenler) tek dosyaya al; başka bilgisayarda geri yükle.</p>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+          <button type="button" class="btn btn-ghost" id="exportBackupBtn">📤 Yedeği Dışa Aktar</button>
+          <button type="button" class="btn btn-ghost" id="importBackupBtn">📥 Yedeği Geri Yükle</button>
+        </div>
+        <input type="file" id="backupFile" accept="application/json,.json" hidden />
+      </div>
+      <div class="field-group" style="margin-top:1.25rem">
+        <h4 style="margin:0 0 0.5rem;font-family:var(--font-display);font-size:0.95rem">🏷️ Malzeme Fiyat Kataloğu</h4>
+        <p class="field-hint" style="margin:0 0 0.6rem">Okulunun kataloğu farklı mı? Her satıra <code>Parça adı: fiyat (USD)</code> yaz — rehber tablolarında katalog fiyatının yerine geçer. Örn: <code>Arduino Uno: 8</code>, <code>SG90 servo motor = 2,75</code></p>
+        <textarea id="customPricesInput" rows="5" spellcheck="false" style="width:100%;font-family:var(--font-mono);font-size:0.85rem" placeholder="Arduino Uno: 8\nSG90 servo motor = 2,75\nJumper kablolar: 1,5"></textarea>
+        <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem;flex-wrap:wrap">
+          <button type="button" class="btn btn-ghost" id="saveCustomPricesBtn">💾 Fiyatları Kaydet</button>
+          <button type="button" class="btn btn-ghost" id="clearCustomPricesBtn">🧹 Temizle</button>
+          <button type="button" class="btn btn-ghost" id="exportCatalogBtn">📤 JSON Dışa Aktar</button>
+          <button type="button" class="btn btn-ghost" id="importCatalogBtn">📥 JSON İçe Aktar</button>
+          <span class="field-hint" id="customPricesHint" style="margin:0"></span>
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.75rem;flex-wrap:wrap">
+          <label for="budgetInput" style="font-size:0.85rem">🎯 Proje bütçe sınırı (USD):</label>
+          <input type="number" id="budgetInput" min="0" step="1" placeholder="örn. 25" style="width:7rem" />
+          <span class="field-hint" style="margin:0">Toplam aşılırsa malzeme tablosunda ⚠️ kırmızı uyarı çıkar. 0/boş = kapalı.</span>
+        </div>
+        <input type="file" id="catalogFile" accept="application/json,.json" hidden />
+      </div>
+      <div class="field-group" style="margin-top:1.25rem">
+        <h4 style="margin:0 0 0.5rem;font-family:var(--font-display);font-size:0.95rem">📊 Sağlayıcı İstatistikleri</h4>
+        <div id="statsWrap"></div>
+      </div>
+      <div class="field-group" id="priceGroup" style="margin-top:1rem">
+        <label data-noI18n style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem">
+          <span>💰 Model Fiyatı <span style="font-weight:400;color:var(--text-dim)">(USD / 1M token)</span></span>
+          <button type="button" class="btn btn-ghost inline-btn" id="savePriceBtn">💾 Kaydet</button>
+        </label>
+        <div style="display:flex;gap:0.5rem">
+          <input type="number" step="0.01" min="0" id="pricePt" placeholder="girdi fiyatı" title="Girdi (input) fiyatı — USD / 1M token" />
+          <input type="number" step="0.01" min="0" id="priceCt" placeholder="çıktı fiyatı" title="Çıktı (output) fiyatı — USD / 1M token" />
+        </div>
+        <p class="field-hint" id="priceHint">Bilinen modellerde maliyet otomatik hesaplanır.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ BİLEŞEN DETAY MODALI ══════════════════ -->
+  <!-- ══════════════════ SINIF MODU ══════════════════ -->
+  <div class="modal-overlay" id="badgesModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="badgesTitle">
+      <div class="modal-head">
+        <h2 id="badgesTitle">🏅 Başarımlar</h2>
+        <button class="modal-close" id="closeBadges" type="button" aria-label="Kapat">✕</button>
+      </div>
+      <div id="badgesBody"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="classModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="classTitle">
+      <div class="modal-head">
+        <h2 id="classTitle">🏫 Sınıf Modu</h2>
+        <button class="modal-close" id="closeClass" type="button" aria-label="Kapat">✕</button>
+      </div>
+      <div id="classBody"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay comp-modal" id="compModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="compTitle">
+      <div class="modal-head">
+        <h2 id="compTitle">Bileşen</h2>
+        <button class="modal-close" id="closeComp" type="button" aria-label="Kapat">✕</button>
+      </div>
+      <div id="compBody"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ SÜRÜM / CHANGELOG MODALI ══════════════════ -->
+  <div class="modal-overlay" id="changelogModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="changelogTitle">
+      <div class="modal-head">
+        <h2 id="changelogTitle">📦 Sürüm Geçmişi</h2>
+        <button class="modal-close" id="closeChangelog" type="button" aria-label="Kapat">✕</button>
+      </div>
+      <div class="changelog-body" id="changelogBody"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ ARŞİV MODALI ══════════════════ -->
+  <div class="modal-overlay" id="archiveModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="archiveTitle">
+      <div class="modal-head">
+        <h2 id="archiveTitle">🗂️ Benim Projelerim</h2>
+        <button class="modal-close" id="closeArchive" type="button" aria-label="Kapat">✕</button>
+      </div>
+      <div id="archiveContent"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ BİLEŞEN KÜTÜPHANESİ ══════════════════ -->
+  <section class="component-library" id="kutuphane">
+    <h2>📚 Bileşen Kütüphanesi</h2>
+    <p class="lib-sub">Öğrencilerin en çok kullandığı Arduino parçaları — pinleri ve püf noktalarıyla.</p>
+    <div class="lib-io">
+      <span class="io-note">⭐ Özel set: kendi bileşenlerini ekle, JSON ile sınıfınla paylaş — bu tarayıcıda saklanır.</span>
+      <button class="btn btn-ghost btn-small" id="libCustomAddBtn" type="button">➕ Bileşen Ekle</button>
+      <button class="btn btn-ghost btn-small" id="libExportBtn" type="button">📤 Seti Dışa Aktar</button>
+      <button class="btn btn-ghost btn-small" id="libImportBtn" type="button">📥 Set İçe Aktar</button>
+    </div>
+    <input type="file" id="libImportFile" accept="application/json,.json" hidden>
+    <div class="lib-cats" id="libCats"></div>
+    <div class="lib-grid" id="libGrid"></div>
+  </section>
+
+  <footer class="site-footer">
+    <p id="footerText">🤖 <strong>Arduino Rüya Atölyesi</strong> — Öğrenciler için yapay zekâ destekli proje rehberi. Kodu üreten yapay zekâdır, eğlenmek senindir!</p>
+    <button class="btn btn-ghost version-badge" id="versionBadge" type="button" title="Sürüm geçmişi" data-noI18n>v2.1.0</button>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
