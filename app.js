@@ -594,13 +594,22 @@ function renderStats() {
 /* ───────────────────── Form & Çipler ───────────────────── */
 const costHint = $("costHint");
 let costHintTimer = null;
+let costHintSeq = 0;
 ideaInput.addEventListener("input", () => {
   charCount.textContent = `${ideaInput.value.length} / 1200`;
-  // Canlı maliyet ipucu (v2.14.0): yazarken 400ms gecikmeli tahmin
+  // Canlı maliyet ipucu (v2.14.0 demo / v2.16.0 AI): yazarken 400ms gecikmeli tahmin.
+  // Yarış koşulu koruması: yalnızca en yeni girişin sonucu basılır.
   if (!costHint) return;
   clearTimeout(costHintTimer);
   costHintTimer = setTimeout(() => {
-    costHint.textContent = liveCostHint(ideaInput.value);
+    const seq = ++costHintSeq;
+    const val = ideaInput.value;
+    costHint.classList.add("thinking");
+    liveCostHint(val, (msg) => {
+      if (seq !== costHintSeq) return; // bu arada kullanıcı yeniden yazdı
+      costHint.textContent = msg || "";
+      costHint.classList.remove("thinking");
+    });
   }, 400);
 });
 
@@ -872,6 +881,75 @@ function parseGuideJSON(text) {
     if (!(k in guide)) throw new Error(`Model yanıtta '${k}' alanı eksik`);
   }
   return guide;
+}
+
+/* ── AI'lı canlı maliyet tahmini (v2.16.0) ──
+   Kullanıcı fikir yazarken API anahtarı varsa fikri AI'a KISA bir istemle gönderir;
+   AI yalnızca parça listesi (materials) döndürür, estimateCost ile fiyatlanır.
+   Anahtar yoksa/istek başarısızsa mevcut demo-şablon ipucusuna düşer (liveCostHint).
+   Sonuç 10 dk önbelleklenir (aynı metin için tekrar çağrı atmaz). */
+const AI_COST_TTL = 10 * 60 * 1000;
+function buildCostPrompt(idea) {
+  return `Öğrencinin Arduino proje fikri: """${idea}"""
+
+Bu fikir için gereken MALZEME listesini tahmin et. SADECE şu JSON'u döndür, başka hiçbir metin yazma:
+{"materials":[{"name":"parça adı","quantity":"adet"}]}
+
+Kurallar:
+- 4-10 parça; Arduino kartını mutlaka ekle ("Arduino Uno" gibi standart adla).
+- Parça adları yaygın satış adları olsun ("SG90 servo motor", "HC-SR04", "220Ω direnç"…).
+- quantity: "1", "2", "1+10" gibi kısa yazım; açıklama yazma.`;
+}
+async function askAICostMaterials(idea) {
+  const p = currentProvider();
+  const sys = "Sen bir Arduino malzeme uzmanısın. Yalnızca istenen JSON'u döndürürsün, başka hiçbir metin yazmazsın.";
+  const user = buildCostPrompt(idea);
+  let text = "";
+  if (p.id === "gemini") {
+    const model = settings.model || "gemini-2.0-flash";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(settings.apiKey)}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: sys + "\n\n" + user }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 1024, responseMimeType: "application/json" }
+      })
+    });
+    if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
+    const data = await res.json();
+    text = data?.candidates?.[0]?.content?.parts?.map((x) => x.text).join("") || "";
+  } else {
+    const base = p.needsBaseURL ? assertSecureURL(settings.baseURL || "") : OPENAI_COMPAT_ENDPOINTS[p.id];
+    if (!base) throw new Error("uç nokta yok");
+    const model = settings.model || p.defaultModel;
+    if (!model) throw new Error("model yok");
+    const headers = { "Content-Type": "application/json" };
+    if (settings.apiKey) headers.Authorization = `Bearer ${settings.apiKey}`;
+    const res = await fetch(base.replace(/\/+$/, "") + "/chat/completions", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model,
+        temperature: 0.2,
+        max_tokens: 1024,
+        messages: [{ role: "system", content: sys }, { role: "user", content: user }]
+      })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    text = data?.choices?.[0]?.message?.content || "";
+  }
+  let raw = String(text).trim();
+  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) raw = fence[1].trim();
+  const start = raw.indexOf("{"), end = raw.lastIndexOf("}");
+  if (start === -1 || end === -1) throw new Error("JSON yok");
+  const parsed = JSON.parse(raw.slice(start, end + 1));
+  const mats = Array.isArray(parsed && parsed.materials) ? parsed.materials : null;
+  const clean = mats ? mats.filter((m) => m && m.name) : [];
+  if (!clean.length) throw new Error("malzeme yok");
+  return clean.map((m) => ({ name: String(m.name).slice(0, 60), quantity: String(m.quantity || "1").slice(0, 12) }));
 }
 
 /* ───────────────────── Demo Rehber Üretici ───────────────────── */
@@ -2346,8 +2424,10 @@ function budgetSuggestion(totalUSD) {
   return `💡 ${t("Bütçe önerisi")}: ${t("Arduino Uno yerine Arduino Nano kullan")} ($${unoP.toFixed(2)} → $${nanoP.toFixed(2)})`;
 }
 /* Fikir yazarken canlı maliyet ipucu (v2.14.0): metni makeDemoGuide'a verip
-   tahmini fiyatlarız — AI modunda da makul bir "benzer proje" fikri verir. */
-function liveCostHint(text) {
+   tahmini fiyatlarız — v2.16.0'da API anahtarı varsa AI'a gerçek parça listesi
+   sorulur, başarısızlıkta demo şablonuna düşer. */
+const aiCostCache = new Map(); // normalize metin → { ts, materials }
+function liveCostHintSync(text) {
   const s = String(text || "").trim();
   if (s.length < 30) return "";
   try {
@@ -2357,6 +2437,38 @@ function liveCostHint(text) {
     if (est.totalUSD <= 0) return "";
     return t("💡 Bu fikre benzer proje") + " ≈ " + fmtTL(est.totalUSD);
   } catch { return ""; }
+}
+/* Eşzamansız sürüm: AI varsa gerçek parça listesi, yoksa/iffa'da demo ipucu.
+   onDone çıktıyı DOM'a basar (eski bir yanıt geç kalyorsa en yeni metin kazanır). */
+async function liveCostHint(text, onDone) {
+  const s = String(text || "").trim();
+  const sync = liveCostHintSync(s);
+  if (s.length < 30) { if (onDone) onDone(""); return ""; }
+  // Hemen demo ipucunu göster (bekletmesin)
+  if (onDone) onDone(sync);
+  // AI yoksa senkron ipucu nihai
+  if (!hasApiKey()) return sync;
+  const norm = s.toLowerCase().replace(/\s+/g, " ").trim();
+  const hit = aiCostCache.get(norm);
+  if (hit && Date.now() - hit.ts < AI_COST_TTL) {
+    const est = estimateCost({ materials: hit.materials });
+    if (est.totalUSD > 0) {
+      const msg = t("✨ AI tahmini") + " ≈ " + fmtTL(est.totalUSD) + (est.anyUnknown ? "" : "");
+      if (onDone) onDone(msg);
+      return msg;
+    }
+  }
+  try {
+    const mats = await askAICostMaterials(s);
+    aiCostCache.set(norm, { ts: Date.now(), materials: mats });
+    const est = estimateCost({ materials: mats });
+    if (est.totalUSD > 0) {
+      const msg = t("✨ AI tahmini") + " ≈ " + fmtTL(est.totalUSD) + (est.anyUnknown ? ` · ${t("bazı parçalar fiyatlanmadı")}` : "");
+      if (onDone) onDone(msg);
+      return msg;
+    }
+  } catch { /* sessizce demo ipucunda kal */ }
+  return sync;
 }
 
 /* Malzeme adını katalogdaki en uzun eşleşen anahtarla fiyatlandır.
@@ -4729,6 +4841,7 @@ const I18N = {
     "⏳ Kur güncelleniyor…": "⏳ Updating rate…",
     "Kur güncellendi": "Rate updated",
     "❌ Kur alınamadı — internet bağlantısını kontrol et. Saklanan kur kullanılıyor.": "❌ Could not fetch rate — check your connection. Using the stored rate.",
+    "✨ AI tahmini": "✨ AI estimate", "bazı parçalar fiyatlanmadı": "some parts unpriced",
     "Seviye: ": "Level: ", "🧰 Malzemeler:": "🧰 Materials:", "🔗 Bağlantılar:": "🔗 Wiring:",
     "📱 Arduino Rüya Atölyesi'nden paylaşıldı": "📱 Shared from Arduino Dream Workshop",
     "Senin hayalin hangi proje? ✨": "What's your dream project? ✨",
@@ -5344,6 +5457,23 @@ renderLib(currentLibCat);
 applyLang(getLang());
 initChangelogModal();
 initPWA();
+
+/* ── Otomatik kur güncelleme (v2.16.0): açılışta kur 24 saatten eskiyse
+   sessizce çevrimiçi tazelenir; başarılıysa açık rehber yeniden render edilir.
+   Başarısızlık tamamen sessizdir — kullanıcı hiçbir uyarı görmez. */
+(async () => {
+  try {
+    if (rateAgeHours() >= 24) {
+      const r = await updateRateFromWeb();
+      if (r.ok) {
+        updateRateStatus();
+        if (currentGuide) renderGuide(currentGuide, undefined, { scroll: false });
+      }
+    } else {
+      updateRateStatus();
+    }
+  } catch { /* sessiz */ }
+})();
 
 /* 💾 Veri yedeği düğmeleri (Ayarlar modalı) */
 const exportBackupBtn = document.getElementById("exportBackupBtn");

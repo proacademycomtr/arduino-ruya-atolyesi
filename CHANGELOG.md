@@ -2,6 +2,14 @@
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
 
+## [2.16.0] - 2026-09-30
+
+- Sürüm 2.16.0 olarak derlendi.
+- Yeni: ✨ **AI'lı canlı maliyet tahmini** — API anahtarı varsa yazdığın fikir AI'a kısa bir istemle gönderilir, AI gerçek parça listesi döndürür ve o liste fiyatlanır ("✨ AI tahmini ≈ …"). Anahtar yoksa/istek başarısızsa demo şablon ipucusuna sessizce düşer; sonuç 10 dk önbelleklenir, yarış koşulu korumalı (yalnız en yeni girişin cevabı basılır)
+- Yeni: 💱 **Otomatik kur tazeleme** — uygulama açılışında saklanan kur 24 saatten eskiyse çevrimiçi sessizce güncellenir; başarılıysa açık rehber yeni kurla yeniden çizilir
+- Temizlik: sw.js sürüm yorumu netleştirildi (CACHE_NAME build.py ile güncellenmeye devam eder); PWA dosyaları canlı sitede doğrulandı (manifest/icon/sw 200)
+- Not: v2.16.0 testlerle 56/56; AI tahmini için 3 yeni test (istem şeması, gemini yanıtı ayrıştırma/hata yolları, AI/demo fallback + önbellek)
+
 ## [2.15.0] - 2026-09-30
 
 - Sürüm 2.15.0 olarak derlendi.

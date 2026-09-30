@@ -4,7 +4,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { loadCore } = require("./extract.js");
+const { loadCore, loadCoreWithSettings } = require("./extract.js");
 
 /* Demet: her test dosyası app.js'i bir kez yükler (pahalı işlem) */
 const { sandbox, picked: core, missing } = loadCore();
@@ -873,9 +873,9 @@ test("v2.14.0 budgetSuggestion: yalnız aşım varsa Nano önerisi", () => {
   sandbox.localStorage.removeItem(KEY);
 });
 
-test("v2.14.0 liveCostHint: 30+ karakterde tahmin, kısada boş", () => {
-  assert.equal(core.liveCostHint("kısa fikir"), "", "kısada boş");
-  const hint = core.liveCostHint("Odam için sıcaklığı ölçüp lamba yakan otomatik bir gece lambası istiyorum");
+test("v2.14.0 liveCostHint (demo yolu): 30+ karakterde tahmin, kısada boş", async () => {
+  assert.equal(await core.liveCostHint("kısa fikir"), "", "kısada boş");
+  const hint = await core.liveCostHint("Odam için sıcaklığı ölçüp lamba yakan otomatik bir gece lambası istiyorum");
   assert.ok(hint.includes("≈"), "tahmin işareti olmalı: " + hint);
   assert.match(hint, /₺ \(\$[\d.]+\)/, "₺+çift gösterim olmalı");
 });
@@ -924,6 +924,65 @@ test("v2.15.0 updateRateFromWeb: başarılı fetch saklanır, hata session-fallb
   sandbox.fetch = async () => { throw new Error("no network in tests"); }; // extract.js varsayılanına dön
   sandbox.localStorage.removeItem(KEY);
   sandbox.fetch = undefined;
+});
+
+/* ─────────── v2.16.0: AI'lı canlı tahmin ─────────── */
+
+test("v2.16.0 buildCostPrompt: fikri gömer, JSON şeması ister", () => {
+  assert.equal(typeof core.buildCostPrompt, "function");
+  const p = core.buildCostPrompt("akıllı saksı");
+  assert.ok(p.includes("akıllı saksı"), "fikir istemde olmalı");
+  assert.match(p, /"materials"/, "materials şeması istenmeli");
+});
+
+test("v2.16.0 askAICostMaterials: gemini yanıtı ayrıştırılır, bozuk yanıt hata fırlatır", async () => {
+  const vm = require("node:vm");
+  // Gemini akışı (provider: gemini) mock fetch ile
+  const good = JSON.stringify({ materials: [{ name: "Arduino Uno", quantity: "1" }, { name: "LDR fotorezistör", quantity: "1" }, { name: "Jumper kablolar", quantity: "10" }] });
+  sandbox.fetch = async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: good }] } }] }) });
+  const mats = await core.askAICostMaterials("akıllı saksı");
+  assert.equal(mats.length, 3);
+  assert.equal(mats[0].name, "Arduino Uno");
+  assert.ok(mats.every((m) => m.name && m.quantity != null), "normalize edilmeli");
+  // Kod çiti + çöp metin içeren yanıt da ayrışmalı
+  sandbox.fetch = async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: "```json\n" + good + "\n```" }] } }] }) });
+  const mats2 = await core.askAICostMaterials("akıllı saksı");
+  assert.equal(mats2.length, 3);
+  // HTTP hatası → throw
+  sandbox.fetch = async () => ({ ok: false, json: async () => ({}) });
+  await assert.rejects(() => core.askAICostMaterials("x"), /Gemini HTTP/);
+  // Geçersiz malzeme filtrelenir; hepsi geçersizse throw
+  sandbox.fetch = async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: '{"materials":[{"name":""},{"foo":1}]}' }] } }] }) });
+  await assert.rejects(() => core.askAICostMaterials("x"), /malzeme yok/);
+  sandbox.fetch = async () => { throw new Error("no network in tests"); };
+  sandbox.fetch = undefined;
+});
+
+test("v2.16.0 liveCostHint: AI yoksa senkron demo ipucu, AI varsa gerçek listeden tahmin", async () => {
+  const good = JSON.stringify({ materials: [{ name: "Arduino Nano", quantity: "1" }, { name: "Buzzer", quantity: "1" }] });
+  // Ana sandbox (AI'sız): demo ipucu + onDone çağrısı
+  let cb = null;
+  const syncMsg = await core.liveCostHint("Odam için sıcaklığı ölçüp lamba yakan otomatik bir gece lambası istiyorum", (m) => { cb = m; });
+  assert.ok(syncMsg.includes("≈"), "demo ipucu tahmin içermeli");
+  assert.equal(cb, syncMsg, "onDone senkron yolda da çağrılmalı");
+  // API-anahtarlı ayrı sandbox: gerçek AI yolu + önbellek + hata fallback'i
+  const { sandbox: sb2, picked: ai } = loadCoreWithSettings({ provider: "gemini", apiKey: "test-key-1234567890" });
+  assert.equal(ai.hasApiKey(), true, "önceden doldurulmuş settings ile hasApiKey true");
+  sb2.fetch = async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: good }] } }] }) });
+  let got = null;
+  const aiMsg = await ai.liveCostHint("Kapı zili projesi için bütçe hesapla ışıklı butonlu sistem", (m) => { got = m; });
+  assert.match(aiMsg, /AI tahmini/, "AI etiketi olmalı: " + aiMsg);
+  assert.match(aiMsg, /₺ \(\$[\d.]+\)/, "çift para gösterimi olmalı");
+  assert.equal(got, aiMsg);
+  // Önbellek: ikinci çağrı fetch'siz cevap vermeli
+  let fetchCount = 0;
+  sb2.fetch = async () => { fetchCount++; return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: good }] } }] }) }; };
+  await ai.liveCostHint("Kapı zili projesi için bütçe hesapla ışıklı butonlu sistem");
+  assert.equal(fetchCount, 0, "önbellekten gelmeli");
+  // AI hatalı: demo ipucuna düşmeli
+  sb2.fetch = async () => { throw new Error("offline"); };
+  const fallback = await ai.liveCostHint("Robot kolu üç eklemli servo motorlarla hassas hareket eden büyük proje");
+  assert.ok(fallback.includes("≈"), "hata anında demo ipucu dönmeli");
 });
 
 test("v2.8.0 portfolyo: sertifikasız durumda sessizce hata gösterir", () => {

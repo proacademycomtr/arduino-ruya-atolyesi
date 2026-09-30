@@ -1,0 +1,18 @@
+{
+  "name": "arduino-ruya-atolyesi",
+  "version": "1.0.0",
+  "description": "**[🚀 Canlı Demo](https://proacademycomtr.github.io/arduino-ruya-atolyesi/)** — kurulum yok, tarayıcıda aç ve kullan. API anahtarı olmadan da 14 demo rehberle çalışır.",
+  "main": "app.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
+}

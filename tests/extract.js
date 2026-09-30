@@ -131,7 +131,8 @@ function loadCore() {
     "loadCustomPrices", "saveCustomPrices", "parseCustomPrices",
     "loadBudget", "isOverBudget", "parseCatalogJSON", "sortCostRows",
     "loadFileCatalog", "fileCatalogBudget", "budgetSuggestion", "liveCostHint",
-    "loadRate", "rate", "rateAgeHours", "updateRateFromWeb"
+    "loadRate", "rate", "rateAgeHours", "updateRateFromWeb",
+    "liveCostHintSync", "buildCostPrompt", "askAICostMaterials", "aiCostCache"
   ];
   // Sanal ortamda app.js tümüyle çalıştı; örneklemesi gerekenler const/let ise
   // ayrıca değerlendir. window üzerinde export edilenler zaten sandbox'ta.
@@ -173,5 +174,25 @@ function loadCore() {
   }
   return { sandbox, picked, missing };
 }
+/* AI tahmini testleri için ayrı sandbox: settings önceden doldurulmuş storage ile yüklenir.
+   loadCore'un sandbox'ı paylaşmak yerine bağımsız kurar — settings const'ı yükleme anında
+   okunduğu için API-anahtarlı senaryo bu yolla test edilir. */
+function loadCoreWithSettings(settings) {
+  const ls = makeStorage();
+  ls.setItem("arduinoDreamLab.settings.v1", JSON.stringify(settings || {}));
+  const sandbox = loadApp({ storage: ls });
+  // picked setini aynı kurallarla çıkar (loadCore'un names listesi — kısa yol: loadCore'daki
+  // listeyi kopyalamak yerine loadCore'u çağırıp sandbox'ı değiştirmek yanlış olur; burada
+  // yalnız AI-tahmini testlerinde gereken fonksiyonlar vm ile alınır).
+  const names = ["liveCostHint", "liveCostHintSync", "askAICostMaterials", "buildCostPrompt", "aiCostCache", "hasApiKey", "estimateCost", "fmtTL", "rate"];
+  const picked = {};
+  for (const n of names) {
+    let v;
+    try { v = vm.runInContext("typeof " + n + " === 'function' ? " + n + " : (typeof " + n + " !== 'undefined' ? " + n + " : undefined)", sandbox); }
+    catch { v = undefined; }
+    if (typeof v !== "undefined") picked[n] = v;
+  }
+  return { sandbox, picked };
+}
 
-module.exports = { loadApp, loadCore, sliceFunction, makeStorage, APP_JS };
+module.exports = { loadApp, loadCore, loadCoreWithSettings, sliceFunction, makeStorage, APP_JS };

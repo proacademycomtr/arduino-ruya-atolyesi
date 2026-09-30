@@ -2,8 +2,9 @@
    Strateji:
    - App shell (index.html) + manifest + icon: network-first, çevrimdışına cache fallback
    - Google Fonts: cache-first (statik, sürümlü URL'ler)
-   - Diğer isteklere dokunmaz */
-const CACHE_NAME = "arduino-ruya-atolyesi-v2.15.0";
+   - Diğer isteklere dokunmaz
+   CACHE_NAME sürüm etiketi build.py tarafından her derlemede güncellenir. */
+const CACHE_NAME = "arduino-ruya-atolyesi-v2.16.0";
 const APP_SHELL = ["./", "./index.html", "./manifest.json", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
