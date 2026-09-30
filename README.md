@@ -1,5 +1,11 @@
 # 🤖 Arduino Rüya Atölyesi
 
+**[🚀 Canlı Demo](https://proacademycomtr.github.io/arduino-ruya-atolyesi/)** — kurulum yok, tarayıcıda aç ve kullan. API anahtarı olmadan da 14 demo rehberle çalışır.
+
+![sürüm](https://img.shields.io/badge/s%C3%BCr%C3%BCm-v2.14.0-00d1b2) ![test](https://img.shields.io/badge/testler-51%2F51-brightgreen) ![lisans](https://img.shields.io/badge/lisans-MIT-blue) [![Tests](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml/badge.svg)](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml)
+
+> 🎨 **Kart Oluştur** düğmesiyle her rehberden paylaşılabilir proje kartı (PNG) çıkar — README'ye eklemek istediğin kartı bize söyle, buraya koyalım.
+
 Öğrenciler için **yapay zekâ destekli Arduino proje rehberi**. Hayalindeki projeyi bir cümleyle yaz; yapay zekâ sana **malzeme listesi**, **devre bağlantıları**, **adım adım yapım rehberi**, **güvenlik ipuçları** ve **çalışan Arduino kodu** hazırlasın.
 
 ## ✨ Özellikler
