@@ -21,3 +21,19 @@ jobs:
           python3 build.py
           test -f dist/index.html
           grep -q "APP_VERSION" dist/index.html
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Bağımlılıklar
+        run: npm install --no-fund --no-audit
+      - name: Playwright tarayıcısı
+        run: npx playwright install chromium --with-deps
+      - name: Derle
+        run: python3 build.py
+      - name: Uçtan uca tarayıcı testleri (file:// dist)
+        run: node scripts/e2e.mjs

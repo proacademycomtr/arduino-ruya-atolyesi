@@ -40,6 +40,26 @@ Tüm fiyatlar **₺ ana, $ ikincil** gösterilir (kur ≈ 34, bilgi amaçlı).
 - **Canlı maliyet ipucu:** fikir yazarken (30+ karakter) demo rehber üzerinden anlık tahmin: "💡 Bu fikre benzer proje ≈ 646.00₺ ($19.00)".
 - **Sürüm notları sayfası:** bu dosya.
 
+## 🌐 v2.15.0 — Çevrimiçi Kur, Yayın, Katkı Altyapısı
+
+- **Çevrimiçi kur:** Ayarlar'da kur durumu + 🌐 güncelleme düğmesi (exchangerate.host → er-api yedek); localStorage'da saklanır, hata anında saklanan/varsayılan kur (34) kullanılır. Tüm ₺ gösterimleri tek `rate()` fonksiyonundan.
+- **GitHub Pages:** proje `~/Documents/GitHub/arduino-ruya-atolyesi`'ye taşındı, canlı site açıldı.
+- **publish.sh:** test + sürümlü derleme + gh-pages yenileme + push tek komut.
+- **CONTRIBUTING + şablonlar:** katkı rehberi, 🐛/💡 issue şablonları, PR kontrol listesi.
+
+## ✨ v2.16.0 — AI'lı Tahmin, Otomatik Kur, E2E
+
+- **AI'lı canlı tahmin:** API anahtarı varsa fikir AI'a kısa istemle gider, AI gerçek parça listesi döndürür ve fiyatlanır ("✨ AI tahmini ≈ …"); yoksa demo ipucusuna düşer. 10 dk önbellek + yarış koşulu koruması.
+- **Otomatik kur tazeleme:** açılışta kur 24 saatten eskiyse sessiz güncelleme + rehberi yeniden çizme.
+- **E2E testleri:** `scripts/e2e.mjs` — Playwright ile 11 kontrollük tarayıcı testi (tablo, sıralama, bütçe, sertifika, adet kalıcılığı).
+- **PWA doğrulaması:** manifest/icon/sw canlıda 200 + service worker aktif.
+
+## 📊 v2.17.0 — Sınıf Analitiği
+
+- **Haftalık ilerleme grafiği:** sınıf raporunda gönderimlerin tamamlanan adımları haftaya kümelendirilir, son 8 haftanın çubuk grafiği basılır.
+- **Sınıf bütçe planlayıcısı:** Ayarlar'a sınıf mevcudu girilir; rapor mevcut × ortalama proje maliyetiyle tüm sınıfın bütçe ihtiyacını hesaplar ve öğretmen sınırıyla karşılaştırır.
+- **README görseli + CI E2E:** canlı uygulama ekran görüntüsü repoda; GitHub Actions artık Playwright E2E'yi de koşar.
+
 ---
 
-*Fiyatlar ortalama Türkiye perakende tahminleridir; alışveriş listesi değildir. Kur değişimi için Ayarlar'dan özel fiyat girin.*
+*Fiyatlar ortalama Türkiye perakende tahminleridir; alışveriş listesi değildir. Kur Ayarlar'dan çevrimiçi güncellenir (varsayılan 34).*

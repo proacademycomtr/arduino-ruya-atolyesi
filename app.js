@@ -512,21 +512,23 @@ if (catalogFileInput) catalogFileInput.addEventListener("change", (e) => {
   };
   reader.readAsText(file);
   e.target.value = "";
-});
-if (budgetInput) budgetInput.addEventListener("change", () => {
+});if (budgetInput) budgetInput.addEventListener("change", () => {
   const v = parseFloat(budgetInput.value);
   localStorage.setItem(BUDGET_KEY, isFinite(v) && v > 0 ? String(v) : "");
   if (currentGuide) renderGuide(currentGuide, undefined, { scroll: false });
 });
+
 /* ── Çevrimiçi kur (v2.15.0) ── */
 const rateStatus = $("rateStatus");
 const updateRateBtn = $("updateRateBtn");
+const classSizeInput = $("classSizeInput");
 function updateRateStatus() {
   if (!rateStatus) return;
   const o = loadRate();
   const age = rateAgeHours();
   const ageTxt = o.ts ? (age < 1 ? t("az önce") : age < 24 ? Math.round(age) + " " + t("saat önce") : Math.round(age / 24) + " " + t("gün önce")) : t("hiç");
   rateStatus.textContent = `1 USD = ${o.rate.toFixed(2)}₺ (${ageTxt} ${t("güncellendi")})`;
+  if (classSizeInput) classSizeInput.value = loadClassSize() || "";
 }
 if (updateRateBtn) updateRateBtn.addEventListener("click", async () => {
   if (rateStatus) rateStatus.textContent = t("⏳ Kur güncelleniyor…");
@@ -538,6 +540,11 @@ if (updateRateBtn) updateRateBtn.addEventListener("click", async () => {
   } else if (customPricesHint) {
     customPricesHint.textContent = t("❌ Kur alınamadı — internet bağlantısını kontrol et. Saklanan kur kullanılıyor.");
   }
+});
+/* Sınıf mevcudu (v2.17.0): sınıf raporundaki bütçe planlayıcısı için */
+if (classSizeInput) classSizeInput.addEventListener("change", () => {
+  const v = parseInt(classSizeInput.value, 10);
+  localStorage.setItem(CLASS_SIZE_KEY, isFinite(v) && v > 0 ? String(v) : "");
 });
 
 /* ───────────────────── Sağlayıcı İstatistikleri ───────────────────── */
@@ -4842,6 +4849,7 @@ const I18N = {
     "Kur güncellendi": "Rate updated",
     "❌ Kur alınamadı — internet bağlantısını kontrol et. Saklanan kur kullanılıyor.": "❌ Could not fetch rate — check your connection. Using the stored rate.",
     "✨ AI tahmini": "✨ AI estimate", "bazı parçalar fiyatlanmadı": "some parts unpriced",
+    "öğrenci ×": "students ×", "öğretmen bütçesini aşıyor": "over teacher budget",
     "Seviye: ": "Level: ", "🧰 Malzemeler:": "🧰 Materials:", "🔗 Bağlantılar:": "🔗 Wiring:",
     "📱 Arduino Rüya Atölyesi'nden paylaşıldı": "📱 Shared from Arduino Dream Workshop",
     "Senin hayalin hangi proje? ✨": "What's your dream project? ✨",
@@ -5314,6 +5322,54 @@ function leaderboardSVG(subs) {
   return `<h3 style="margin:0 0 4px">${en ? "🏆 Leaderboard — top 10 by progress" : "🏆 Lider Tablosu — ilerlemeye göre ilk 10"}</h3>` +
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img">${rows}</svg>`;
 }
+/* ── Sınıf bütçe planlayıcısı (v2.17.0): öğretmen mevcut girer; sınıf raporu
+   mevcut × proje maliyeti ile toplam bütçe ihtiyacını gösterir. ── */
+const CLASS_SIZE_KEY = "arduinoDreamLab.classSize.v1";
+function loadClassSize() {
+  const v = parseInt(localStorage.getItem(CLASS_SIZE_KEY), 10);
+  return isFinite(v) && v > 0 ? v : 0;
+}
+/* Haftalık ilerleme grafiği (v2.17.0): gönderimlerin ts alanını haftaya göre
+   kümelendirip o hafta tamamlanan toplam adım sayısını çubuk grafiğe döker. */
+function weeklyProgressSVG(subs) {
+  const en = getLang() === "en";
+  // Her gönderim için hafta başlangıcı (Pazartesi, yerel zaman)
+  const mondayOf = (ts) => {
+    const d = new Date(ts);
+    const day = (d.getDay() + 6) % 7; // Pzt=0
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - day);
+    return d.getTime();
+  };
+  const perWeek = new Map(); // hafta → tamamlanan adım sayısı
+  for (const s of subs || []) {
+    const done = Object.keys(s.steps || {}).length;
+    if (!done) continue;
+    const wk = mondayOf(s.ts || Date.now());
+    perWeek.set(wk, (perWeek.get(wk) || 0) + done);
+  }
+  if (!perWeek.size) return "";
+  const weeks = [...perWeek.keys()].sort((a, b) => a - b).slice(-8); // son 8 hafta
+  const W = 500, H = 190, top = 30, bot = 34, barX = 36;
+  const barW = Math.floor((W - barX - 16) / weeks.length) - 8;
+  const max = Math.max(...weeks.map((w) => perWeek.get(w)), 1);
+  const escA = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const bars = weeks.map((wk, i) => {
+    const v = perWeek.get(wk);
+    const h = Math.round((H - top - bot) * v / max);
+    const x = barX + i * (barW + 8);
+    const y = H - bot - h;
+    const d = new Date(wk);
+    const label = d.toLocaleDateString("tr-TR", { day: "2-digit", month: "short" });
+    return `<g><rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="4" fill="#0a7a68"/>` +
+      `<text x="${x + barW / 2}" y="${y - 5}" text-anchor="middle" font-size="11" fill="#1a2233">${v}</text>` +
+      `<text x="${x + barW / 2}" y="${H - 12}" text-anchor="middle" font-size="9" fill="#666">${escA(label)}</text></g>`;
+  }).join("");
+  const title = en ? "📈 Steps completed per week (last 8 weeks)" : "📈 Haftada tamamlanan adımlar (son 8 hafta)";
+  return `<h3 style="margin:14px 0 4px">${title}</h3>` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img">` +
+    `<line x1="${barX - 8}" y1="${H - bot}" x2="${W - 10}" y2="${H - bot}" stroke="#c9c2b0"/>${bars}</svg>`;
+}
 /* Sınıf raporu: gönderimleri A4 dikey sayfalara döken basılı PDF (print-to-PDF) */
 function downloadClassReport() {
   const en = getLang() === "en";
@@ -5348,6 +5404,8 @@ function downloadClassReport() {
   <h2>${en ? "Class code" : "Sınıf kodu"}: ${esc2(c.code || "—")} · ${new Date().toLocaleDateString("tr-TR")} · ${subs.length} ${en ? "students" : "öğrenci"}</h2>
   ${leaderboardSVG(subs)}
   ${(() => { const sum = subs.reduce((acc, s) => acc + (estimateCost({ materials: s.materials || [] }).totalUSD || 0), 0); return sum > 0 ? `<p style="font-size:13px;margin:10px 0"><strong>${en ? "💰 Class total budget" : "💰 Sınıf toplam bütçesi"}:</strong> ${fmtTL(sum)}${isOverBudget(sum) ? ` — ⚠️ ${en ? "over budget" : "bütçe aşımı"}` : ""}</p>` : ""; })()}
+  ${(() => { const n = loadClassSize(); const per = subs.reduce((acc, s) => acc + (estimateCost({ materials: s.materials || [] }).totalUSD || 0), 0); if (!n || !per) return ""; const total = n * per; return `<p style="font-size:13px;margin:10px 0"><strong>${en ? "🎯 Full-class budget plan" : "🎯 Tüm sınıf bütçe planı"}:</strong> ${n} ${en ? "students ×" : "öğrenci ×"} ${fmtTL(per)} = <strong>${fmtTL(total)}</strong>${isOverBudget(total) ? ` — ⚠️ ${en ? "over teacher budget" : "öğretmen bütçesini aşıyor"}` : ""}</p>`; })()}
+  ${weeklyProgressSVG(subs)}
   <table><thead><tr><th>${en ? "Student" : "Öğrenci"}</th><th>${en ? "Project" : "Proje"}</th><th>${en ? "Steps" : "Adım"}</th><th>${en ? "Est. Cost" : "Maliyet"}</th><th>${en ? "Progress" : "İlerleme"}</th><th>${en ? "Feedback" : "Geri Bildirim"}</th><th>${en ? "Date" : "Tarih"}</th></tr></thead><tbody>${rows}</tbody></table>
   <footer>${en ? "Generated with Arduino Dream Lab — progress data is collected locally, no server involved." : "Arduino Rüya Atölyesi ile üretildi — ilerleme verisi yerel toplanır, sunucu yok."}</footer>
   <scr${""}ipt>window.onload=function(){setTimeout(function(){window.print()},300)}</scr${""}ipt></body></html>`;
@@ -5491,7 +5549,7 @@ if (backupFileInput) backupFileInput.addEventListener("change", (e) => {
    Tüm uygulama verisi (rehber arşivi, adımlar, sınıf, gönderiler, rozetler,
    geri bildirimler, ayarlar, kütüphane…) tek .yedek.json dosyasında taşınır.
    Dil/tema/model favorileri gibi cihaz yerel tercihleri hariç tutulur. */
-const BACKUP_SKIP = ["arduinoDreamLab.lang.v1", "arduinoDreamLab.theme.v1", "arduinoDreamLab.modelFavs.v1", "arduinoDreamLab.customPrices.v1", "arduinoDreamLab.budget.v1"];
+const BACKUP_SKIP = ["arduinoDreamLab.lang.v1", "arduinoDreamLab.theme.v1", "arduinoDreamLab.modelFavs.v1", "arduinoDreamLab.customPrices.v1", "arduinoDreamLab.budget.v1", "arduinoDreamLab.classSize.v1"];
 function exportBackup() {
   const en = getLang() === "en";
   const data = { app: "arduino-ruya-atolyesi", kind: "veri-yedegi", version: 2, exportedAt: Date.now(), data: {} };

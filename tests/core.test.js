@@ -985,6 +985,39 @@ test("v2.16.0 liveCostHint: AI yoksa senkron demo ipucu, AI varsa gerçek listed
   assert.ok(fallback.includes("≈"), "hata anında demo ipucu dönmeli");
 });
 
+/* ─────────── v2.17.0: sınıf mevcudu planlayıcısı + haftalık ilerleme grafiği ─────────── */
+
+test("v2.17.0 loadClassSize: yoksa 0, geçersizse 0, geçerliyse değer", () => {
+  const KEY = "arduinoDreamLab.classSize.v1";
+  sandbox.localStorage.removeItem(KEY);
+  assert.equal(core.loadClassSize(), 0, "boş → 0");
+  sandbox.localStorage.setItem(KEY, "24");
+  assert.equal(core.loadClassSize(), 24);
+  sandbox.localStorage.setItem(KEY, "-3");
+  assert.equal(core.loadClassSize(), 0, "negatif → 0");
+  sandbox.localStorage.setItem(KEY, "abc");
+  assert.equal(core.loadClassSize(), 0, "sayı değil → 0");
+  sandbox.localStorage.removeItem(KEY);
+});
+
+test("v2.17.0 weeklyProgressSVG: adımları haftaya kümelendirir, boş veride boş string", () => {
+  assert.equal(typeof core.weeklyProgressSVG, "function");
+  assert.equal(core.weeklyProgressSVG([]), "", "veri yok → boş");
+  assert.equal(core.weeklyProgressSVG([{ steps: {}, ts: Date.now() }]), "", "adımsız gönderim → boş");
+  const now = Date.now();
+  const svg = core.weeklyProgressSVG([
+    { steps: { 0: true, 1: true, 2: true }, ts: now },
+    { steps: { 0: true }, ts: now - 86400000 }, // dün — aynı hafta
+    { steps: { 0: true, 1: true, 2: true, 3: true, 4: true }, ts: now - 7 * 86400000 } // geçen hafta
+  ]);
+  assert.ok(svg.includes("<svg"), "SVG üretmeli");
+  assert.ok(svg.includes("Haftada tamamlanan"), "başlık olmalı");
+  // Bu hafta 4 adım (3+1), geçen hafta 5 → çubuk değerleri görünmeli
+  assert.ok(svg.includes(">4<"), "bu hafta değeri 4 olmalı");
+  assert.ok(svg.includes(">5<"), "geçen hafta değeri 5 olmalı");
+  assert.ok((svg.match(/<rect/g) || []).length === 2, "2 hafta → 2 çubuk");
+});
+
 test("v2.8.0 portfolyo: sertifikasız durumda sessizce hata gösterir", () => {
   sandbox.localStorage.removeItem("arduinoDreamLab.badges.v1");
   let shown = "";

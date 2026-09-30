@@ -4,7 +4,7 @@
    - Google Fonts: cache-first (statik, sürümlü URL'ler)
    - Diğer isteklere dokunmaz
    CACHE_NAME sürüm etiketi build.py tarafından her derlemede güncellenir. */
-const CACHE_NAME = "arduino-ruya-atolyesi-v2.16.0";
+const CACHE_NAME = "arduino-ruya-atolyesi-v2.17.0";
 const APP_SHELL = ["./", "./index.html", "./manifest.json", "./icon.svg"];
 
 self.addEventListener("install", (event) => {

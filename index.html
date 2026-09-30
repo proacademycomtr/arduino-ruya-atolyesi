@@ -233,6 +233,11 @@
           <span class="field-hint" style="margin:0">Toplam aşılırsa malzeme tablosunda ⚠️ kırmızı uyarı çıkar. 0/boş = kapalı.</span>
         </div>
         <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.75rem;flex-wrap:wrap">
+          <label for="classSizeInput" style="font-size:0.85rem">👥 Sınıf mevcudu:</label>
+          <input type="number" id="classSizeInput" min="0" step="1" placeholder="örn. 24" style="width:5.5rem" />
+          <span class="field-hint" style="margin:0">Sınıf raporu mevcut × proje maliyetiyle tüm sınıfın bütçe planını gösterir. 0/boş = kapalı.</span>
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.75rem;flex-wrap:wrap">
           <label style="font-size:0.85rem">💱 Kur (USD→₺):</label>
           <span class="field-hint" id="rateStatus" style="margin:0"></span>
           <button type="button" class="btn btn-ghost" id="updateRateBtn">🌐 Çevrimiçi Güncelle</button>

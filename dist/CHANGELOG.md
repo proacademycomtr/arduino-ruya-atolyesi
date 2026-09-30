@@ -2,6 +2,14 @@
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
 
+## [2.17.0] - 2026-09-30
+
+- Sürüm 2.17.0 olarak derlendi.
+- Yeni: 📈 **Sınıf raporunda haftalık ilerleme grafiği** — gönderimlerin tamamlanan adımları haftaya kümelendirilir, son 8 haftanın çubuk grafiği lider tablosunun altına basılır
+- Yeni: 🎯 **Sınıf bütçe planlayıcısı** — Ayarlar'a "Sınıf mevcudu" girdisi; sınıf raporu mevcut × ortalama proje maliyetiyle tüm sınıfın bütçe ihtiyacını hesaplar ve öğretmen bütçe sınırıyla karşılaştırır
+- Not: mevcut/bütçe cihaz tercihleri sayılır, veri yedeğine girmez (BACKUP_SKIP)
+- Ek: README'ye canlı uygulama ekran görüntüsü (docs/screenshot.png); CI'ya E2E job'ı (Playwright, file:// dist üzerinde 11 kontrol)
+
 ## [2.16.0] - 2026-09-30
 
 - Sürüm 2.16.0 olarak derlendi.
