@@ -26,6 +26,8 @@ fi
 echo "📦 gh-pages dalı güncelleniyor…"
 git worktree add /tmp/agh-pages gh-pages 2>/dev/null || true
 rsync -a --delete --exclude '.git' dist/ /tmp/agh-pages/
+# README görselleri gibi repo varlıkları da yayına girsin (docs/ vb.)
+if [ -d docs ]; then mkdir -p /tmp/agh-pages/docs; rsync -a docs/ /tmp/agh-pages/docs/; fi
 touch /tmp/agh-pages/.nojekyll
 cd /tmp/agh-pages
 if [ -n "$(git status --porcelain)" ]; then

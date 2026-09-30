@@ -15,3 +15,5 @@
 
 # Freebuff çalışma alanı
 .freebuff/
+node_modules/
+package-lock.json
