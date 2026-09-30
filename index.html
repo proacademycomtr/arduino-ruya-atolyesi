@@ -232,6 +232,11 @@
           <input type="number" id="budgetInput" min="0" step="1" placeholder="örn. 25" style="width:7rem" />
           <span class="field-hint" style="margin:0">Toplam aşılırsa malzeme tablosunda ⚠️ kırmızı uyarı çıkar. 0/boş = kapalı.</span>
         </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.75rem;flex-wrap:wrap">
+          <label style="font-size:0.85rem">💱 Kur (USD→₺):</label>
+          <span class="field-hint" id="rateStatus" style="margin:0"></span>
+          <button type="button" class="btn btn-ghost" id="updateRateBtn">🌐 Çevrimiçi Güncelle</button>
+        </div>
         <input type="file" id="catalogFile" accept="application/json,.json" hidden />
       </div>
       <div class="field-group" style="margin-top:1.25rem">

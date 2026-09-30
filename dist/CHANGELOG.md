@@ -2,6 +2,14 @@
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
 
+## [2.15.0] - 2026-09-30
+
+- Sürüm 2.15.0 olarak derlendi.
+- Yeni: 💱 **Çevrimiçi kur** — Ayarlar'da "1 USD = X₺ (zaman önce güncellendi)" durumu + 🌐 Çevrimiçi Güncelle düğmesi; exchangerate.host/er-api'den çekilir, localStorage'da saklanır, hata anında saklanan/varsayılan kur (34) kullanılır. Tüm ₺ gösterimleri (tablo, PDF, rapor, sertifika, Portfolyo, kart) bu kurdan hesaplanır
+- Yeni: 🚀 **publish.sh** — test + sürümlü derleme + gh-pages yenileme + push'u tek komutta birleştiren yayın script'i (./publish.sh veya ./publish.sh 2.16.0)
+- Yeni: 🤝 **CONTRIBUTING.md** + 🐛/💡 issue şablonları + PR şablonu
+- Not: Proje ~/Documents/GitHub/arduino-ruya-atolyesi'ye taşındı; GitHub Pages canlı: proacademycomtr.github.io/arduino-ruya-atolyesi
+
 ## [2.14.0] - 2026-09-30
 
 - Sürüm 2.14.0 olarak derlendi.

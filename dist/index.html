@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Hayalindeki Arduino projesini yaz, yapay zekâ senin için adım adım yapım rehberi hazırlasın." />
-  <title>Arduino Rüya Atölyesi — Hayalindeki Projeyi Gerçekleştir v2.14.0</title>
+  <title>Arduino Rüya Atölyesi — Hayalindeki Projeyi Gerçekleştir v2.15.0</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
@@ -1454,6 +1454,11 @@ pre.code-block .num { color: #7dd3fc; }
           <input type="number" id="budgetInput" min="0" step="1" placeholder="örn. 25" style="width:7rem" />
           <span class="field-hint" style="margin:0">Toplam aşılırsa malzeme tablosunda ⚠️ kırmızı uyarı çıkar. 0/boş = kapalı.</span>
         </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.75rem;flex-wrap:wrap">
+          <label style="font-size:0.85rem">💱 Kur (USD→₺):</label>
+          <span class="field-hint" id="rateStatus" style="margin:0"></span>
+          <button type="button" class="btn btn-ghost" id="updateRateBtn">🌐 Çevrimiçi Güncelle</button>
+        </div>
         <input type="file" id="catalogFile" accept="application/json,.json" hidden />
       </div>
       <div class="field-group" style="margin-top:1.25rem">
@@ -1549,7 +1554,7 @@ pre.code-block .num { color: #7dd3fc; }
   </footer>
 
   <script>
-const APP_VERSION = "2.14.0";
+const APP_VERSION = "2.15.0";
 const FILE_CATALOG = JSON.parse(`{
   "app": "arduino-ruya-atolyesi",
   "kind": "fiyat-katalogu",
@@ -1701,6 +1706,7 @@ function openModal() {
   updateKeyHint();
   updatePriceEditor();
   updateCustomPricesEditor();
+  updateRateStatus();
   renderStats();
   settingsModal.hidden = false;
   apiKeyInput.focus();
@@ -2082,6 +2088,27 @@ if (budgetInput) budgetInput.addEventListener("change", () => {
   const v = parseFloat(budgetInput.value);
   localStorage.setItem(BUDGET_KEY, isFinite(v) && v > 0 ? String(v) : "");
   if (currentGuide) renderGuide(currentGuide, undefined, { scroll: false });
+});
+/* ── Çevrimiçi kur (v2.15.0) ── */
+const rateStatus = $("rateStatus");
+const updateRateBtn = $("updateRateBtn");
+function updateRateStatus() {
+  if (!rateStatus) return;
+  const o = loadRate();
+  const age = rateAgeHours();
+  const ageTxt = o.ts ? (age < 1 ? t("az önce") : age < 24 ? Math.round(age) + " " + t("saat önce") : Math.round(age / 24) + " " + t("gün önce")) : t("hiç");
+  rateStatus.textContent = `1 USD = ${o.rate.toFixed(2)}₺ (${ageTxt} ${t("güncellendi")})`;
+}
+if (updateRateBtn) updateRateBtn.addEventListener("click", async () => {
+  if (rateStatus) rateStatus.textContent = t("⏳ Kur güncelleniyor…");
+  const r = await updateRateFromWeb();
+  updateRateStatus();
+  if (r.ok) {
+    if (customPricesHint) customPricesHint.textContent = `✅ ${t("Kur güncellendi")}: 1 USD = ${r.rate.toFixed(2)}₺`;
+    if (currentGuide) renderGuide(currentGuide, undefined, { scroll: false });
+  } else if (customPricesHint) {
+    customPricesHint.textContent = t("❌ Kur alınamadı — internet bağlantısını kontrol et. Saklanan kur kullanılıyor.");
+  }
 });
 
 /* ───────────────────── Sağlayıcı İstatistikleri ───────────────────── */
@@ -3766,7 +3793,43 @@ const PRICE_CATALOG = [
   { k: ["ARDUINO UNO"], usd: 10.0, note: "Uno" },
   { k: ["ARDUINO NANO"], usd: 6.0, note: "Nano" }
 ];
-const USD_TRY_RATE = 34; // yaklaşık kur — yalnızca bilgi amaçlı
+const USD_TRY_RATE = 34; // varsayılan kur — çevrimiçi güncellenebilir (v2.15.0)
+
+/* ── Çevrimiçi kur (v2.15.0): exchangerate.host'tan USD→TRY çekilir;
+   localStorage'da saklanır, 24 saatten eskiyse önerilir. Tüm ₺ gösterimleri
+   rate() üzerinden hesaplanır — API hatalarında saklanan/varsayılan değer kullanılır. */
+const RATE_KEY = "arduinoDreamLab.rate.v1";
+function loadRate() {
+  try {
+    const o = JSON.parse(localStorage.getItem(RATE_KEY));
+    if (o && isFinite(o.rate) && o.rate > 0 && o.rate < 1000) return { rate: o.rate, ts: o.ts || 0 };
+  } catch {}
+  return { rate: USD_TRY_RATE, ts: 0 };
+}
+function rate() { return loadRate().rate; }
+function rateAgeHours() {
+  const o = loadRate();
+  return o.ts ? (Date.now() - o.ts) / 3600000 : Infinity;
+}
+async function updateRateFromWeb() {
+  const endpoints = [
+    "https://api.exchangerate.host/latest?base=USD&symbols=TRY",
+    "https://open.er-api.com/v6/latest/USD"
+  ];
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const r = Number(data && data.rates && data.rates.TRY);
+      if (isFinite(r) && r > 0 && r < 1000) {
+        localStorage.setItem(RATE_KEY, JSON.stringify({ rate: r, ts: Date.now() }));
+        return { ok: true, rate: r };
+      }
+    } catch {}
+  }
+  return { ok: false, rate: rate() };
+}
 
 /* ── Öğretmen özel fiyat kataloğu (v2.11.0) ──
    Okulun kataloğu farklıysa öğretmen Ayarlar'dan "Parça adı: fiyat (USD)"
@@ -3922,9 +3985,9 @@ function estimateCost(g, qtyOv) {
   return { rows, totalUSD, anyUnknown };
 }
 
-/* Fiyatı hem ₺ hem $ olarak gösterir (v2.12.0: ₺ ana birim; kur USD_TRY_RATE) */
+/* Fiyatı hem ₺ hem $ olarak gösterir (v2.12.0: ₺ ana birim; kur rate() — v2.15.0 çevrimiçi) */
 function fmtTL(usd) {
-  const tl = usd * USD_TRY_RATE;
+  const tl = usd * rate();
   const r2 = (x) => (Math.round(x * 100) / 100).toFixed(2);
   return `${r2(tl)}₺ ($${r2(usd)})`;
 }
@@ -5115,7 +5178,7 @@ function shareCardCanvas(g) {
     { v: String(mats), l: en ? "parts" : "parça", x: 80 },
     { v: String(wirs), l: en ? "wires" : "bağlantı", x: 388 },
     { v: String(steps), l: en ? "steps" : "adım", x: 696 },
-    { v: (Math.round(costUsd * USD_TRY_RATE * 10) / 10).toFixed(0) + "₺", l: en ? "est. cost" : "≈ fiyat", x: 1004 }
+    { v: (Math.round(costUsd * rate() * 10) / 10).toFixed(0) + "₺", l: en ? "est. cost" : "≈ fiyat", x: 1004 }
   ];
   const boxY = H - 300;
   stats.forEach((s) => {
@@ -5199,7 +5262,7 @@ async function shareCard(g) {
 function buildPrintableHTML(g) {
   const date = new Date().toLocaleDateString("tr-TR");
   const en = getLang() === "en";
-  const money = (x) => `${(Math.round(x * USD_TRY_RATE * 100) / 100).toFixed(2)}₺ ($${x.toFixed(2)})`;
+  const money = (x) => `${(Math.round(x * rate() * 100) / 100).toFixed(2)}₺ ($${x.toFixed(2)})`;
   const cost = estimateCost(g);
   const mats = cost.rows.map((r, i) => `<tr><td>${esc(r.name)}</td><td>${esc(r.qty)}</td><td>${r.known ? "$" + r.unit.toFixed(2) : "—"}</td><td>${r.known ? "$" + r.total.toFixed(2) : "—"}</td><td>${esc((g.materials || [])[i]?.purpose || "")}</td></tr>`).join("");
   const costOver = isOverBudget(cost.totalUSD);
@@ -5393,7 +5456,7 @@ function certificateSVG(g, studentName, ts) {
   const certOver2 = isOverBudget(costUsd2);
   const costStrip = costUsd2 > 0
     ? (en ? "Estimated project cost: " : "Tahmini proje maliyeti: ")
-      + `${(costUsd2 * USD_TRY_RATE).toFixed(2)}₺ ($${costUsd2.toFixed(2)})`
+      + `${(costUsd2 * rate()).toFixed(2)}₺ ($${costUsd2.toFixed(2)})`
       + (certOver2 ? (en ? " · ⚠️ OVER BUDGET" : " · ⚠️ BÜTÇE AŞIMI") : (en ? " · average retail estimate" : " · ortalama perakende tahmini"))
     : "";
   const brand = en ? "🤖 Arduino Dream Workshop" : "🤖 Arduino Rüya Atölyesi";
@@ -5477,7 +5540,7 @@ function certCanvas(g, studentName) {
   if (costUsd2 > 0) {
     const isOver = isOverBudget(costUsd2);
     const strip = (en ? "Estimated project cost: " : "Tahmini proje maliyeti: ")
-      + `${(costUsd2 * USD_TRY_RATE).toFixed(2)}₺ ($${costUsd2.toFixed(2)})`
+      + `${(costUsd2 * rate()).toFixed(2)}₺ ($${costUsd2.toFixed(2)})`
       + (isOver ? (en ? " · ⚠️ OVER BUDGET" : " · ⚠️ BÜTÇE AŞIMI") : (en ? " · average retail estimate" : " · ortalama perakende tahmini"));
     c.fillStyle = isOver ? "rgba(229, 72, 77, 0.12)" : "rgba(176, 141, 63, 0.12)";
     roundRect(c, W / 2 - 250, yEnd + 28, 500, 42, 21);
@@ -6233,6 +6296,10 @@ const I18N = {
     "Bütçe önerisi": "Budget tip", "Arduino Uno yerine Arduino Nano kullan": "use Arduino Nano instead of Arduino Uno",
     "💡 Bu fikre benzer proje": "💡 A similar project costs about",
     "depo": "repo",
+    "az önce": "just now", "saat önce": "h ago", "gün önce": "d ago", "hiç": "never", "güncellendi": "updated",
+    "⏳ Kur güncelleniyor…": "⏳ Updating rate…",
+    "Kur güncellendi": "Rate updated",
+    "❌ Kur alınamadı — internet bağlantısını kontrol et. Saklanan kur kullanılıyor.": "❌ Could not fetch rate — check your connection. Using the stored rate.",
     "Seviye: ": "Level: ", "🧰 Malzemeler:": "🧰 Materials:", "🔗 Bağlantılar:": "🔗 Wiring:",
     "📱 Arduino Rüya Atölyesi'nden paylaşıldı": "📱 Shared from Arduino Dream Workshop",
     "Senin hayalin hangi proje? ✨": "What's your dream project? ✨",
@@ -6712,7 +6779,7 @@ function downloadClassReport() {
   const subs = Object.values(c.submissions || {}).sort((a, b) => (a.student || "").localeCompare(b.student || "", "tr"));
   if (!subs.length) return;
   const esc2 = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
-  const money = (x) => (x > 0 ? (Math.round(x * USD_TRY_RATE * 100) / 100).toFixed(2) + "₺ ($" + x.toFixed(2) + ")" : "—");
+  const money = (x) => (x > 0 ? (Math.round(x * rate() * 100) / 100).toFixed(2) + "₺ ($" + x.toFixed(2) + ")" : "—");
   const rows = subs.map((s) => {
     const total = Number(s.total) || 0;
     const done = Object.keys(s.steps || {}).length;
@@ -7075,7 +7142,7 @@ function downloadPortfolio() {
   files.push({ name: en ? "PORTFOLIO.txt" : "PORTFOLYO.txt", content: lines.join("\n") + "\n" });
   downloadFileBlob(makeZip(files), "portfolyo.zip");
 }
-  window.__CHANGELOG_HTML = "<p>Bu dosya `build.py` tarafından otomatik güncellenir.</p><h2>[2.14.0] - 2026-09-30</h2><ul><li>Sürüm 2.14.0 olarak derlendi.</li><li>Yeni: 📁 **Depoda varsayılan katalog** — `fiyat-katalogu.json` artık projenin kökünde; build.py onu hem dist'e kopyalar hem FILE_CATALOG olarak JS'e gömer. Fiyat önceliği: öğretmen özel (localStorage) → depo → gömülü PRICE_CATALOG; Ayarlar'daki bütçe alanı depo sınırını placeholder olarak gösterir</li><li>Yeni: 💡 **Bütçe aşımı önerisi** — toplam sınırı aşarsa tabloda \"Bütçe önerisi: Arduino Uno yerine Arduino Nano kullan ($10.00 → $6.00)\" satırı (özel fiyatlar da hesaba katılır)</li><li>Yeni: ⌨️ **Canlı maliyet ipucu** — fikir yazarken 30+ karakterde demo rehber üzerinden anlık tahmin: \"💡 Bu fikre benzer proje ≈ 646.00₺ ($19.00)\" (400ms gecikmeli)</li><li>Yeni: 📋 **SÜRÜM_NOTLARI.md** — v2.10→v2.14 fiyat modülünün tamamını özetleyen sürüm notları sayfası</li></ul><h2>[2.13.0] - 2026-09-30</h2><ul><li>Sürüm 2.13.0 olarak derlendi.</li><li>Yeni: 🔽 **Fiyata göre sıralama** — malzeme tablosunun Tutar başlığındaki düğme pahalıdan ucuza (↓) → ucuza pahalıya (↑) → orijinal sıra (⇅) döngüsü yapar; fiyatlanamayan parçalar her zaman sonda, tercih hatırlanır</li><li>Yeni: 📎 **Portfolyo.zip'e fiyat katalogu** — öğretmen özel fiyatları + bütçe sınırı `fiyat-katalogu.json` olarak arşive girer; PORTFOLYO.txt'te veliler/okul idaresi için açıklama notu taşır (katalog boşsa dosya üretilmez)</li><li>Yeni: 💰 **Sınıf raporunda toplam bütçe** — tüm öğrencilerin projelerinin tahmini maliyeti toplanır ve raporun üstünde \"Sınıf toplam bütçesi\" satırında gösterilir; bütçe sınırı aşılırsa ⚠️ \"bütçe aşımı\" işaretiyle</li><li>Gelişti: 🏅 **Sertifikada bütçe aşımı işareti** — proje maliyeti öğretmen sınırını aşarsa sertifika şeridi (PDF + Portfolyo SVG'si) kırmızıya döner: \"⚠️ BÜTÇE AŞIMI\"; sınır içindeyse altın şerit + normal not</li></ul><h2>[2.12.0] - 2026-09-30</h2><ul><li>Sürüm 2.12.0 olarak derlendi.</li><li>Değişti: 💱 **TL ana para birimi** — tüm fiyat gösterimlerinde ₺ öncelikli, $ parantez içinde ikincil: `612.00₺ ($18.00)`; tablo, PDF, sınıf raporu, WhatsApp, sertifika kartı ve Portfolyo özetinde tek biçim</li><li>Yeni: 🎯 **Bütçe sınırı uyarısı** — Ayarlar'dan USD cinsinden üst sınır girilir; proje toplamı aşarsa malzeme tablosunda ⚠️ kırmızı \"Bütçe aşımı (Sınır: …)\" satırı ve PDF'te \"bütçe aşımı\" etiketi; 0/boş = kapalı, cihaz tercihi (yedeğe girmez)</li><li>Yeni: 🏅 **Sertifikada fiyat şeridi** — PDF (canvas) ve Portfolyo SVG sertifikasında altın yuvarlak köşeli şerit: \"Tahmini proje maliyeti: 612.00₺ ($18.00) · ortalama perakende tahmini\"</li><li>Yeni: 📤 **Katalog JSON paylaşımı** — öğretmen özel fiyatlarını + bütçe sınırını `fiyat-katalogu.json` olarak dışa aktarır; diğer öğretmen aynı dosyayı içe aktararak katalogu devralır (sayı olmayan fiyatlar sessizce atlanır)</li></ul><h2>[2.11.0] - 2026-09-29</h2><ul><li>Sürüm 2.11.0 olarak derlendi.</li><li>Yeni: 🏷️ **Öğretmen fiyat kataloğu** — Ayarlar'a \"Parça adı: fiyat (USD)\" satırları yazılır (noktalı/virgüllü ondalık ikisi de olur), localStorage'da kalıcıdır ve fiyat tahmininde katalog fiyatının YERİNE geçer; en uzun eşleşen ad kazanır, ✏️ işaretiyle tabloda belli olur</li><li>Yeni: 🔢 **Canlı adet düzenleyici** — malzeme tablosunda her satırda −/+ düğmeleri ve yazılabilir adet kutusu; toplam anında güncellenir, adetler proje başına localStorage'da saklanır</li><li>Yeni: 📊 **Sınıf raporunda Maliyet sütunu** — gönderim dosyası artık proje malzemelerini taşır; öğretmen her öğrencinin projesinin tahmini maliyetini raporda görür</li><li>Yeni: 💰 **Portfolyo.zip'e bütçe özeti** — PORTFOLYO.txt'te proje başına tahmini maliyet + portfolyo toplamı (\"alışveriş listesi değildir\" notuyla)</li></ul><h2>[2.10.0] - 2026-09-29</h2><ul><li>Sürüm 2.10.0 olarak derlendi.</li><li>Yeni: 💰 **Malzeme fiyat tahmini** — her rehberin malzeme tablosunda Birim Fiyat ve Tutar sütunları; yaklaşık Türkiye perakende fiyatları 39 parçalık katalogdan ($ + ₺ çift gösterim, kur bilgi amaçlı ~34)</li><li>Yeni: **Ortalama Proje Fiyatı** satırı — adet × birim hesabıyla proje toplamı; katalogda olmayan parçalar \"—\" ile işaretlenir ve toplama katılmaz</li><li>PDF çıktısı ve WhatsApp paylaşımı da fiyat toplamını taşır; sertifika projesi kartına 4. istatistik kutusu (≈ fiyat) eklendi</li><li>AI rehberlerinde de çalışır: AI malzeme adlarını aynı katalogla fiyatlar, bilinmeyenler dürüstçe \"fiyatlanmadı\" olarak gösterilir</li></ul><h2>[2.9.0] - 2026-09-28</h2><ul><li>Sürüm 2.9.0 olarak derlendi.</li><li>Yeni: 🌙🎲📏 **3 yeni demo rehber** — otomatik gece lambası (LDR + histeresis), butonla atılan dijital zar (randomSeed gürültü tohumu, 6 LED'li zar yüzleri), OLED mesafe ölçer (HC-SR04 + SSD1306 ikili kütüphane); üçü de wokwiValidate'ten 0 uyarıyla geçer ve 🚀 İleri Seviye bölümü taşır. Demo sayısı 11 → 14; altın rozet eşiği artık demo sayısından otomatik türetilir</li><li>Yeni: 📜 **Portfolyo.zip'e sertifikalar** — her proje klasörüne baskı-dostu SERTIFIKA.svg eklenir (certificateSVG, certCanvas ile aynı görsel dil)</li><li>Yeni: ⚡ **Toplu geri bildirim** — öğretmen panelinde yorumu bekleyen tüm gönderiler tek listede; \"Hepsini İndir\" her öğrenciye kişisel .geribildirim.json dosyası indirir ve gönderileri işaretler</li><li>Yeni: 💾 **Veri yedeği** — Ayarlar'dan tüm uygulama verisi (arşiv, adımlar, sınıf, gönderiler, rozetler, geri bildirimler, özel bileşenler) tek .yedek.json dosyasına dışa aktarılır / başka bilgisayarda geri yüklenir; dil/tema gibi cihaz yerel tercihleri hariçtir</li><li>Çözücü iyileştirmeleri: satır sahibi parça tespiti (\"OLED GND → GND\" satırındaki GND, satırdaki OLED parçasınındır), çoklu örnek parça bağlantıları (LED1/LED2… ayrı ayrı çözülür), OLED'de LCD'ye yanlış eşleşme engellendi, wokwi-7segment DP pini, RGB/OLED'de boşta düz LED parçası üretilmez</li></ul><h2>[2.8.0] - 2026-09-28</h2><ul><li>Sürüm 2.8.0 olarak derlendi.</li><li>Yeni: 🎨🔧🕐 **3 yeni demo rehber** — LCD'li dijital saat (I2C, millis() sayaç), RGB LED mood lambası (0-767 ton haritası, PWM karıştırma), servo kapı kilidi (kenar algılama, durum makinesi); üçü de wokwiValidate'ten 0 uyarıyla geçer ve 🚀 İleri Seviye bölümü taşır</li><li>Yeni: 📄 **Sınıf raporuna Geri Bildirim sütunu** — her gönderimde \"Verildi ✓ / Bekliyor\" durumu + varsa öğretmen yorumunun 80 karakterlik özeti</li><li>Yeni: 🥉🥈🥇 **Rozet kademeleri** — Başarımlar modalında bronz (3 sertifika) / gümüş (5) / altın (tüm 11 demo) ilerleme kartı + \"sonraki hedef\" metni</li><li>Yeni: 📦 **Portfolyo.zip** — sertifikalı tüm rehberlerin Wokwi paketleri (sketch.ino + diagram.json + öğretmen notları) numaralı klasörler hâlinde tek arşivde; kökte PORTFOLYO.txt özeti. Sertifikalar artık rehber snapshot'ı saklar; eski guide'sız kayıtlar atlanır</li><li>Düzeltme: RGB projesinde \"RGB LED\" metni ayrıca boşta bir wokwi-led parçası üretiyordu — RGB varken düz LED eklenmez</li></ul><h2>[2.7.0] - 2026-09-25</h2><ul><li>Sürüm 2.7.0 olarak derlendi.</li><li>Yeni: 🏫 **Öğretmen paneli** — Sınıf Modu artık iki sütunlu geniş panel: solda sınıf kodu + içe aktarma + rapor, sağda ilerleme yüzdeli gönderi kartları ve geri bildirim yazma (tek ekranda)</li><li>Yeni: 🏅 **Öğrenci başarımları** — header'da sayaçlı yeni düğme; kazanılan sertifikalar + okunan öğretmen geri bildirimleri kart görünümünde listelenir (mükerrer kayıt engellenir)</li><li>Yeni: 🚀 **İleri Seviye bölümü** — 7 segment (ikinci display ile 0-99 multiplexing, butonla durdur/başlat) ve piyano (kayıt/çalma, pot ile oktav) demo rehberlerine katlanabilir gelişmiş kutu: ek wiring satırları + kod parçaları</li><li>Yeni: 📦 **Zip kişiselleştirme** — Wokwi paketi öğrenci adı + sınıf kodunu bilir: sketch.ino'ya başlık yorumu, öğretmen notlarına \"Öğrenci / Sınıf kodu\" satırları (ad: gönderim/sertifika girişlerinden)</li></ul><h2>[2.6.0] - 2026-09-25</h2><ul><li>Sürüm 2.6.0 olarak derlendi.</li><li>Yeni: 💬 **Öğretmen geri bildirimi** — öğretmen içe aktarılan gönderiye yorum yazar, `.geribildirim.json` indirir; öğrenci \"Geri Bildirimi Göster\" ile açıp rehberde okur (yorumlar tarayıcıda saklanır)</li><li>Yeni: ⚡ **Wokwi'de Aç güçlendirildi** — sketch kodu + tüm bağlantılar çözülmüşse diagram.json tek kopyada panoya; Wokwi şablonu yeni sekmede açılır</li><li>Yeni: 🏆 **Lider tablosu** — sınıf raporuna ilerlemeye göre sıralı SVG çubuk grafik (ilk 10, print-to-PDF dostu, bağımlılıksız)</li><li>Yeni: 🔢🚗🎹 **3 yeni demo rehber** — 7 segment display sayacı (wokwi-7segment, ortak katot), ultrasonik park sensörü, buzzer'lı mini piyano (INPUT_PULLUP, 4 buton); üçü de wokwiValidate'ten 0 uyarıyla geçer</li><li>Düzeltme: sınıf gönderim içe aktarma tek-nesne `.klasor.json` biçimini kabul eder (dizi/sarmalayıcı yanına)</li><li>Düzeltme: çözücüde tek harfli pin kelimeleri (\"Display A\") sahip parça adına gömülü olduğu için yutuluyordu — 3+ harf sınırıyla pinler doğru çözülür</li></ul><h2>[2.5.0] - 2026-09-25</h2><ul><li>Sürüm 2.5.0 olarak derlendi.</li><li>Yeni: 🏫 **Sınıf Modu** — öğretmen sınıf kodu üretir, öğrenci adımlarını tamamlayıp `.klasor.json` gönderim dosyası indirir; öğretmen gönderimleri içe aktarıp PDF sınıf raporu alır (sunucusuz, dosya tabanlı)</li><li>Yeni: 📦 **Wokwi Paketi (.zip)** — rehberden sketch.ino + diagram.json + öğretmen notları içeren gerçek proje arşivi; bağımlılıksız zip yazıcı (STORE yöntemi, CRC32 doğrulanmış)</li><li>Yeni: 🛠️ **Adım takibi** — her adımda onay kutusu + ilerleme çubuğu; tüm adımlar bitince sertifika ve gönderim satırları açılır</li><li>Yeni: 🧪 birim testler — `node --test tests/`; çözücü, wokwiValidate, zip yazıcı, sınıf gönderimi ve özel set normalize senaryoları (16 test, app.js sanal ortamda değerlendirilir)</li></ul><h2>[2.4.0] - 2026-09-25</h2><ul><li>Sürüm 2.4.0 olarak derlendi.</li><li>Yeni: 5 demo rehbere `wokwiHints` — demo modunda bile gerçek röle/motor/servo kablolaması çıkar (L298N/DC motor Wokwi'de olmadığı için potansiyometre ile simüle edilir, satır notuyla açıklanır)</li><li>Yeni: `wokwiValidate` taslak doğrulaması — pin çakışması (aynı pine iki kablo) + eksik GND/5V uyarıları, öğretici kontrol kutusunda</li><li>Yeni: sertifika penceresine 1080×1080 paylaşım kartı PNG indirme düğmesi</li><li>Yeni: özel bileşen seti — öğretmenler bileşen ekler, JSON olarak dışa/içe aktarır (localStorage kalıcı, \"Özel Set\" kategorisi)</li><li>Düzeltme: Wokwi parça tipleri gerçek adlarına güncellendi (relay-module, lcd1602, pir-motion-sensor, photoresistor-sensor, ssd1306)</li><li>Düzeltme: AI prompt'u yalnızca geçerli Wokwi tiplerini listeler; L298N/DC motor uydurma tip yerine NULL döndürür</li><li>İyileştirme: kablo çözücü — ARDUINO öneki, ~10 PWM pini, satır-sahibi parça yönlendirmesi, çoklu aynı-tip parça desteği</li><li>Düzeltme: çözücü büyük/küçük harf duyarsız; \"IR sensör SOL — OUT\" gibi tireli satırlar çözülür; VCC/GND satırın kendi parçasına bağlanır (yanlış hint-parçası değil)</li><li>Düzeltme: \"DC motor\" artık yanlışlıkla \"Servo Motor\" kütüphane parçasına eşleşmez (genel kelimeler eşleştirmede hariç)</li></ul><h2>[2.3.0] - 2026-09-24</h2><ul><li>Sürüm 2.3.0 olarak derlendi.</li><li>Yeni: AI şemasına `wokwiHints` alanı — her malzeme için Wokwi parça tipi + pin eşlemesi; kablo üretimi bunları öncelikli kullanır</li><li>Yeni: bileşen kütüphanesi kartlarına Wokwi parça tipi/pin eşlemeleri eklendi ve taslak üretiminde kullanılıyor</li><li>Yeni: eşleşmeyen bağlantı satırları için rehberde öğretici yardım kutusu</li><li>Yeni: arşivden tek tıkla sertifika üretimi (🏅, ad sorulur, PDF iner)</li><li>İyileştirme: sertifika adı hatırlanır, sonraki sertifikalarda önerilir</li></ul><h2>[2.2.0] - 2026-09-24</h2><ul><li>Sürüm 2.2.0 olarak derlendi.</li><li>Yeni: sürüm rozeti + sürüm geçmişi modalı (footer)</li><li>Yeni: paylaşım kartını Web Share API ile doğrudan paylaşma (desteklenmezse indirme)</li><li>Yeni: PWA — manifest + service worker ile çevrimdışı kullanım</li><li>Yeni: Wokwi diagram.json kopyalarken parça/kablo özeti ve eşleşmeyen satır uyarısı</li></ul><h2>[2.1.0] - 2026-09-24</h2><ul><li>Sürüm 2.1.0 olarak derlendi.</li></ul>";
+  window.__CHANGELOG_HTML = "<p>Bu dosya `build.py` tarafından otomatik güncellenir.</p><h2>[2.15.0] - 2026-09-30</h2><ul><li>Sürüm 2.15.0 olarak derlendi.</li><li>Yeni: 💱 **Çevrimiçi kur** — Ayarlar'da \"1 USD = X₺ (zaman önce güncellendi)\" durumu + 🌐 Çevrimiçi Güncelle düğmesi; exchangerate.host/er-api'den çekilir, localStorage'da saklanır, hata anında saklanan/varsayılan kur (34) kullanılır. Tüm ₺ gösterimleri (tablo, PDF, rapor, sertifika, Portfolyo, kart) bu kurdan hesaplanır</li><li>Yeni: 🚀 **publish.sh** — test + sürümlü derleme + gh-pages yenileme + push'u tek komutta birleştiren yayın script'i (./publish.sh veya ./publish.sh 2.16.0)</li><li>Yeni: 🤝 **CONTRIBUTING.md** + 🐛/💡 issue şablonları + PR şablonu</li><li>Not: Proje ~/Documents/GitHub/arduino-ruya-atolyesi'ye taşındı; GitHub Pages canlı: proacademycomtr.github.io/arduino-ruya-atolyesi</li></ul><h2>[2.14.0] - 2026-09-30</h2><ul><li>Sürüm 2.14.0 olarak derlendi.</li><li>Yeni: 📁 **Depoda varsayılan katalog** — `fiyat-katalogu.json` artık projenin kökünde; build.py onu hem dist'e kopyalar hem FILE_CATALOG olarak JS'e gömer. Fiyat önceliği: öğretmen özel (localStorage) → depo → gömülü PRICE_CATALOG; Ayarlar'daki bütçe alanı depo sınırını placeholder olarak gösterir</li><li>Yeni: 💡 **Bütçe aşımı önerisi** — toplam sınırı aşarsa tabloda \"Bütçe önerisi: Arduino Uno yerine Arduino Nano kullan ($10.00 → $6.00)\" satırı (özel fiyatlar da hesaba katılır)</li><li>Yeni: ⌨️ **Canlı maliyet ipucu** — fikir yazarken 30+ karakterde demo rehber üzerinden anlık tahmin: \"💡 Bu fikre benzer proje ≈ 646.00₺ ($19.00)\" (400ms gecikmeli)</li><li>Yeni: 📋 **SÜRÜM_NOTLARI.md** — v2.10→v2.14 fiyat modülünün tamamını özetleyen sürüm notları sayfası</li></ul><h2>[2.13.0] - 2026-09-30</h2><ul><li>Sürüm 2.13.0 olarak derlendi.</li><li>Yeni: 🔽 **Fiyata göre sıralama** — malzeme tablosunun Tutar başlığındaki düğme pahalıdan ucuza (↓) → ucuza pahalıya (↑) → orijinal sıra (⇅) döngüsü yapar; fiyatlanamayan parçalar her zaman sonda, tercih hatırlanır</li><li>Yeni: 📎 **Portfolyo.zip'e fiyat katalogu** — öğretmen özel fiyatları + bütçe sınırı `fiyat-katalogu.json` olarak arşive girer; PORTFOLYO.txt'te veliler/okul idaresi için açıklama notu taşır (katalog boşsa dosya üretilmez)</li><li>Yeni: 💰 **Sınıf raporunda toplam bütçe** — tüm öğrencilerin projelerinin tahmini maliyeti toplanır ve raporun üstünde \"Sınıf toplam bütçesi\" satırında gösterilir; bütçe sınırı aşılırsa ⚠️ \"bütçe aşımı\" işaretiyle</li><li>Gelişti: 🏅 **Sertifikada bütçe aşımı işareti** — proje maliyeti öğretmen sınırını aşarsa sertifika şeridi (PDF + Portfolyo SVG'si) kırmızıya döner: \"⚠️ BÜTÇE AŞIMI\"; sınır içindeyse altın şerit + normal not</li></ul><h2>[2.12.0] - 2026-09-30</h2><ul><li>Sürüm 2.12.0 olarak derlendi.</li><li>Değişti: 💱 **TL ana para birimi** — tüm fiyat gösterimlerinde ₺ öncelikli, $ parantez içinde ikincil: `612.00₺ ($18.00)`; tablo, PDF, sınıf raporu, WhatsApp, sertifika kartı ve Portfolyo özetinde tek biçim</li><li>Yeni: 🎯 **Bütçe sınırı uyarısı** — Ayarlar'dan USD cinsinden üst sınır girilir; proje toplamı aşarsa malzeme tablosunda ⚠️ kırmızı \"Bütçe aşımı (Sınır: …)\" satırı ve PDF'te \"bütçe aşımı\" etiketi; 0/boş = kapalı, cihaz tercihi (yedeğe girmez)</li><li>Yeni: 🏅 **Sertifikada fiyat şeridi** — PDF (canvas) ve Portfolyo SVG sertifikasında altın yuvarlak köşeli şerit: \"Tahmini proje maliyeti: 612.00₺ ($18.00) · ortalama perakende tahmini\"</li><li>Yeni: 📤 **Katalog JSON paylaşımı** — öğretmen özel fiyatlarını + bütçe sınırını `fiyat-katalogu.json` olarak dışa aktarır; diğer öğretmen aynı dosyayı içe aktararak katalogu devralır (sayı olmayan fiyatlar sessizce atlanır)</li></ul><h2>[2.11.0] - 2026-09-29</h2><ul><li>Sürüm 2.11.0 olarak derlendi.</li><li>Yeni: 🏷️ **Öğretmen fiyat kataloğu** — Ayarlar'a \"Parça adı: fiyat (USD)\" satırları yazılır (noktalı/virgüllü ondalık ikisi de olur), localStorage'da kalıcıdır ve fiyat tahmininde katalog fiyatının YERİNE geçer; en uzun eşleşen ad kazanır, ✏️ işaretiyle tabloda belli olur</li><li>Yeni: 🔢 **Canlı adet düzenleyici** — malzeme tablosunda her satırda −/+ düğmeleri ve yazılabilir adet kutusu; toplam anında güncellenir, adetler proje başına localStorage'da saklanır</li><li>Yeni: 📊 **Sınıf raporunda Maliyet sütunu** — gönderim dosyası artık proje malzemelerini taşır; öğretmen her öğrencinin projesinin tahmini maliyetini raporda görür</li><li>Yeni: 💰 **Portfolyo.zip'e bütçe özeti** — PORTFOLYO.txt'te proje başına tahmini maliyet + portfolyo toplamı (\"alışveriş listesi değildir\" notuyla)</li></ul><h2>[2.10.0] - 2026-09-29</h2><ul><li>Sürüm 2.10.0 olarak derlendi.</li><li>Yeni: 💰 **Malzeme fiyat tahmini** — her rehberin malzeme tablosunda Birim Fiyat ve Tutar sütunları; yaklaşık Türkiye perakende fiyatları 39 parçalık katalogdan ($ + ₺ çift gösterim, kur bilgi amaçlı ~34)</li><li>Yeni: **Ortalama Proje Fiyatı** satırı — adet × birim hesabıyla proje toplamı; katalogda olmayan parçalar \"—\" ile işaretlenir ve toplama katılmaz</li><li>PDF çıktısı ve WhatsApp paylaşımı da fiyat toplamını taşır; sertifika projesi kartına 4. istatistik kutusu (≈ fiyat) eklendi</li><li>AI rehberlerinde de çalışır: AI malzeme adlarını aynı katalogla fiyatlar, bilinmeyenler dürüstçe \"fiyatlanmadı\" olarak gösterilir</li></ul><h2>[2.9.0] - 2026-09-28</h2><ul><li>Sürüm 2.9.0 olarak derlendi.</li><li>Yeni: 🌙🎲📏 **3 yeni demo rehber** — otomatik gece lambası (LDR + histeresis), butonla atılan dijital zar (randomSeed gürültü tohumu, 6 LED'li zar yüzleri), OLED mesafe ölçer (HC-SR04 + SSD1306 ikili kütüphane); üçü de wokwiValidate'ten 0 uyarıyla geçer ve 🚀 İleri Seviye bölümü taşır. Demo sayısı 11 → 14; altın rozet eşiği artık demo sayısından otomatik türetilir</li><li>Yeni: 📜 **Portfolyo.zip'e sertifikalar** — her proje klasörüne baskı-dostu SERTIFIKA.svg eklenir (certificateSVG, certCanvas ile aynı görsel dil)</li><li>Yeni: ⚡ **Toplu geri bildirim** — öğretmen panelinde yorumu bekleyen tüm gönderiler tek listede; \"Hepsini İndir\" her öğrenciye kişisel .geribildirim.json dosyası indirir ve gönderileri işaretler</li><li>Yeni: 💾 **Veri yedeği** — Ayarlar'dan tüm uygulama verisi (arşiv, adımlar, sınıf, gönderiler, rozetler, geri bildirimler, özel bileşenler) tek .yedek.json dosyasına dışa aktarılır / başka bilgisayarda geri yüklenir; dil/tema gibi cihaz yerel tercihleri hariçtir</li><li>Çözücü iyileştirmeleri: satır sahibi parça tespiti (\"OLED GND → GND\" satırındaki GND, satırdaki OLED parçasınındır), çoklu örnek parça bağlantıları (LED1/LED2… ayrı ayrı çözülür), OLED'de LCD'ye yanlış eşleşme engellendi, wokwi-7segment DP pini, RGB/OLED'de boşta düz LED parçası üretilmez</li></ul><h2>[2.8.0] - 2026-09-28</h2><ul><li>Sürüm 2.8.0 olarak derlendi.</li><li>Yeni: 🎨🔧🕐 **3 yeni demo rehber** — LCD'li dijital saat (I2C, millis() sayaç), RGB LED mood lambası (0-767 ton haritası, PWM karıştırma), servo kapı kilidi (kenar algılama, durum makinesi); üçü de wokwiValidate'ten 0 uyarıyla geçer ve 🚀 İleri Seviye bölümü taşır</li><li>Yeni: 📄 **Sınıf raporuna Geri Bildirim sütunu** — her gönderimde \"Verildi ✓ / Bekliyor\" durumu + varsa öğretmen yorumunun 80 karakterlik özeti</li><li>Yeni: 🥉🥈🥇 **Rozet kademeleri** — Başarımlar modalında bronz (3 sertifika) / gümüş (5) / altın (tüm 11 demo) ilerleme kartı + \"sonraki hedef\" metni</li><li>Yeni: 📦 **Portfolyo.zip** — sertifikalı tüm rehberlerin Wokwi paketleri (sketch.ino + diagram.json + öğretmen notları) numaralı klasörler hâlinde tek arşivde; kökte PORTFOLYO.txt özeti. Sertifikalar artık rehber snapshot'ı saklar; eski guide'sız kayıtlar atlanır</li><li>Düzeltme: RGB projesinde \"RGB LED\" metni ayrıca boşta bir wokwi-led parçası üretiyordu — RGB varken düz LED eklenmez</li></ul><h2>[2.7.0] - 2026-09-25</h2><ul><li>Sürüm 2.7.0 olarak derlendi.</li><li>Yeni: 🏫 **Öğretmen paneli** — Sınıf Modu artık iki sütunlu geniş panel: solda sınıf kodu + içe aktarma + rapor, sağda ilerleme yüzdeli gönderi kartları ve geri bildirim yazma (tek ekranda)</li><li>Yeni: 🏅 **Öğrenci başarımları** — header'da sayaçlı yeni düğme; kazanılan sertifikalar + okunan öğretmen geri bildirimleri kart görünümünde listelenir (mükerrer kayıt engellenir)</li><li>Yeni: 🚀 **İleri Seviye bölümü** — 7 segment (ikinci display ile 0-99 multiplexing, butonla durdur/başlat) ve piyano (kayıt/çalma, pot ile oktav) demo rehberlerine katlanabilir gelişmiş kutu: ek wiring satırları + kod parçaları</li><li>Yeni: 📦 **Zip kişiselleştirme** — Wokwi paketi öğrenci adı + sınıf kodunu bilir: sketch.ino'ya başlık yorumu, öğretmen notlarına \"Öğrenci / Sınıf kodu\" satırları (ad: gönderim/sertifika girişlerinden)</li></ul><h2>[2.6.0] - 2026-09-25</h2><ul><li>Sürüm 2.6.0 olarak derlendi.</li><li>Yeni: 💬 **Öğretmen geri bildirimi** — öğretmen içe aktarılan gönderiye yorum yazar, `.geribildirim.json` indirir; öğrenci \"Geri Bildirimi Göster\" ile açıp rehberde okur (yorumlar tarayıcıda saklanır)</li><li>Yeni: ⚡ **Wokwi'de Aç güçlendirildi** — sketch kodu + tüm bağlantılar çözülmüşse diagram.json tek kopyada panoya; Wokwi şablonu yeni sekmede açılır</li><li>Yeni: 🏆 **Lider tablosu** — sınıf raporuna ilerlemeye göre sıralı SVG çubuk grafik (ilk 10, print-to-PDF dostu, bağımlılıksız)</li><li>Yeni: 🔢🚗🎹 **3 yeni demo rehber** — 7 segment display sayacı (wokwi-7segment, ortak katot), ultrasonik park sensörü, buzzer'lı mini piyano (INPUT_PULLUP, 4 buton); üçü de wokwiValidate'ten 0 uyarıyla geçer</li><li>Düzeltme: sınıf gönderim içe aktarma tek-nesne `.klasor.json` biçimini kabul eder (dizi/sarmalayıcı yanına)</li><li>Düzeltme: çözücüde tek harfli pin kelimeleri (\"Display A\") sahip parça adına gömülü olduğu için yutuluyordu — 3+ harf sınırıyla pinler doğru çözülür</li></ul><h2>[2.5.0] - 2026-09-25</h2><ul><li>Sürüm 2.5.0 olarak derlendi.</li><li>Yeni: 🏫 **Sınıf Modu** — öğretmen sınıf kodu üretir, öğrenci adımlarını tamamlayıp `.klasor.json` gönderim dosyası indirir; öğretmen gönderimleri içe aktarıp PDF sınıf raporu alır (sunucusuz, dosya tabanlı)</li><li>Yeni: 📦 **Wokwi Paketi (.zip)** — rehberden sketch.ino + diagram.json + öğretmen notları içeren gerçek proje arşivi; bağımlılıksız zip yazıcı (STORE yöntemi, CRC32 doğrulanmış)</li><li>Yeni: 🛠️ **Adım takibi** — her adımda onay kutusu + ilerleme çubuğu; tüm adımlar bitince sertifika ve gönderim satırları açılır</li><li>Yeni: 🧪 birim testler — `node --test tests/`; çözücü, wokwiValidate, zip yazıcı, sınıf gönderimi ve özel set normalize senaryoları (16 test, app.js sanal ortamda değerlendirilir)</li></ul><h2>[2.4.0] - 2026-09-25</h2><ul><li>Sürüm 2.4.0 olarak derlendi.</li><li>Yeni: 5 demo rehbere `wokwiHints` — demo modunda bile gerçek röle/motor/servo kablolaması çıkar (L298N/DC motor Wokwi'de olmadığı için potansiyometre ile simüle edilir, satır notuyla açıklanır)</li><li>Yeni: `wokwiValidate` taslak doğrulaması — pin çakışması (aynı pine iki kablo) + eksik GND/5V uyarıları, öğretici kontrol kutusunda</li><li>Yeni: sertifika penceresine 1080×1080 paylaşım kartı PNG indirme düğmesi</li><li>Yeni: özel bileşen seti — öğretmenler bileşen ekler, JSON olarak dışa/içe aktarır (localStorage kalıcı, \"Özel Set\" kategorisi)</li><li>Düzeltme: Wokwi parça tipleri gerçek adlarına güncellendi (relay-module, lcd1602, pir-motion-sensor, photoresistor-sensor, ssd1306)</li><li>Düzeltme: AI prompt'u yalnızca geçerli Wokwi tiplerini listeler; L298N/DC motor uydurma tip yerine NULL döndürür</li><li>İyileştirme: kablo çözücü — ARDUINO öneki, ~10 PWM pini, satır-sahibi parça yönlendirmesi, çoklu aynı-tip parça desteği</li><li>Düzeltme: çözücü büyük/küçük harf duyarsız; \"IR sensör SOL — OUT\" gibi tireli satırlar çözülür; VCC/GND satırın kendi parçasına bağlanır (yanlış hint-parçası değil)</li><li>Düzeltme: \"DC motor\" artık yanlışlıkla \"Servo Motor\" kütüphane parçasına eşleşmez (genel kelimeler eşleştirmede hariç)</li></ul><h2>[2.3.0] - 2026-09-24</h2><ul><li>Sürüm 2.3.0 olarak derlendi.</li><li>Yeni: AI şemasına `wokwiHints` alanı — her malzeme için Wokwi parça tipi + pin eşlemesi; kablo üretimi bunları öncelikli kullanır</li><li>Yeni: bileşen kütüphanesi kartlarına Wokwi parça tipi/pin eşlemeleri eklendi ve taslak üretiminde kullanılıyor</li><li>Yeni: eşleşmeyen bağlantı satırları için rehberde öğretici yardım kutusu</li><li>Yeni: arşivden tek tıkla sertifika üretimi (🏅, ad sorulur, PDF iner)</li><li>İyileştirme: sertifika adı hatırlanır, sonraki sertifikalarda önerilir</li></ul><h2>[2.2.0] - 2026-09-24</h2><ul><li>Sürüm 2.2.0 olarak derlendi.</li><li>Yeni: sürüm rozeti + sürüm geçmişi modalı (footer)</li><li>Yeni: paylaşım kartını Web Share API ile doğrudan paylaşma (desteklenmezse indirme)</li><li>Yeni: PWA — manifest + service worker ile çevrimdışı kullanım</li><li>Yeni: Wokwi diagram.json kopyalarken parça/kablo özeti ve eşleşmeyen satır uyarısı</li></ul><h2>[2.1.0] - 2026-09-24</h2><ul><li>Sürüm 2.1.0 olarak derlendi.</li></ul>";
   </script>
 </body>
 </html>

@@ -3,7 +3,7 @@
    - App shell (index.html) + manifest + icon: network-first, çevrimdışına cache fallback
    - Google Fonts: cache-first (statik, sürümlü URL'ler)
    - Diğer isteklere dokunmaz */
-const CACHE_NAME = "arduino-ruya-atolyesi-v2.14.0";
+const CACHE_NAME = "arduino-ruya-atolyesi-v2.15.0";
 const APP_SHELL = ["./", "./index.html", "./manifest.json", "./icon.svg"];
 
 self.addEventListener("install", (event) => {

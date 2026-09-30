@@ -130,7 +130,8 @@ function loadCore() {
     "priceOf", "estimateCost", "fmtTL", "PRICE_CATALOG", "USD_TRY_RATE",
     "loadCustomPrices", "saveCustomPrices", "parseCustomPrices",
     "loadBudget", "isOverBudget", "parseCatalogJSON", "sortCostRows",
-    "loadFileCatalog", "fileCatalogBudget", "budgetSuggestion", "liveCostHint"
+    "loadFileCatalog", "fileCatalogBudget", "budgetSuggestion", "liveCostHint",
+    "loadRate", "rate", "rateAgeHours", "updateRateFromWeb"
   ];
   // Sanal ortamda app.js tümüyle çalıştı; örneklemesi gerekenler const/let ise
   // ayrıca değerlendir. window üzerinde export edilenler zaten sandbox'ta.

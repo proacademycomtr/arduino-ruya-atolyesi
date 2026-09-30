@@ -135,6 +135,7 @@ function openModal() {
   updateKeyHint();
   updatePriceEditor();
   updateCustomPricesEditor();
+  updateRateStatus();
   renderStats();
   settingsModal.hidden = false;
   apiKeyInput.focus();
@@ -516,6 +517,27 @@ if (budgetInput) budgetInput.addEventListener("change", () => {
   const v = parseFloat(budgetInput.value);
   localStorage.setItem(BUDGET_KEY, isFinite(v) && v > 0 ? String(v) : "");
   if (currentGuide) renderGuide(currentGuide, undefined, { scroll: false });
+});
+/* ── Çevrimiçi kur (v2.15.0) ── */
+const rateStatus = $("rateStatus");
+const updateRateBtn = $("updateRateBtn");
+function updateRateStatus() {
+  if (!rateStatus) return;
+  const o = loadRate();
+  const age = rateAgeHours();
+  const ageTxt = o.ts ? (age < 1 ? t("az önce") : age < 24 ? Math.round(age) + " " + t("saat önce") : Math.round(age / 24) + " " + t("gün önce")) : t("hiç");
+  rateStatus.textContent = `1 USD = ${o.rate.toFixed(2)}₺ (${ageTxt} ${t("güncellendi")})`;
+}
+if (updateRateBtn) updateRateBtn.addEventListener("click", async () => {
+  if (rateStatus) rateStatus.textContent = t("⏳ Kur güncelleniyor…");
+  const r = await updateRateFromWeb();
+  updateRateStatus();
+  if (r.ok) {
+    if (customPricesHint) customPricesHint.textContent = `✅ ${t("Kur güncellendi")}: 1 USD = ${r.rate.toFixed(2)}₺`;
+    if (currentGuide) renderGuide(currentGuide, undefined, { scroll: false });
+  } else if (customPricesHint) {
+    customPricesHint.textContent = t("❌ Kur alınamadı — internet bağlantısını kontrol et. Saklanan kur kullanılıyor.");
+  }
 });
 
 /* ───────────────────── Sağlayıcı İstatistikleri ───────────────────── */
@@ -2200,7 +2222,43 @@ const PRICE_CATALOG = [
   { k: ["ARDUINO UNO"], usd: 10.0, note: "Uno" },
   { k: ["ARDUINO NANO"], usd: 6.0, note: "Nano" }
 ];
-const USD_TRY_RATE = 34; // yaklaşık kur — yalnızca bilgi amaçlı
+const USD_TRY_RATE = 34; // varsayılan kur — çevrimiçi güncellenebilir (v2.15.0)
+
+/* ── Çevrimiçi kur (v2.15.0): exchangerate.host'tan USD→TRY çekilir;
+   localStorage'da saklanır, 24 saatten eskiyse önerilir. Tüm ₺ gösterimleri
+   rate() üzerinden hesaplanır — API hatalarında saklanan/varsayılan değer kullanılır. */
+const RATE_KEY = "arduinoDreamLab.rate.v1";
+function loadRate() {
+  try {
+    const o = JSON.parse(localStorage.getItem(RATE_KEY));
+    if (o && isFinite(o.rate) && o.rate > 0 && o.rate < 1000) return { rate: o.rate, ts: o.ts || 0 };
+  } catch {}
+  return { rate: USD_TRY_RATE, ts: 0 };
+}
+function rate() { return loadRate().rate; }
+function rateAgeHours() {
+  const o = loadRate();
+  return o.ts ? (Date.now() - o.ts) / 3600000 : Infinity;
+}
+async function updateRateFromWeb() {
+  const endpoints = [
+    "https://api.exchangerate.host/latest?base=USD&symbols=TRY",
+    "https://open.er-api.com/v6/latest/USD"
+  ];
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const r = Number(data && data.rates && data.rates.TRY);
+      if (isFinite(r) && r > 0 && r < 1000) {
+        localStorage.setItem(RATE_KEY, JSON.stringify({ rate: r, ts: Date.now() }));
+        return { ok: true, rate: r };
+      }
+    } catch {}
+  }
+  return { ok: false, rate: rate() };
+}
 
 /* ── Öğretmen özel fiyat kataloğu (v2.11.0) ──
    Okulun kataloğu farklıysa öğretmen Ayarlar'dan "Parça adı: fiyat (USD)"
@@ -2356,9 +2414,9 @@ function estimateCost(g, qtyOv) {
   return { rows, totalUSD, anyUnknown };
 }
 
-/* Fiyatı hem ₺ hem $ olarak gösterir (v2.12.0: ₺ ana birim; kur USD_TRY_RATE) */
+/* Fiyatı hem ₺ hem $ olarak gösterir (v2.12.0: ₺ ana birim; kur rate() — v2.15.0 çevrimiçi) */
 function fmtTL(usd) {
-  const tl = usd * USD_TRY_RATE;
+  const tl = usd * rate();
   const r2 = (x) => (Math.round(x * 100) / 100).toFixed(2);
   return `${r2(tl)}₺ ($${r2(usd)})`;
 }
@@ -3549,7 +3607,7 @@ function shareCardCanvas(g) {
     { v: String(mats), l: en ? "parts" : "parça", x: 80 },
     { v: String(wirs), l: en ? "wires" : "bağlantı", x: 388 },
     { v: String(steps), l: en ? "steps" : "adım", x: 696 },
-    { v: (Math.round(costUsd * USD_TRY_RATE * 10) / 10).toFixed(0) + "₺", l: en ? "est. cost" : "≈ fiyat", x: 1004 }
+    { v: (Math.round(costUsd * rate() * 10) / 10).toFixed(0) + "₺", l: en ? "est. cost" : "≈ fiyat", x: 1004 }
   ];
   const boxY = H - 300;
   stats.forEach((s) => {
@@ -3633,7 +3691,7 @@ async function shareCard(g) {
 function buildPrintableHTML(g) {
   const date = new Date().toLocaleDateString("tr-TR");
   const en = getLang() === "en";
-  const money = (x) => `${(Math.round(x * USD_TRY_RATE * 100) / 100).toFixed(2)}₺ ($${x.toFixed(2)})`;
+  const money = (x) => `${(Math.round(x * rate() * 100) / 100).toFixed(2)}₺ ($${x.toFixed(2)})`;
   const cost = estimateCost(g);
   const mats = cost.rows.map((r, i) => `<tr><td>${esc(r.name)}</td><td>${esc(r.qty)}</td><td>${r.known ? "$" + r.unit.toFixed(2) : "—"}</td><td>${r.known ? "$" + r.total.toFixed(2) : "—"}</td><td>${esc((g.materials || [])[i]?.purpose || "")}</td></tr>`).join("");
   const costOver = isOverBudget(cost.totalUSD);
@@ -3827,7 +3885,7 @@ function certificateSVG(g, studentName, ts) {
   const certOver2 = isOverBudget(costUsd2);
   const costStrip = costUsd2 > 0
     ? (en ? "Estimated project cost: " : "Tahmini proje maliyeti: ")
-      + `${(costUsd2 * USD_TRY_RATE).toFixed(2)}₺ ($${costUsd2.toFixed(2)})`
+      + `${(costUsd2 * rate()).toFixed(2)}₺ ($${costUsd2.toFixed(2)})`
       + (certOver2 ? (en ? " · ⚠️ OVER BUDGET" : " · ⚠️ BÜTÇE AŞIMI") : (en ? " · average retail estimate" : " · ortalama perakende tahmini"))
     : "";
   const brand = en ? "🤖 Arduino Dream Workshop" : "🤖 Arduino Rüya Atölyesi";
@@ -3911,7 +3969,7 @@ function certCanvas(g, studentName) {
   if (costUsd2 > 0) {
     const isOver = isOverBudget(costUsd2);
     const strip = (en ? "Estimated project cost: " : "Tahmini proje maliyeti: ")
-      + `${(costUsd2 * USD_TRY_RATE).toFixed(2)}₺ ($${costUsd2.toFixed(2)})`
+      + `${(costUsd2 * rate()).toFixed(2)}₺ ($${costUsd2.toFixed(2)})`
       + (isOver ? (en ? " · ⚠️ OVER BUDGET" : " · ⚠️ BÜTÇE AŞIMI") : (en ? " · average retail estimate" : " · ortalama perakende tahmini"));
     c.fillStyle = isOver ? "rgba(229, 72, 77, 0.12)" : "rgba(176, 141, 63, 0.12)";
     roundRect(c, W / 2 - 250, yEnd + 28, 500, 42, 21);
@@ -4667,6 +4725,10 @@ const I18N = {
     "Bütçe önerisi": "Budget tip", "Arduino Uno yerine Arduino Nano kullan": "use Arduino Nano instead of Arduino Uno",
     "💡 Bu fikre benzer proje": "💡 A similar project costs about",
     "depo": "repo",
+    "az önce": "just now", "saat önce": "h ago", "gün önce": "d ago", "hiç": "never", "güncellendi": "updated",
+    "⏳ Kur güncelleniyor…": "⏳ Updating rate…",
+    "Kur güncellendi": "Rate updated",
+    "❌ Kur alınamadı — internet bağlantısını kontrol et. Saklanan kur kullanılıyor.": "❌ Could not fetch rate — check your connection. Using the stored rate.",
     "Seviye: ": "Level: ", "🧰 Malzemeler:": "🧰 Materials:", "🔗 Bağlantılar:": "🔗 Wiring:",
     "📱 Arduino Rüya Atölyesi'nden paylaşıldı": "📱 Shared from Arduino Dream Workshop",
     "Senin hayalin hangi proje? ✨": "What's your dream project? ✨",
@@ -5146,7 +5208,7 @@ function downloadClassReport() {
   const subs = Object.values(c.submissions || {}).sort((a, b) => (a.student || "").localeCompare(b.student || "", "tr"));
   if (!subs.length) return;
   const esc2 = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
-  const money = (x) => (x > 0 ? (Math.round(x * USD_TRY_RATE * 100) / 100).toFixed(2) + "₺ ($" + x.toFixed(2) + ")" : "—");
+  const money = (x) => (x > 0 ? (Math.round(x * rate() * 100) / 100).toFixed(2) + "₺ ($" + x.toFixed(2) + ")" : "—");
   const rows = subs.map((s) => {
     const total = Number(s.total) || 0;
     const done = Object.keys(s.steps || {}).length;

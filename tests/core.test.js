@@ -880,6 +880,52 @@ test("v2.14.0 liveCostHint: 30+ karakterde tahmin, kısada boş", () => {
   assert.match(hint, /₺ \(\$[\d.]+\)/, "₺+çift gösterim olmalı");
 });
 
+/* ─────────── v2.15.0: çevrimiçi kur ─────────── */
+
+test("v2.15.0 loadRate: varsayılan 34, saklanan kur + yaş hesabı", () => {
+  const KEY = "arduinoDreamLab.rate.v1";
+  sandbox.localStorage.removeItem(KEY);
+  assert.equal(core.rate(), 34, "saklanan kur yokken varsayılan 34");
+  assert.equal(core.rateAgeHours(), Infinity, "hiç güncellenmemiş → Infinity");
+  sandbox.localStorage.setItem(KEY, JSON.stringify({ rate: 41.5, ts: Date.now() }));
+  assert.equal(core.rate(), 41.5);
+  const age = core.rateAgeHours();
+  assert.ok(age >= 0 && age < 1, "taze kur ~0 saat eski, " + age);
+  // Geçersiz saklama → varsayılana düş
+  sandbox.localStorage.setItem(KEY, "bozuk");
+  assert.equal(core.rate(), 34, "bozuk veri → varsayılan");
+  sandbox.localStorage.setItem(KEY, JSON.stringify({ rate: 5000, ts: Date.now() }));
+  assert.equal(core.rate(), 34, "absürt kur (>1000) → varsayılan");
+  sandbox.localStorage.removeItem(KEY);
+});
+
+test("v2.15.0 updateRateFromWeb: başarılı fetch saklanır, hata session-fallback", async () => {
+  const KEY = "arduinoDreamLab.rate.v1";
+  sandbox.localStorage.removeItem(KEY);
+  const vm = require("node:vm");
+  // Başarılı senaryo
+  vm.runInContext("__fakeFetch = async (url) => ({ ok: true, json: async () => ({ rates: { TRY: 41.2 } }) });", sandbox);
+  sandbox.fetch = sandbox.__fakeFetch;
+  const ok = await core.updateRateFromWeb();
+  assert.ok(ok.ok, "başarılı fetch");
+  assert.equal(ok.rate, 41.2);
+  assert.equal(core.rate(), 41.2, "kur saklanmalı");
+  assert.ok(core.rateAgeHours() < 1);
+  // Hata senaryosu: iki uç nokta da patlar → ok:false, mevcut kur korunur
+  sandbox.fetch = async () => { throw new Error("offline"); };
+  const fail = await core.updateRateFromWeb();
+  assert.equal(fail.ok, false);
+  assert.equal(fail.rate, 41.2, "hata anında saklanan kur korunmalı");
+  assert.equal(core.rate(), 41.2);
+  // Bozuk yanıt → reddet
+  sandbox.fetch = async () => ({ ok: true, json: async () => ({ rates: { TRY: "x" } }) });
+  const fail2 = await core.updateRateFromWeb();
+  assert.equal(fail2.ok, false, "sayı olmayan kur reddedilmeli");
+  sandbox.fetch = async () => { throw new Error("no network in tests"); }; // extract.js varsayılanına dön
+  sandbox.localStorage.removeItem(KEY);
+  sandbox.fetch = undefined;
+});
+
 test("v2.8.0 portfolyo: sertifikasız durumda sessizce hata gösterir", () => {
   sandbox.localStorage.removeItem("arduinoDreamLab.badges.v1");
   let shown = "";
