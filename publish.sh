@@ -24,6 +24,8 @@ else
 fi
 
 echo "📦 gh-pages dalı güncelleniyor…"
+# Bayat worktree kalıntısı varsa temizle (add başarısız olursa rsync yanlış ağaca gider)
+git worktree remove --force /tmp/agh-pages 2>/dev/null || rm -rf /tmp/agh-pages
 git worktree add /tmp/agh-pages gh-pages 2>/dev/null || true
 rsync -a --delete --exclude '.git' dist/ /tmp/agh-pages/
 # README görselleri gibi repo varlıkları da yayına girsin (docs/ vb.)
