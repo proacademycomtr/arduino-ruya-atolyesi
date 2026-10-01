@@ -1184,3 +1184,104 @@ test("v2.8.0 portfolyo: sertifikasız durumda sessizce hata gösterir", () => {
   assert.ok(shown.includes("📦"), "bilgilendirme gösterilmeli");
   assert.equal(downloads.length, 0, "sertifikasız zip üretilmemeli");
 });
+
+/* ───── v2.20.0: CSV tarih filtresi ───── */
+test("v2.20.0 filterSubsByRange: ISO gün aralığı (dahil), boş aralık tümünü döndürür", () => {
+  const d = (y, m, day) => new Date(y, m, day, 14).getTime(); // yerel öğlen saati
+  const subs = [
+    { student: "Eylül", ts: d(2026, 8, 10) },
+    { student: "Ekim", ts: d(2026, 9, 5) },
+    { student: "Ekim2", ts: d(2026, 9, 20) },
+    { student: "tsYok", ts: 0 }
+  ];
+  assert.equal(core.filterSubsByRange(subs, "", "").length, 4, "boş aralık → tümü");
+  assert.deepEqual(core.filterSubsByRange(subs, "2026-10-01", "").map((s) => s.student), ["Ekim", "Ekim2"], "sadece from");
+  assert.deepEqual(core.filterSubsByRange(subs, "", "2026-09-30").map((s) => s.student), ["Eylül"], "sadece to");
+  assert.deepEqual(core.filterSubsByRange(subs, "2026-10-05", "2026-10-20").map((s) => s.student), ["Ekim", "Ekim2"], "her iki uç da dahil");
+  assert.equal(core.filterSubsByRange(subs, "2026-01-01", "2026-01-02").length, 0, "aralık dışında kalır");
+  assert.equal(core.filterSubsByRange(null, "2026-01-01", "").length, 0, "null liste güvenli");
+});
+
+test("v2.20.0 loadCsvRange/saveCsvRange: kalıcılık + bozuk JSON'a dayanıklılık", () => {
+  sandbox.localStorage.removeItem("arduinoDreamLab.csvRange.v1");
+  assert.deepEqual({ ...core.loadCsvRange() }, { from: "", to: "" }, "ilk okuma boş");
+  core.saveCsvRange({ from: "2026-10-01", to: "2026-10-20" });
+  assert.equal(core.loadCsvRange().from, "2026-10-01");
+  assert.equal(core.loadCsvRange().to, "2026-10-20");
+  core.saveCsvRange({ from: "2026-11-01", to: undefined });
+  assert.equal(core.loadCsvRange().to, "", "eksik alan boşa normalize");
+  sandbox.localStorage.setItem("arduinoDreamLab.csvRange.v1", "{bozuk");
+  assert.deepEqual({ ...core.loadCsvRange() }, { from: "", to: "" }, "bozuk JSON → varsayılan");
+  sandbox.localStorage.removeItem("arduinoDreamLab.csvRange.v1");
+});
+
+/* ───── v2.20.0: Arşiv favori/etiket ───── */
+test("v2.20.0 archiveMeta/setArchiveMeta: favori işaretleme + etiket normalize (trim, en çok 5)", () => {
+  sandbox.localStorage.setItem("arduinoDreamLab.archive.v1", JSON.stringify([
+    { id: 11, ts: 1, guide: { title: "P1", code: "a" } },
+    { id: 12, ts: 2, guide: { title: "P2", code: "b" }, meta: { fav: true, tags: ["veli"] } }
+  ]));
+  const list = core.loadArchive();
+  const m0 = core.archiveMeta(list[0]);
+  assert.equal(m0.fav, false, "meta yok → fav varsayılan false");
+  assert.equal(m0.tags.length, 0, "meta yok → etiketsiz");
+  const m1 = core.archiveMeta(list[1]);
+  assert.equal(m1.fav, true, "mevcut meta korunur");
+  assert.equal(m1.tags.join(","), "veli");
+  core.setArchiveMeta(11, { fav: true });
+  assert.equal(core.archiveMeta(core.loadArchive()[0]).fav, true, "fav kalıcı");
+  core.setArchiveMeta(11, { tags: [" dönem1 ", "", "veli", "a", "b", "c", "d"] });
+  const m = core.archiveMeta(core.loadArchive()[0]);
+  assert.equal(m.tags.join(","), "dönem1,veli,a,b,c", "boşluk temizle + en çok 5");
+  assert.equal(m.fav, true, "tags güncellemesi fav'ı korur");
+  core.setArchiveMeta(11, { fav: false });
+  assert.equal(core.archiveMeta(core.loadArchive()[0]).fav, false);
+  core.setArchiveMeta(999, { fav: true }); // olmayan id → no-op, hata atmamalı
+  assert.equal(core.loadArchive().length, 2);
+  sandbox.localStorage.removeItem("arduinoDreamLab.archive.v1");
+});
+
+/* ───── v2.20.0: Göz serbest okuma ───── */
+test("v2.20.0 buildAmbientPlan + nextAmbientStep/markAmbientStep: iç içe adım deposuyla sırayı izler", () => {
+  const g = { title: "Göz Serbest Projesi", code: "const x=1;".repeat(3), steps: [
+    { title: "Led bağla", detail: "Led dijital 13 pinine bağlanır." },
+    { title: "Kod yükle", detail: "Blink kodunu yükleyip gözlemle." },
+    { title: "Gözlemle", detail: "Ledin yanıp sönme hızını değiştir." }
+  ] };
+  const plan = core.buildAmbientPlan(g);
+  assert.equal(plan.length, 3);
+  assert.equal(plan[0].i, 0);
+  assert.ok(plan[1].text.startsWith("Adım 2."), "okuma metni Adım N ile başlar");
+  assert.equal(core.buildAmbientPlan({ steps: [] }).length, 0);
+
+  const done = () => { try { return core.stepsStore()[core.stepsKeyOf(g)] || {}; } catch { return {}; } };
+  assert.deepEqual(Object.keys(done()), [], "başlangıçta işaretli adım yok");
+  assert.equal(core.nextAmbientStep(g, 0), 0, "ilk okunacak adım 0");
+  core.markAmbientStep(g, 0);
+  assert.ok(done()[0] > 0, "adım localStorage'a yazıldı (iç içe yapı)");
+  assert.equal(core.nextAmbientStep(g, 0), 1, "işaretli adım atlanır");
+  core.markAmbientStep(g, 1);
+  core.markAmbientStep(g, 2);
+  assert.equal(core.nextAmbientStep(g, 0), -1, "tümü bitince -1");
+  assert.equal(core.nextAmbientStep(g, 2), -1, "tümü bitince idx'ten bağımsız -1");
+});
+
+/* ───── v2.20.0: Portfolyo favori sıralaması ───── */
+test("v2.20.0 orderPortfolioCerts: favoriler önce, sonra en yeni tarih", () => {
+  sandbox.localStorage.setItem("arduinoDreamLab.badges.v1", JSON.stringify([
+    { type: "cert", project: "Eski Proje", ts: 100, guide: { title: "Eski Proje", code: "x1" } },
+    { type: "cert", project: "Yeni Proje", ts: 300, guide: { title: "Yeni Proje", code: "x2" } },
+    { type: "cert", project: "Favori Proje", ts: 200, guide: { title: "Favori Proje", code: "x3" } },
+    { type: "feedback", project: "Rozet", ts: 999 }
+  ]));
+  sandbox.localStorage.setItem("arduinoDreamLab.archive.v1", JSON.stringify([
+    { id: 1, ts: 1, guide: { title: "Favori Proje", code: "x3" }, meta: { fav: true, tags: ["severim"] } }
+  ]));
+  const certs = core.loadBadges().filter((b) => b.type === "cert" && b.guide);
+  assert.equal(certs.length, 3);
+  const ordered = core.orderPortfolioCerts(certs);
+  assert.deepEqual(ordered.map((b) => b.project), ["Favori Proje", "Yeni Proje", "Eski Proje"], "favori önce, aynı statüde en yeni önce");
+  assert.deepEqual(core.orderPortfolioCerts([]).length, 0, "boş liste güvenli");
+  sandbox.localStorage.removeItem("arduinoDreamLab.badges.v1");
+  sandbox.localStorage.removeItem("arduinoDreamLab.archive.v1");
+});

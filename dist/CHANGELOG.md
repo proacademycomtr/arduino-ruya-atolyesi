@@ -2,6 +2,10 @@
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
 
+## [2.20.0] - 2026-10-01
+
+- Sürüm 2.20.0 olarak derlendi.
+
 ## [2.19.0] - 2026-10-01
 
 - Sürüm 2.19.0 olarak derlendi.

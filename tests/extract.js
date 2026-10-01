@@ -135,7 +135,9 @@ function loadCore() {
     "liveCostHintSync", "buildCostPrompt", "askAICostMaterials", "aiCostCache",
     "loadClassSize", "weeklyProgressSVG",
     "catalogSuggestions", "atRiskStudents", "unknownMaterials", "classSubsToCSV", "downloadClassCSV",
-    "shoppingListText", "shareShoppingList", "filterSubmissions", "paginate", "mostActiveWeek", "mondayOf"
+    "shoppingListText", "shareShoppingList", "filterSubmissions", "paginate", "mostActiveWeek", "mondayOf",
+    "loadCsvRange", "saveCsvRange", "filterSubsByRange", "archiveMeta", "setArchiveMeta", "loadArchive", "writeArchive",
+    "buildAmbientPlan", "nextAmbientStep", "markAmbientStep", "orderPortfolioCerts"
   ];
   // Sanal ortamda app.js tümüyle çalıştı; örneklemesi gerekenler const/let ise
   // ayrıca değerlendir. window üzerinde export edilenler zaten sandbox'ta.

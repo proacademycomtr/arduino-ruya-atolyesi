@@ -115,6 +115,25 @@ try {
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
 
+  /* ── 7) v2.20.0: CSV tarih filtresi gönderi listesini süzer ── */
+  await page.evaluate(() => {
+    const iso = (ts) => { const d = new Date(ts); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+    const subs = {};
+    subs["Eski Öğrenci|Proje A"] = { student: "Eski Öğrenci", project: "Proje A", total: 2, steps: { 0: 1 }, ts: Date.now() - 40 * 86400000, materials: [] };
+    subs["Yeni Öğrenci|Proje B"] = { student: "Yeni Öğrenci", project: "Proje B", total: 2, steps: { 0: 1 }, ts: Date.now() - 86400000, materials: [] };
+    localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({ code: "E2E-20", submissions: subs }));
+    localStorage.setItem("arduinoDreamLab.csvRange.v1", JSON.stringify({ from: iso(Date.now() - 7 * 86400000), to: "" }));
+  });
+  await page.click("#classBtn");
+  await page.waitForSelector("#subList .archive-item");
+  const fSubs = (await page.$$("#subList .archive-item")).length;
+  ok("7a. tarih filtresi 1 gönderiye düşürür", fSubs === 1, fSubs + " satır");
+  await page.click("#csvRangeClear");
+  await page.waitForTimeout(300);
+  const cSubs = (await page.$$("#subList .archive-item")).length;
+  ok("7b. filtre temizle → tüm gönderiler", cSubs === 2, cSubs + " satır");
+  await page.evaluate(() => localStorage.removeItem("arduinoDreamLab.csvRange.v1"));
+
 } catch (e) {
   ok("AKIŞ", false, e.message);
 } finally {

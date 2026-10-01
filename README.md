@@ -4,7 +4,7 @@
 
 Katkı yapmak isterseniz [CONTRIBUTING.md](CONTRIBUTING.md) ile başlayın; yayına çıkarmak için `./publish.sh` tek komut.
 
-![sürüm](https://img.shields.io/badge/s%C3%BCr%C3%BCm-v2.19.0-00d1b2) ![test](https://img.shields.io/badge/testler-67%20birim%20%2B%2015%20E2E-brightgreen) ![lisans](https://img.shields.io/badge/lisans-MIT-blue) [![Tests](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml/badge.svg)](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml)
+![sürüm](https://img.shields.io/badge/s%C3%BCr%C3%BCm-v2.20.0-00d1b2) ![test](https://img.shields.io/badge/testler-72%20birim%20%2B%2017%20E2E-brightgreen) ![lisans](https://img.shields.io/badge/lisans-MIT-blue) [![Tests](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml/badge.svg)](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml)
 
 > 🎨 **Kart Oluştur** düğmesiyle her rehberden paylaşılabilir proje kartı (PNG) çıkar — README'ye eklemek istediğin kartı bize söyle, buraya koyalım.
 
@@ -24,10 +24,11 @@ Katkı yapmak isterseniz [CONTRIBUTING.md](CONTRIBUTING.md) ile başlayın; yay�
 - 🔎 **Taslak doğrulama (wokwiValidate):** taslağı üretirken **pin çakışması** (aynı pine iki kablo) ve **eksik GND/5V besleme** uyarılarını öğretici kutuda gösterir — öğrenciler kabloyu çekmeden hatayı görür
 - 📦 **Wokwi Paketi (.zip):** rehberden `sketch.ino` + `diagram.json` + öğretmen notları içeren **gerçek bir proje arşivi** indirir — öğrenci adı ve sınıf kodu biliniyorsa **sketch başlığı ve notlar kişiselleşir** — Wokwi'de "Open project ZIP" ile tek seferde açılır (bağımlılıksız zip yazıcı)
 - 🛠️ **Adım takibi:** her adımın yanında onay kutusu + ilerleme çubuğu; tüm adımlar bitince sertifika satırı açılır (ilerleme localStorage'da kalıcı)
-- 🏫 **Sınıf Modu + Öğretmen Paneli:** öğretmen sınıf kodu üretir ve paylaşır; öğrenci adımlarını tamamlayıp **`.klasor.json` gönderim dosyası** indirir; öğretmen **iki sütunlu panelde** gönderileri ilerleme yüzdesiyle izler, yorum yazar, **PDF sınıf raporu** (SVG lider tablosu + 📈 haftalık ilerleme grafiği + 🎯 sınıf bütçe planı) alır — tamamı sunucusuz, dosya tabanlı akış. Panel akıllıdır: 🏷️ **katalog öneri çipleri** (depoda olup özel fiyatı olmayan parçalar tek tıkla fiyat listesine eklenir), 🚨 **risk altındaki öğrenciler** (10 gündür hareketsiz + bitmemiş proje), ❓ **fiyatlanamayan malzemeler** (kataloksız parçalar toplanır), 📊 **CSV dışa aktarma** (Excel uyumlu gönderi tablosu) ve 🔍 **arama + sayfalama** (Türkçe harf duyarsız, 6'şarlı)
+- 🏫 **Sınıf Modu + Öğretmen Paneli:** öğretmen sınıf kodu üretir ve paylaşır; öğrenci adımlarını tamamlayıp **`.klasor.json` gönderim dosyası** indirir; öğretmen **iki sütunlu panelde** gönderileri ilerleme yüzdesiyle izler, yorum yazar, **PDF sınıf raporu** (SVG lider tablosu + 📈 haftalık ilerleme grafiği + 🎯 sınıf bütçe planı) alır — tamamı sunucusuz, dosya tabanlı akış. Panel akıllıdır: 🏷️ **katalog öneri çipleri** (depoda olup özel fiyatı olmayan parçalar tek tıkla fiyat listesine eklenir), 🚨 **risk altındaki öğrenciler** (10 gündür hareketsiz + bitmemiş proje), ❓ **fiyatlanamayan malzemeler** (kataloksız parçalar toplanır), 📊 **CSV dışa aktarma** (Excel uyumlu gönderi tablosu) ve 🔍 **arama + sayfalama** (Türkçe harf duyarsız, 6'şarlı); 📅 **CSV tarih filtresi** (dönem sonu raporu için gönderileri başlangıç/bitiş gününe göre süzer — CSV, liste ve PDF raporu birlikte)
 - 🏅 **Öğrenci başarımları:** header'daki sayaçlı düğme; kazanılan **sertifikalar** + okunan **öğretmen geri bildirimleri** tek yerde
 - 🥉🥈🥇 **Rozet kademeleri:** Başarımlar penceresinde bronz (3 sertifika) / gümüş (5) / altın (tüm 14 demo) ilerleme kartı + "sonraki hedef" göstergesi
-- 📦 **Portfolyo.zip:** sertifikalı tüm rehberlerin Wokwi paketleri (sketch.ino + diagram.json + notlar + **sertifika SVG'si**) numaralı klasörlerle tek arşivde; kökte PORTFOLYO.txt özeti
+- 📦 **Portfolyo.zip:** sertifikalı tüm rehberlerin Wokwi paketleri (sketch.ino + diagram.json + notlar + **sertifika SVG'si**) numaralı klasörlerle tek arşivde; kökte PORTFOLYO.txt özeti; ⭐ favoriler öne alınır, **RAPOR.md** favori/etiket özetini taşır
+- ⭐ **Arşiv favori + etiketler:** arşiv kartlarında favorile ⭐ ve virgülle ayırarak etiketle 🏷️; çiplerle filtrele (Tümü / Favoriler / etiket), favoriler Portfolyo.zip'te öne çıkar
 - 🚀 **İleri Seviye:** demo rehberlerde katlanabilir gelişmiş kutu — ek devre + kod parçaları (multiplexing, kayıt/çalma, oktav kontrolü)
 - 💬 **Öğretmen geri bildirimi:** öğretmen içe aktarılan gönderiye yorum yazar, `.geribildirim.json` dosyası indirip öğrenciye iletir; öğrenci rehberde **"Geri Bildirimi Göster"** ile okur — döngü tamamen dosya tabanlı
 - 🏆 **Lider tablosu:** sınıf raporunda öğrenciler ilerleme yüzdesine göre sıralı SVG çubuk grafikte (ilk 10) gösterilir; raporda ayrıca her gönderimin **Geri Bildirim** durumu (Verildi ✓ / Bekliyor + yorum özeti) listelenir
@@ -37,7 +38,7 @@ Katkı yapmak isterseniz [CONTRIBUTING.md](CONTRIBUTING.md) ile başlayın; yay�
 - 📚 **Bileşen kütüphanesi:** 15 parça; pinleri, örnek kodu, sık yapılan hataları ve gerçek Wokwi parça tipleriyle
 - ⭐ **Özel bileşen seti:** öğretmenler kendi bileşenlerini ekler, **JSON olarak dışa/içe aktarır** (sınıfla paylaşım); set localStorage'da kalıcıdır ve Wokwi üretiminde otomatik kullanılır
 - 🎤 **Sesli fikir girişi:** mikrofonla konuş, fikrin metne dönüşsün (Chrome/Edge)
-- 🔊 **Bana Anlat:** rehberi sesli okur (metinden konuşmaya) — dinlerken diğer işlerini yapabilirsin
+- 🔊 **Bana Anlat / 👁️ Göz Serbest:** rehberi sesli okur (metinden konuşmaya) — v2.20.0 ile **adım adım okur, her adımı otomatik işaretler ve sonrakine geçer**; öğrenci elini kullanmadan rehberi takip eder, işaretli adımlardan kaldığı yerden devam eder
 - 🏅 **Başarı sertifikası:** tüm adımları tamamlayınca adını yazıp sertifika oluştur — **PDF olarak otomatik iner**, yazdırılabilir pencere de açılır
 - 🖼️ **Paylaşım kartı:** rehberi 1080×1080 sosyal medya kartı olarak indir; mobilde **Web Share API** ile doğrudan Instagram/WhatsApp'a paylaş — **sertifika penceresinden de tek tıkla PNG**
 - 📲 **PWA / Çevrimdışı:** manifest + service worker ile site telefona kurulur, internet olmadan da açılır (AI çağrıları hariç — onlar bağlantı ister)

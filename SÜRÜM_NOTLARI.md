@@ -1,4 +1,4 @@
-# 📋 Sürüm Notları — Fiyat Tahmini Dönemi (v2.10.0 → v2.18.0)
+# 📋 Sürüm Notları — Fiyat Tahmini Dönemi (v2.10.0 → v2.20.0)
 
 Arduino Rüya Atölyesi'nin malzeme fiyatı modülünün baştan sona hikâyesi.
 Tüm fiyatlar **₺ ana, $ ikincil** gösterilir (kur ≈ 34, bilgi amaçlı).
@@ -59,6 +59,13 @@ Tüm fiyatlar **₺ ana, $ ikincil** gösterilir (kur ≈ 34, bilgi amaçlı).
 - **Haftalık ilerleme grafiği:** sınıf raporunda gönderimlerin tamamlanan adımları haftaya kümelendirilir, son 8 haftanın çubuk grafiği basılır.
 - **Sınıf bütçe planlayıcısı:** Ayarlar'a sınıf mevcudu girilir; rapor mevcut × ortalama proje maliyetiyle tüm sınıfın bütçe ihtiyacını hesaplar ve öğretmen sınırıyla karşılaştırır.
 - **README görseli + CI E2E:** canlı uygulama ekran görüntüsü repoda; GitHub Actions artık Playwright E2E'yi de koşar.
+
+## 🧭 v2.20.0 — Takip Et ve Keşfet
+
+- **CSV tarih filtresi:** panelde başlangıç/bitiş tarihi seç — CSV indirimi ve gönderi listesi bu aralığa süzülür, seçim localStorage'da korunur; sınıf raporu başlığında "CSV tarih aralığı: … (n/total)" notu düşer; ✕ tek tıkla temizler.
+- **Arşiv favori/etiketler:** ⭐ favorile, 🏷️ virgülle ayırarak (en çok 5) etiketle; ⭐ Favoriler / 🏷️ etiket çipleriyle filtrele. Favoriler Portfolyo.zip'te önce numara alır, zip'e favoriler + etiket özetli RAPOR.md girer.
+- **Göz serbest modu:** "Bana Anlat" artık adım adım okur — her adım bitince 2 sn bekler, adımı otomatik işaretler ve sonrakine geçer; daha önce işaretli adımlardan kaldığı yerden devam eder.
+- **Test:** 72 birim (5 yeni), E2E 17 kontrol (2 yeni).
 
 ## 🧭 v2.19.0 — Paylaş ve Bul
 

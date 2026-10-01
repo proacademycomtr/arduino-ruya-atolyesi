@@ -2552,6 +2552,7 @@ function sortCostRows(rows, mode) {
 }
 
 function renderGuide(g, idea) {
+  stopAmbient();
   if (typeof idea === "string") currentIdea = idea;
   const aiTag = g.ai === true
     ? '<span class="diff-tag" data-level="AI" style="background:var(--teal-soft);color:var(--teal)">✨ AI Üretimi</span>'
@@ -2877,7 +2878,77 @@ function renderDiagram(g) {
   }
 }
 
+/* ── v2.20.0: CSV tarih filtresi + arşiv meta + göz serbest okuma yardımcıları ── */
+const CSV_RANGE_KEY = "arduinoDreamLab.csvRange.v1";
+function loadCsvRange() {
+  try { const r = JSON.parse(localStorage.getItem(CSV_RANGE_KEY)) || {}; return { from: String(r.from || ""), to: String(r.to || "") }; }
+  catch { return { from: "", to: "" }; }
+}
+function saveCsvRange(r) {
+  try { localStorage.setItem(CSV_RANGE_KEY, JSON.stringify({ from: String(r.from || ""), to: String(r.to || "") })); } catch {}
+}
+/* Gönderileri tarih aralığına göre süzer: ISO gün dizesi (YYYY-MM-DD) karşılaştırması.
+   ts → yerel gün (UTC değil; öğretmenin saat dilimi anlamlı). Aralık boşsa tümü. */
+function filterSubsByRange(subs, from, to) {
+  const f = String(from || "").slice(0, 10);
+  const t2 = String(to || "").slice(0, 10);
+  if (!f && !t2) return subs;
+  return (subs || []).filter((s) => {
+    const ts = Number(s.ts) || 0;
+    if (!ts) return false;
+    const d = new Date(ts);
+    const day = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    if (f && day < f) return false;
+    if (t2 && day > t2) return false;
+    return true;
+  });
+}
+/* Arşiv öğesinin favori/etiketlerini oku-yaz (eski yedeklerle uyumlu: alan yoksa varsayılan) */
+function archiveMeta(item) {
+  const m = item && item.meta ? item.meta : {};
+  return { fav: !!m.fav, tags: Array.isArray(m.tags) ? m.tags.map((x) => String(x)).filter(Boolean).slice(0, 5) : [] };
+}
+function setArchiveMeta(id, patch) {
+  const list = loadArchive();
+  const it = list.find((x) => String(x.id) === String(id));
+  if (!it) return;
+  const cur = archiveMeta(it);
+  const next = { fav: patch.fav === undefined ? cur.fav : !!patch.fav, tags: patch.tags === undefined ? cur.tags : patch.tags.map((x) => String(x).trim()).filter(Boolean).slice(0, 5) };
+  it.meta = next;
+  writeArchive(list);
+}
+/* Göz serbest modu: adımları kuyruğa alıp sırayla okur; biten adım otomatik işaretlenir.
+   settings const'ı yükleme anında okunduğu için işaretlemeyi localStorage'a doğrudan yazar. */
+function buildAmbientPlan(g) {
+  const en = getLang() === "en";
+  return (g.steps || []).map((s, i) => ({
+    i,
+    title: s.title || (en ? "Step " + (i + 1) : "Adım " + (i + 1)),
+    detail: String(s.detail || ""),
+    text: (en ? "Step " : "Adım ") + (i + 1) + ". " + (s.title || "") + ". " + String(s.detail || "")
+  }));
+}
+function nextAmbientStep(g, idx) {
+  let done = {};
+  try { done = stepsStore()[stepsKeyOf(g)] || {}; } catch {}
+  const total = (g.steps || []).length;
+  for (let i = idx; i < total; i++) if (!done[i]) return i;
+  return -1;
+}
+function markAmbientStep(g, idx) {
+  const store = stepsStore();
+  const key = stepsKeyOf(g);
+  if (!store[key] || typeof store[key] !== "object") store[key] = {};
+  store[key][idx] = Date.now();
+  localStorage.setItem(STEPS_KEY, JSON.stringify(store));
+}
+function stopAmbient() {
+  try { clearTimeout(ambientTimer); } catch {}
+  ambientTimer = null;
+}
+
 /* ───────────────────── Rehber Eylemleri (PDF / Paylaş / Arşiv) ───────────────────── */
+let ambientTimer = null;
 function speakText(text) {
   try {
     const synth = window.speechSynthesis;
@@ -3610,35 +3681,53 @@ function wireGuideActions(g) {
         const synth = window.speechSynthesis;
         if (synth && synth.speaking) {
           stopSpeaking();
+          stopAmbient();
           btn.textContent = t("🔊 Bana Anlat");
+          btn.classList.remove("btn-handsfree");
           return;
         }
+        /* v2.20.0: Göz serbest mod — tüm metni tek seferde değil, adım adım okur;
+           her adımın sonunda 2 sn bekler, o adımı otomatik işaretler, sonrakine geçer. */
         const en = getLang() === "en";
-        const mats = (g.materials || []).map((m) => `${m.name} ×${m.quantity}`).join("; ");
-        const wir = (g.wiring || []).map((w) => `${w.from} → ${w.to}`).join("; ");
-        const stp = (g.steps || []).map((s, i) => `${i + 1}. ${s.title}. ${s.detail}`).join(" ");
-        const tps = (g.tips || []).join(" ");
-        const text = [
+        const steps = buildAmbientPlan(g);
+        if (!steps.length) { showError(en ? "No steps to read." : "Okunacak adım yok."); return; }
+        const startAt = nextAmbientStep(g, 0);
+        const firstIdx = startAt === -1 ? 0 : startAt;
+        const intro = [
           `${en ? "Project" : "Proje"}: ${g.title}. ${en ? "Level" : "Seviye"}: ${g.difficulty}.`,
           g.summary,
-          `${en ? "Materials" : "Malzemeler"}: ${mats}.`,
+          `${en ? "Materials" : "Malzemeler"}: ${(g.materials || []).map((m) => `${m.name} ×${m.quantity}`).join("; ")}.`,
           `${en ? "Estimated project total" : "Ortalama proje fiyatı"}: ${fmtTL(estimateCost(g).totalUSD)}.`,
-          `${en ? "Wiring" : "Bağlantılar"}: ${wir}.`,
-          `${en ? "Build steps" : "Yapım adımları"}: ${stp}`,
-          tps ? `${en ? "Tips" : "İpuçları"}: ${tps}` : ""
-        ].filter(Boolean).join(" ").slice(0, 4000);
-        const ok = speakText(text);
-        if (ok) {
-          btn.textContent = t("⏹️ Durdur");
-          const restore = () => { btn.textContent = t("🔊 Bana Anlat"); };
-          if (synth) {
-            const u = synth;
-            const check = setInterval(() => { if (!u.speaking) { restore(); clearInterval(check); } }, 500);
-            setTimeout(() => clearInterval(check), 600000);
+          firstIdx === 0 ? (en ? "Starting step 1." : "Adım 1 ile başlıyorum.") : (en ? `Resuming from step ${firstIdx + 1}.` : `Adım ${firstIdx + 1} devam ediyorum.`)
+        ].filter(Boolean).join(" ");
+        const ok = speakText(intro);
+        if (!ok) { showError(en ? "Speech synthesis is not available in this browser." : "Bu tarayıcıda sesli anlatım desteklenmiyor."); return; }
+        btn.textContent = t("👁️ Göz Serbest — Durdur");
+        btn.classList.add("btn-handsfree");
+        const boxes = [...resultCard.querySelectorAll("[data-step-check]")];
+        const sayStep = (idx) => {
+          const st = steps[idx];
+          if (!st) return;
+          speakText(st.text);
+          const box = boxes[idx];
+          if (box && !box.checked) {
+            box.checked = true;
+            const li = resultCard.querySelector(`.step-item[data-step="${idx}"]`);
+            if (li) li.classList.add("done");
+            markAmbientStep(g, idx);
+            updateProgressBar();
           }
-        } else {
-          showError(en ? "Speech synthesis is not available in this browser." : "Bu tarayıcıda sesli anlatım desteklenmiyor.");
-        }
+          if (idx + 1 < steps.length) {
+            ambientTimer = setTimeout(() => sayStep(idx + 1), (st.detail || "").length * 68 + 2200);
+          } else {
+            ambientTimer = setTimeout(() => {
+              stopAmbient();
+              btn.textContent = t("🔊 Bana Anlat");
+              btn.classList.remove("btn-handsfree");
+            }, (st.detail || "").length * 68 + 2200);
+          }
+        };
+        ambientTimer = setTimeout(() => sayStep(firstIdx), Math.min(intro.length * 62, 12000));
       }
       else if (act === "cert") {
         const nameEl = document.getElementById("certNameInput");
@@ -4357,31 +4446,75 @@ function saveToArchive(g, idea, manual = false) {
   writeArchive(list.slice(0, 30));
   return true;
 }
+/* v2.20.0: Arşiv filtre durumu — "all" | "fav" | etiket adı (modlar arası korunur) */
+let archiveFilter = { mode: "all", tag: "" };
 function renderArchive() {
   const wrap = $("archiveContent");
-  const list = loadArchive();
-  if (!list.length) {
+  const all = loadArchive();
+  if (!all.length) {
     wrap.innerHTML = '<div class="empty-state"><span class="big">📭</span><p>Henüz kaydedilmiş proje yok.<br>Bir rehber oluşturduğunda otomatik olarak burada birikir.</p></div>';
     return;
   }
-  wrap.innerHTML = '<div class="archive-grid">' + list.map((item) => {
+  const en = getLang() === "en";
+  const tagCounts = new Map();
+  let favCount = 0;
+  all.forEach((item) => {
+    const m = archiveMeta(item);
+    if (m.fav) favCount++;
+    m.tags.forEach((tg) => tagCounts.set(tg, (tagCounts.get(tg) || 0) + 1));
+  });
+  const chipBtn = (mode, tag, label, count, on) => `<button type="button" class="arch-chip${on ? " on" : ""}" data-archchip="${esc(mode)}" data-archtag="${esc(tag || "")}">${label}${count ? ` <span class='count-badge'>${count}</span>` : ""}</button>`;
+  const chips = `<div class="arch-chips">`
+    + chipBtn("all", "", en ? "🗂️ All" : "🗂️ Tümü", all.length, archiveFilter.mode === "all")
+    + chipBtn("fav", "", en ? "⭐ Favorites" : "⭐ Favoriler", favCount, archiveFilter.mode === "fav")
+    + [...tagCounts.keys()].sort((a, b) => a.localeCompare(b, "tr")).map((tg) => chipBtn("tag", tg, "🏷️ " + esc(tg), tagCounts.get(tg), archiveFilter.mode === "tag" && archiveFilter.tag === tg)).join("")
+    + `</div>`;
+  let list = all;
+  if (archiveFilter.mode === "fav") list = all.filter((item) => archiveMeta(item).fav);
+  else if (archiveFilter.mode === "tag") list = all.filter((item) => archiveMeta(item).tags.includes(archiveFilter.tag));
+  const grid = list.length ? '<div class="archive-grid">' + list.map((item) => {
     const gg = item.guide || {};
+    const meta = archiveMeta(item);
     const date = new Date(item.ts).toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" });
-    return `<div class="archive-item">
-      <h4>${esc(gg.title || "İsimsiz proje")}</h4>
+    return `<div class="archive-item${meta.fav ? " arch-fav" : ""}">
+      <h4>${meta.fav ? "⭐ " : ""}${esc(gg.title || "İsimsiz proje")}</h4>
       <div class="arch-meta">
         <span class="arch-badge">${esc(gg.difficulty || "—")}</span>
         <span class="arch-date">📅 ${date}</span>
         <span>🧰 ${(gg.materials || []).length} parça</span>
       </div>
+      ${meta.tags.length ? `<div class="arch-tags">${meta.tags.map((tg) => `<span class="arch-tag">🏷️ ${esc(tg)}</span>`).join("")}</div>` : ""}
       <div class="row">
         <button class="btn btn-ghost btn-small" data-open="${item.id}" type="button">👁️ Görüntüle</button>
+        <button class="btn btn-ghost btn-small" data-fav="${item.id}" type="button" title="${meta.fav ? t("Favoriden çıkar") : t("Favorilere ekle")}">${meta.fav ? "⭐" : "☆"}</button>
+        <button class="btn btn-ghost btn-small" data-tag="${item.id}" type="button" title="${t("Etiketleri düzenle (virgülle ayır, en çok 5)")}">🏷️</button>
         <button class="btn btn-ghost btn-small" data-cert="${item.id}" type="button" title="${t("Sertifika üret")}">🏅</button>
         <button class="btn btn-ghost btn-small" data-del="${item.id}" type="button" aria-label="Sil">🗑️</button>
       </div>
     </div>`;
-  }).join("") + '</div><div class="modal-actions" style="justify-content:space-between"><button class="btn btn-ghost btn-small" id="exportArchive" type="button">📤 Yedekle (JSON)</button><button class="btn btn-ghost btn-small" id="importArchive" type="button">📥 Geri Yükle</button><button class="btn btn-ghost btn-small" id="clearArchive" type="button">🧹 Tümünü Temizle</button><button class="btn btn-ghost btn-small" id="closeArchiveBtn2" type="button">Kapat</button></div><input type="file" id="importFile" accept="application/json,.json" hidden>';
+  }).join("") + "</div>" : `<p class="panel-empty">${en ? "No projects match this filter." : "Bu filtreyle eşleşen proje yok."}</p>`;
+  wrap.innerHTML = chips + grid + '<div class="modal-actions" style="justify-content:space-between"><button class="btn btn-ghost btn-small" id="exportArchive" type="button">📤 Yedekle (JSON)</button><button class="btn btn-ghost btn-small" id="importArchive" type="button">📥 Geri Yükle</button><button class="btn btn-ghost btn-small" id="clearArchive" type="button">🧹 Tümünü Temizle</button><button class="btn btn-ghost btn-small" id="closeArchiveBtn2" type="button">Kapat</button></div><input type="file" id="importFile" accept="application/json,.json" hidden>';
 
+  wrap.querySelectorAll("[data-archchip]").forEach((b) => b.addEventListener("click", () => {
+    const mode = b.dataset.archchip;
+    archiveFilter = mode === "tag" ? { mode: "tag", tag: b.dataset.archtag || "" } : { mode, tag: "" };
+    renderArchive();
+  }));
+  wrap.querySelectorAll("[data-fav]").forEach((b) => b.addEventListener("click", () => {
+    const item = loadArchive().find((x) => String(x.id) === b.dataset.fav);
+    if (!item) return;
+    setArchiveMeta(item.id, { fav: !archiveMeta(item).fav });
+    renderArchive();
+  }));
+  wrap.querySelectorAll("[data-tag]").forEach((b) => b.addEventListener("click", () => {
+    const item = loadArchive().find((x) => String(x.id) === b.dataset.tag);
+    if (!item) return;
+    const cur = archiveMeta(item).tags.join(", ");
+    const val = window.prompt(t("Etiketler (virgülle ayır, örn. veli, dönem1):"), cur);
+    if (val === null) return;
+    setArchiveMeta(item.id, { tags: String(val).split(",").map((x) => x.trim()).filter(Boolean) });
+    renderArchive();
+  }));
   $("exportArchive").addEventListener("click", () => {
     const data = JSON.stringify({ app: "arduino-dream-lab", v: 1, exportedAt: new Date().toISOString(), items: loadArchive() }, null, 2);
     const a = document.createElement("a");
@@ -4406,7 +4539,7 @@ function renderArchive() {
         const ids = new Set(cur.map((x) => x.id));
         let added = 0;
         valid.forEach((x) => {
-          if (!ids.has(x.id)) { cur.push({ id: x.id || Date.now() + added, ts: x.ts || Date.now(), idea: x.idea || "", sig: x.sig || (x.guide.title + "|" + (x.guide.code || "").length), guide: x.guide }); added++; }
+          if (!ids.has(x.id)) { cur.push({ id: x.id || Date.now() + added, ts: x.ts || Date.now(), idea: x.idea || "", sig: x.sig || (x.guide.title + "|" + (x.guide.code || "").length), guide: x.guide, meta: x.meta || undefined }); added++; }
         });
         writeArchive(cur.sort((a, b) => b.ts - a.ts).slice(0, 30));
         renderArchive();
@@ -4875,6 +5008,18 @@ const I18N = {
     "Bütçe önerisi": "Budget tip", "Arduino Uno yerine Arduino Nano kullan": "use Arduino Nano instead of Arduino Uno",
     "💡 Bu fikre benzer proje": "💡 A similar project costs about",
     "depo": "repo",
+    /* v2.20.0: CSV tarih filtresi */
+    "Başlangıç tarihi": "Start date", "Bitiş tarihi": "End date",
+    "Filtreyi temizle — tüm gönderiler": "Clear filter — all submissions",
+    /* v2.20.0: Arşiv favori/etiket */
+    "Favoriden çıkar": "Remove from favorites", "Favorilere ekle": "Add to favorites",
+    "Etiketleri düzenle (virgülle ayır, en çok 5)": "Edit tags (comma separated, max 5)",
+    "Etiketler (virgülle ayır, örn. veli, dönem1):": "Tags (comma separated, e.g. parent, term1):",
+    "Favoriden çıkarıldı": "Removed from favorites", "Favorilere eklendi": "Added to favorites",
+    "Etiketler kaydedildi": "Tags saved",
+    /* v2.20.0: Göz serbest */
+    "👁️ Göz Serbest — Durdur": "👁️ Hands-free — Stop",
+    "Sesli okuma başlatılamadı — bir adım kutusuna tıkla ve tekrar dene.": "Could not start speech — click a step box and try again.",
     "az önce": "just now", "saat önce": "h ago", "gün önce": "d ago", "hiç": "never", "güncellendi": "updated",
     "⏳ Kur güncelleniyor…": "⏳ Updating rate…",
     "Kur güncellendi": "Rate updated",
@@ -5172,7 +5317,8 @@ function openClassModal() {
      böylece arama yazarken odak kaybolmaz. */
   const subState = { q: "", page: 1 };
   function subListHtml() {
-    const pg = paginate(filterSubmissions(subs, subState.q), subState.page, 6);
+    const range = loadCsvRange();
+    const pg = paginate(filterSubsByRange(filterSubmissions(subs, subState.q), range.from, range.to), subState.page, 6);
     const rows = pg.slice.map((s) => {
       const k = esc(s.student + "|" + s.project);
       const total = Number(s.total) || 0;
@@ -5254,7 +5400,15 @@ function openClassModal() {
       </div>
       <div class="panel-card">
         <div class="panel-subhead"><h3>📥 ${t("Gönderiler")}</h3><span class="count-badge">${subs.length}</span></div>
-        ${subs.length ? `<div class="row" style="margin:0 0 0.6rem"><button class="btn btn-ghost btn-small" id="classCsvBtn" type="button">📊 ${t("CSV İndir")}</button></div>` : ""}
+        ${subs.length ? `
+        <div class="csv-range row" style="margin:0 0 0.6rem;flex-wrap:wrap;gap:0.4rem;align-items:center">
+          <button class="btn btn-ghost btn-small" id="classCsvBtn" type="button">📊 ${t("CSV İndir")}</button>
+          <label class="csv-range-lab" for="csvFrom">📅</label>
+          <input type="date" id="csvFrom" class="csv-date" value="${esc(loadCsvRange().from)}" aria-label="${t("Başlangıç tarihi")}" />
+          <span class="csv-sep">–</span>
+          <input type="date" id="csvTo" class="csv-date" value="${esc(loadCsvRange().to)}" aria-label="${t("Bitiş tarihi")}" />
+          <button class="btn btn-ghost btn-small" id="csvRangeClear" type="button" title="${t("Filtreyi temizle — tüm gönderiler")}">✕</button>
+        </div>` : ""}
         ${subs.length ? `
         <input type="text" id="subSearch" class="cert-name-input" style="width:100%;margin:0 0 0.6rem" placeholder="${t("🔍 Ara: öğrenci veya proje…")}" value="" />
         <div id="subList"></div>` : `<p class="panel-empty">${t("Henüz gönderi yok — öğrenci \"📋 Gönderim Dosyası İndir\" ile dosya üretir, sen buradan içe aktarırsın.")}</p>`}
@@ -5318,6 +5472,11 @@ function openClassModal() {
   if (bulkBtn) bulkBtn.addEventListener("click", applyBulkFeedback);
   const csvBtn = $("classCsvBtn");
   if (csvBtn) csvBtn.addEventListener("click", downloadClassCSV);
+  const csvFrom = $("csvFrom"), csvTo = $("csvTo");
+  if (csvFrom) csvFrom.addEventListener("change", () => { const r = loadCsvRange(); r.from = csvFrom.value; saveCsvRange(r); refreshSubList(); });
+  if (csvTo) csvTo.addEventListener("change", () => { const r = loadCsvRange(); r.to = csvTo.value; saveCsvRange(r); refreshSubList(); });
+  const csvClr = $("csvRangeClear");
+  if (csvClr) csvClr.addEventListener("click", () => { saveCsvRange({ from: "", to: "" }); const f = $("csvFrom"), t3 = $("csvTo"); if (f) f.value = ""; if (t3) t3.value = ""; refreshSubList(); });
   $("classBody").querySelectorAll("[data-pchip]").forEach((b) => b.addEventListener("click", () => {
     const nm = b.dataset.pchip || "";
     const fc = loadFileCatalog();
@@ -5558,17 +5717,25 @@ function classSubsToCSV(subs) {
 }
 function downloadClassCSV() {
   const c = loadClassroom();
-  const subs = Object.values(c.submissions || {}).sort((a, b) => (a.student || "").localeCompare(b.student || "", "tr"));
+  let subs = Object.values(c.submissions || {}).sort((a, b) => (a.student || "").localeCompare(b.student || "", "tr"));
+  const range = loadCsvRange();
+  subs = filterSubsByRange(subs, range.from, range.to);
   if (!subs.length) return;
+  const suffix = (range.from || range.to) ? "-" + (range.from || "bas") + "_" + (range.to || "son") : "";
   downloadFileBlob(new Blob([classSubsToCSV(subs)], { type: "text/csv;charset=utf-8" }),
-    "sinif-gonderimleri-" + new Date().toISOString().slice(0, 10) + ".csv");
+    "sinif-gonderimleri" + suffix + "-" + new Date().toISOString().slice(0, 10) + ".csv");
 }
 /* Sınıf raporu: gönderimleri A4 dikey sayfalara döken basılı PDF (print-to-PDF) */
 function downloadClassReport() {
   const en = getLang() === "en";
   const c = loadClassroom();
-  const subs = Object.values(c.submissions || {}).sort((a, b) => (a.student || "").localeCompare(b.student || "", "tr"));
+  let subs = Object.values(c.submissions || {}).sort((a, b) => (a.student || "").localeCompare(b.student || "", "tr"));
   if (!subs.length) return;
+  const csvRange = loadCsvRange();
+  const csvFiltered = filterSubsByRange(subs, csvRange.from, csvRange.to);
+  const rangeLabel = (csvRange.from || csvRange.to)
+    ? ` · ${en ? "CSV date range" : "CSV tarih aralığı"}: ${csvRange.from || "…"} – ${csvRange.to || "…"} (${csvFiltered.length}/${subs.length})`
+    : "";
   const esc2 = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
   const money = (x) => (x > 0 ? (Math.round(x * rate() * 100) / 100).toFixed(2) + "₺ ($" + x.toFixed(2) + ")" : "—");
   const rows = subs.map((s) => {
@@ -5594,7 +5761,7 @@ function downloadClassReport() {
   .fb-note{font-size:10px;color:#666;font-style:italic;margin-top:2px;max-width:200px}
   footer{margin-top:18px;font-size:10px;color:#888}</style></head><body>
   <h1>🤖 ${en ? "Class Report — Arduino Dream Lab" : "Sınıf Raporu — Arduino Rüya Atölyesi"}</h1>
-  <h2>${en ? "Class code" : "Sınıf kodu"}: ${esc2(c.code || "—")} · ${new Date().toLocaleDateString("tr-TR")} · ${subs.length} ${en ? "students" : "öğrenci"}</h2>
+  <h2>${en ? "Class code" : "Sınıf kodu"}: ${esc2(c.code || "—")} · ${new Date().toLocaleDateString("tr-TR")} · ${subs.length} ${en ? "students" : "öğrenci"}${rangeLabel}</h2>
   ${leaderboardSVG(subs)}
   ${(() => { const sum = subs.reduce((acc, s) => acc + (estimateCost({ materials: s.materials || [] }).totalUSD || 0), 0); return sum > 0 ? `<p style="font-size:13px;margin:10px 0"><strong>${en ? "💰 Class total budget" : "💰 Sınıf toplam bütçesi"}:</strong> ${fmtTL(sum)}${isOverBudget(sum) ? ` — ⚠️ ${en ? "over budget" : "bütçe aşımı"}` : ""}</p>` : ""; })()}
   ${(() => { const n = loadClassSize(); const per = subs.reduce((acc, s) => acc + (estimateCost({ materials: s.materials || [] }).totalUSD || 0), 0); if (!n || !per) return ""; const total = n * per; return `<p style="font-size:13px;margin:10px 0"><strong>${en ? "🎯 Full-class budget plan" : "🎯 Tüm sınıf bütçe planı"}:</strong> ${n} ${en ? "students ×" : "öğrenci ×"} ${fmtTL(per)} = <strong>${fmtTL(total)}</strong>${isOverBudget(total) ? ` — ⚠️ ${en ? "over teacher budget" : "öğretmen bütçesini aşıyor"}` : ""}</p>`; })()}
@@ -5902,9 +6069,17 @@ function downloadWokwiZip() {
    Sertifikalı tüm rehberlerin Wokwi paketlerini (sketch.ino + diagram.json +
    notlar) numaralı klasörler hâlinde tek arşivde toplar; kökte PORTFOLYO.txt
    özeti olur. guide snapshot'ı olmayan eski sertifikalar atlanır. */
+/* v2.20.0: Portfolyo sıralaması — favoriler önce (arşiv meta'sından), sonra en yeni;
+   favori eşleşmesi: rozet proje adı + guide.code arşivdeki rehberle eşleşir */
+function orderPortfolioCerts(certs) {
+  return (certs || [])
+    .map((b) => ({ b, fav: archiveMeta({ meta: (loadArchive().find((x) => x.guide && (x.guide.title || "") === (b.project || "") && x.guide.code === b.guide.code) || {}).meta }).fav }))
+    .sort((x, y) => (y.fav - x.fav) || ((y.b.ts || 0) - (x.b.ts || 0)))
+    .map((x) => x.b);
+}
 function downloadPortfolio() {
   const en = getLang() === "en";
-  const certs = loadBadges().filter((b) => b.type === "cert" && b.guide);
+  const certs = orderPortfolioCerts(loadBadges().filter((b) => b.type === "cert" && b.guide));
   if (!certs.length) {
     showError(en ? "📦 No certificate with a saved guide yet — finish all steps of a guide and create your certificate first."
       : "📦 Kayıtlı rehberli sertifika yok — önce bir rehberin tüm adımlarını bitirip sertifika oluştur.");
@@ -5943,6 +6118,19 @@ function downloadPortfolio() {
     lines.push(`${nn}. ${b.project}: ${est.totalUSD > 0 ? fmtTL(est.totalUSD) : (en ? "not priced" : "fiyatlanmadı")}${est.anyUnknown ? (en ? " (some parts unpriced)" : " (bazı parçalar fiyatlanmadı)") : ""}`);
   });
   lines.push("-".repeat(46), `${en ? "PORTFOLIO TOTAL" : "PORTFOLYO TOPLAMI"}: ${fmtTL(budgetSum)}`, en ? "* average retail estimates, not a shopping list" : "* ortalama perakende tahminleri, alışveriş listesi değildir");
+  /* v2.20.0: RAPOR.md — favoriler ve etiketler zip'e özet olarak girer */
+  const favCerts = certs.filter((b) => archiveMeta({ meta: (loadArchive().find((x) => x.guide && (x.guide.title || "") === (b.project || "") && x.guide.code === b.guide.code) || {}).meta }).fav);
+  const tagLines = [];
+  loadArchive().forEach((item) => {
+    const m = archiveMeta(item);
+    if (m.tags.length) tagLines.push(`- ${item.guide && item.guide.title ? item.guide.title : "—"}: ${m.tags.join(", ")}`);
+  });
+  if (favCerts.length || tagLines.length) {
+    const report = [en ? "# Project report" : "# Proje Raporu", ""];
+    if (favCerts.length) report.push(en ? `## ⭐ Favorites (${favCerts.length})` : `## ⭐ Favoriler (${favCerts.length})`, ...favCerts.map((b, i) => `${i + 1}. ${b.project}${b.difficulty ? " (" + b.difficulty + ")" : ""}`), "");
+    if (tagLines.length) report.push(en ? "## 🏷️ Tags" : "## 🏷️ Etiketler", ...tagLines, "");
+    files.push({ name: en ? "REPORT.md" : "RAPOR.md", content: report.join("\n") });
+  }
   // Öğretmenin özel fiyat kataloğu + bütçe sınırı da arşive girsin (v2.13.0) —
   // veliler/okul idaresi fiyatların nereden geldiğini görebilir
   const customPrices = loadCustomPrices();
