@@ -2,6 +2,15 @@
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
 
+## [2.18.0] - 2026-10-01
+
+- Sürüm 2.18.0 olarak derlendi.
+- Yeni: 🏷️ **Katalog öneri çipleri** — öğretmen paneli, depo fiyat kataloğunda (fiyat-katalogu.json) olup henüz özel fiyatı olmayan parçaları çip olarak önerir; tıklayınca parça öğretmenin özel fiyat listesine depo fiyatıyla eklenir ve Ayarlar'daki editörle senkron kalır
+- Yeni: 🚨 **Risk Altındaki Öğrenciler** — son 10 gündür yeni adım göndermemiş ve projesini bitirmemiş öğrenciler panelde en eski tarihli önce listelenir (kırmızı vurgulu kart)
+- Yeni: ❓ **Fiyatlanamayan Malzemeler** — özel/depoyu/gömülü katalogların hiçbirinde karşılığı olmayan parça adları sınıf genelinde toplanır (büyük/küçük harf farkı birleştirilir, adet sayılır) ve çip olarak gösterilir; öğretmene hangi fiyatları ekleyeceği söylenir
+- Yeni: 📊 **CSV dışa aktarma** — sınıf gönderileri Excel uyumlu .csv olarak iner (UTF-8 BOM, ';' ayırıcı, tırnak kaçış), sütunlar: öğrenci, proje, tamamlanan/toplam adım, ilerleme %, tahmini maliyet USD, geri bildirim, tarih
+- Test: 58→63 birim test (5 yeni: catalogSuggestions, atRiskStudents, unknownMaterials, classSubsToCSV, downloadClassCSV); E2E 11/11 aynı
+
 ## [2.17.0] - 2026-09-30
 
 - Sürüm 2.17.0 olarak derlendi.
