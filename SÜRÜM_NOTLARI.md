@@ -1,4 +1,4 @@
-# 📋 Sürüm Notları — Fiyat Tahmini Dönemi (v2.10.0 → v2.14.0)
+# 📋 Sürüm Notları — Fiyat Tahmini Dönemi (v2.10.0 → v2.18.0)
 
 Arduino Rüya Atölyesi'nin malzeme fiyatı modülünün baştan sona hikâyesi.
 Tüm fiyatlar **₺ ana, $ ikincil** gösterilir (kur ≈ 34, bilgi amaçlı).
@@ -59,6 +59,14 @@ Tüm fiyatlar **₺ ana, $ ikincil** gösterilir (kur ≈ 34, bilgi amaçlı).
 - **Haftalık ilerleme grafiği:** sınıf raporunda gönderimlerin tamamlanan adımları haftaya kümelendirilir, son 8 haftanın çubuk grafiği basılır.
 - **Sınıf bütçe planlayıcısı:** Ayarlar'a sınıf mevcudu girilir; rapor mevcut × ortalama proje maliyetiyle tüm sınıfın bütçe ihtiyacını hesaplar ve öğretmen sınırıyla karşılaştırır.
 - **README görseli + CI E2E:** canlı uygulama ekran görüntüsü repoda; GitHub Actions artık Playwright E2E'yi de koşar.
+
+## 🧭 v2.18.0 — Akıllı Öğretmen Paneli
+
+- **Katalog öneri çipleri:** panel, depo kataloğunda (fiyat-katalogu.json) olup henüz özel fiyatı olmayan parçaları çip olarak önerir; tek tıkla özel fiyat listesine depo fiyatıyla eklenir, Ayarlar editörüyle senkron kalır.
+- **Risk altındaki öğrenciler:** son 10 gündür yeni adım göndermemiş + projesi bitmemiş öğrenciler en eski tarihli önce, kırmızı vurgulu kartta listelenir.
+- **Fiyatlanamayan malzemeler:** hiçbir katalog katmanında olmayan parça adları sınıf genelinde toplanır (harf farkı birleştirilir, adet sayılır) — öğretmene "şunları fiyat listene ekle" der.
+- **CSV dışa aktarma:** gönderiler Excel uyumlu `.csv` olarak iner (UTF-8 BOM + ';' ayırıcı); ilerleme %, tahmini maliyet USD, geri bildirim ve tarih sütunlarıyla.
+- **Test:** 63 birim test (5 yeni), E2E 11 kontrol aynı.
 
 ---
 

@@ -687,6 +687,25 @@ pre.code-block .num { color: #7dd3fc; }
 }
 .cert-name-input:focus { outline: none; border-color: var(--teal); }
 
+/* 🏫 Sınıf paneli yenilikleri (v2.18.0) */
+.price-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-top: 0.55rem; }
+.price-chips-label { font-size: 0.78rem; color: var(--text-dim); }
+.price-chip {
+  border: 1px dashed var(--border); background: transparent; color: var(--text);
+  border-radius: 999px; padding: 0.2rem 0.6rem; font: inherit; font-size: 0.78rem; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.price-chip:hover { border-color: var(--teal); background: var(--teal-soft); }
+.at-risk-card { border-color: rgba(224, 82, 65, 0.45); }
+.risk-rows { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.4rem; }
+.risk-row { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; font-size: 0.9rem; }
+.risk-when { color: var(--text-dim); font-size: 0.8rem; }
+.unk-rows { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; }
+.unk-chip {
+  border: 1px solid var(--border); border-radius: 999px; padding: 0.2rem 0.6rem;
+  font-size: 0.78rem; color: var(--text-dim);
+}
+
 /* ────────── Nasıl çalışır ────────── */
 .how-it-works { max-width: 1100px; margin: 0 auto; padding: 4.5rem 1.25rem 5rem; }
 .how-it-works h2 {

@@ -4,7 +4,7 @@
 
 Katkı yapmak isterseniz [CONTRIBUTING.md](CONTRIBUTING.md) ile başlayın; yayına çıkarmak için `./publish.sh` tek komut.
 
-![sürüm](https://img.shields.io/badge/s%C3%BCr%C3%BCm-v2.17.0-00d1b2) ![test](https://img.shields.io/badge/testler-58%20birim%20%2B%2011%20E2E-brightgreen) ![lisans](https://img.shields.io/badge/lisans-MIT-blue) [![Tests](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml/badge.svg)](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml)
+![sürüm](https://img.shields.io/badge/s%C3%BCr%C3%BCm-v2.18.0-00d1b2) ![test](https://img.shields.io/badge/testler-63%20birim%20%2B%2011%20E2E-brightgreen) ![lisans](https://img.shields.io/badge/lisans-MIT-blue) [![Tests](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml/badge.svg)](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml)
 
 > 🎨 **Kart Oluştur** düğmesiyle her rehberden paylaşılabilir proje kartı (PNG) çıkar — README'ye eklemek istediğin kartı bize söyle, buraya koyalım.
 
@@ -24,7 +24,7 @@ Katkı yapmak isterseniz [CONTRIBUTING.md](CONTRIBUTING.md) ile başlayın; yay�
 - 🔎 **Taslak doğrulama (wokwiValidate):** taslağı üretirken **pin çakışması** (aynı pine iki kablo) ve **eksik GND/5V besleme** uyarılarını öğretici kutuda gösterir — öğrenciler kabloyu çekmeden hatayı görür
 - 📦 **Wokwi Paketi (.zip):** rehberden `sketch.ino` + `diagram.json` + öğretmen notları içeren **gerçek bir proje arşivi** indirir — öğrenci adı ve sınıf kodu biliniyorsa **sketch başlığı ve notlar kişiselleşir** — Wokwi'de "Open project ZIP" ile tek seferde açılır (bağımlılıksız zip yazıcı)
 - 🛠️ **Adım takibi:** her adımın yanında onay kutusu + ilerleme çubuğu; tüm adımlar bitince sertifika satırı açılır (ilerleme localStorage'da kalıcı)
-- 🏫 **Sınıf Modu + Öğretmen Paneli:** öğretmen sınıf kodu üretir ve paylaşır; öğrenci adımlarını tamamlayıp **`.klasor.json` gönderim dosyası** indirir; öğretmen **iki sütunlu panelde** gönderileri ilerleme yüzdesiyle izler, yorum yazar, **PDF sınıf raporu** (SVG lider tablosu + 📈 haftalık ilerleme grafiği + 🎯 sınıf bütçe planı) alır — tamamı sunucusuz, dosya tabanlı akış
+- 🏫 **Sınıf Modu + Öğretmen Paneli:** öğretmen sınıf kodu üretir ve paylaşır; öğrenci adımlarını tamamlayıp **`.klasor.json` gönderim dosyası** indirir; öğretmen **iki sütunlu panelde** gönderileri ilerleme yüzdesiyle izler, yorum yazar, **PDF sınıf raporu** (SVG lider tablosu + 📈 haftalık ilerleme grafiği + 🎯 sınıf bütçe planı) alır — tamamı sunucusuz, dosya tabanlı akış. Panel akıllıdır: 🏷️ **katalog öneri çipleri** (depoda olup özel fiyatı olmayan parçalar tek tıkla fiyat listesine eklenir), 🚨 **risk altındaki öğrenciler** (10 gündür hareketsiz + bitmemiş proje), ❓ **fiyatlanamayan malzemeler** (kataloksız parçalar toplanır) ve 📊 **CSV dışa aktarma** (Excel uyumlu gönderi tablosu)
 - 🏅 **Öğrenci başarımları:** header'daki sayaçlı düğme; kazanılan **sertifikalar** + okunan **öğretmen geri bildirimleri** tek yerde
 - 🥉🥈🥇 **Rozet kademeleri:** Başarımlar penceresinde bronz (3 sertifika) / gümüş (5) / altın (tüm 14 demo) ilerleme kartı + "sonraki hedef" göstergesi
 - 📦 **Portfolyo.zip:** sertifikalı tüm rehberlerin Wokwi paketleri (sketch.ino + diagram.json + notlar + **sertifika SVG'si**) numaralı klasörlerle tek arşivde; kökte PORTFOLYO.txt özeti

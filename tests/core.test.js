@@ -1018,6 +1018,92 @@ test("v2.17.0 weeklyProgressSVG: adımları haftaya kümelendirir, boş veride b
   assert.ok((svg.match(/<rect/g) || []).length === 2, "2 hafta → 2 çubuk");
 });
 
+/* ─────────── v2.18.0: katalog önerileri + risk listesi + fiyatlanamayanlar + CSV ─────────── */
+
+test("v2.18.0 catalogSuggestions: depoda olup özel fiyatı olmayan parçaları önerir", () => {
+  assert.equal(typeof core.catalogSuggestions, "function");
+  // Depo kataloğu yoksa boş liste (vm realm'i farklı prototipli dizi döndürür → uzunluk karşılaştır)
+  const hadCatalog = sandbox.FILE_CATALOG;
+  delete sandbox.FILE_CATALOG;
+  assert.equal(core.catalogSuggestions().length, 0, "katalog yok → boş");
+  // Sahte depo kataloğu enjekte et
+  sandbox.FILE_CATALOG = { prices: { "Astronaut Sensörü": 7.5, "NeoPixel": 3.2, "Jumper": 2.0 }, budget: 20 };
+  sandbox.localStorage.setItem("arduinoDreamLab.customPrices.v1", "{}");
+  const all = core.catalogSuggestions();
+  assert.deepEqual(all.sort(), ["Astronaut Sensörü", "Jumper", "NeoPixel"], "hepsi önerilmeli: " + JSON.stringify(all));
+  // NeoPixel'e özel fiyat ekle → önerilerden düşmeli
+  sandbox.localStorage.setItem("arduinoDreamLab.customPrices.v1", JSON.stringify({ NeoPixel: 9.9 }));
+  const after = core.catalogSuggestions();
+  assert.ok(!after.some((n) => core.foldTR(n) === core.foldTR("NeoPixel")), "özel fiyatı eklenen önerilmemeli");
+  assert.equal(after.length, 2);
+  // Temizlik
+  if (hadCatalog) sandbox.FILE_CATALOG = hadCatalog; else delete sandbox.FILE_CATALOG;
+  sandbox.localStorage.removeItem("arduinoDreamLab.customPrices.v1");
+});
+
+test("v2.18.0 atRiskStudents: 10 gündür hareketsiz + bitmemiş proje → listede", () => {
+  const now = Date.now(), day = 86400000;
+  const subs = [
+    { student: "Ada", project: "Akıllı Saksı", ts: now - 3 * day, total: 6, steps: { 0: 1 } },          // yeni — değil
+    { student: "Barış", project: "Gece Lambası", ts: now - 15 * day, total: 5, steps: { 0: 1, 1: 1 } }, // risk
+    { student: "Cem", project: "Robot Kol", ts: now - 30 * day, total: 6, steps: { 0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1 } }, // bitmiş — değil
+    { student: "Defne", project: "Termometre", ts: now - 20 * day, total: 0, steps: {} },               // risksiz total → risk
+    { student: "Ece", project: "Kapı Zili", ts: now - 12 * day, total: 4, steps: { 0: 1 } }             // risk
+  ];
+  const risk = core.atRiskStudents(subs);
+  assert.deepEqual(risk.map((s) => s.name), ["Defne", "Barış", "Ece"], "en eski önce sıralanmalı");
+  // Eşik günü değiştir: 14 gün → 15+ gün öncesi: Defne (20g) ve Barış (15g)
+  const tight = core.atRiskStudents(subs, 14);
+  assert.deepEqual(tight.map((s) => s.name), ["Defne", "Barış"], "14 gün eşiği");
+  assert.deepEqual(core.atRiskStudents(subs, 40).map((s) => s.name), [], "40 gün eşiğinde kimse kalmaz");
+  assert.equal(core.atRiskStudents([]).length, 0);
+});
+
+test("v2.18.0 unknownMaterials: hiçbir katalogda olmayan parçaları adetle toplar", () => {
+  const subs = [
+    { materials: [{ name: "Arduino Uno", quantity: 2 }, { name: "Kuantum Sensör MK-9", quantity: 1 }] },
+    { materials: [{ name: "kuantum sensör mk-9", quantity: 2 }, { name: "Buzzer", quantity: "1" }] },
+    { materials: [] }
+  ];
+  const unk = core.unknownMaterials(subs);
+  assert.equal(unk.length, 1, "yalnız kataloksız parça kalmalı: " + JSON.stringify(unk));
+  assert.match(unk[0].name, /Kuantum Sensör MK-9/i);
+  assert.equal(unk[0].qty, 3, "adet toplanmalı (1+2), harf farkı aynı grupta");
+  assert.equal(core.unknownMaterials([]).length, 0);
+});
+
+test("v2.18.0 classSubsToCSV: BOM + başlık + hücreleri ';'-ile ayırır, tırnakları kaçar", () => {
+  const csv = core.classSubsToCSV([
+    { student: "Ada;", project: "Ceviz ve \"LED\" projesi", total: 4, steps: { 0: 1, 1: 1 }, ts: Date.UTC(2026, 0, 15),
+      materials: [{ name: "Arduino Uno", quantity: 1 }], fb: "Harika\nİş" }
+  ]);
+  assert.ok(csv.charCodeAt(0) === 0xFEFF, "UTF-8 BOM ile başlamalı");
+  const body = csv.slice(1);
+  const lines = body.split("\r\n");
+  assert.equal(lines.length, 2, "başlık + 1 satır");
+  assert.ok(lines[0].startsWith("Öğrenci;Proje;Tamamlanan Adım"), "başlık Türkçe: " + lines[0]);
+  assert.ok(lines[1].includes('"Ada;"'), "; içeren hücre tırnaklanmalı");
+  assert.ok(lines[1].includes('"Ceviz ve ""LED"" projesi"'), "tırnak çiftlenerek kaçırılmalı");
+  assert.ok(lines[1].includes('"Harika\nİş"'), "satır sonu içeren hücre tırnaklanmalı");
+  assert.ok(lines[1].includes("2026-01-15"), "ISO tarih olmalı");
+  assert.ok(lines[1].includes("50"), "ilerleme %50 olmalı");
+});
+
+test("v2.18.0 downloadClassCSV: gönderi yoksa sessiz kalır, varsa .csv indirir", () => {
+  let downloads = [];
+  sandbox.downloadFileBlob = (blob, name) => downloads.push(name);
+  sandbox.localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({ code: "7A", submissions: {} }));
+  downloads = [];
+  core.downloadClassCSV();
+  assert.equal(downloads.length, 0, "gönderi yok → indirme yok");
+  sandbox.localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({
+    code: "7A", submissions: { "Ada|Saksı": { student: "Ada", project: "Saksı", total: 3, steps: { 0: 1 }, ts: Date.now(), materials: [] } }
+  }));
+  core.downloadClassCSV();
+  assert.equal(downloads.length, 1);
+  assert.match(downloads[0], /^sinif-gonderimleri-\d{4}-\d{2}-\d{2}\.csv$/);
+});
+
 test("v2.8.0 portfolyo: sertifikasız durumda sessizce hata gösterir", () => {
   sandbox.localStorage.removeItem("arduinoDreamLab.badges.v1");
   let shown = "";

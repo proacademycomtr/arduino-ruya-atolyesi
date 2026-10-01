@@ -133,7 +133,8 @@ function loadCore() {
     "loadFileCatalog", "fileCatalogBudget", "budgetSuggestion", "liveCostHint",
     "loadRate", "rate", "rateAgeHours", "updateRateFromWeb",
     "liveCostHintSync", "buildCostPrompt", "askAICostMaterials", "aiCostCache",
-    "loadClassSize", "weeklyProgressSVG"
+    "loadClassSize", "weeklyProgressSVG",
+    "catalogSuggestions", "atRiskStudents", "unknownMaterials", "classSubsToCSV", "downloadClassCSV"
   ];
   // Sanal ortamda app.js tümüyle çalıştı; örneklemesi gerekenler const/let ise
   // ayrıca değerlendir. window üzerinde export edilenler zaten sandbox'ta.

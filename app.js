@@ -4987,6 +4987,11 @@ const I18N = {
     "📌 Pinler / Bağlantı": "📌 Pins / Wiring", "💻 Örnek Kod Parçası": "💻 Sample Code", "⚠️ Sık Yapılan Hatalar": "⚠️ Common Mistakes",
     // Arşiv
     "🗂️ Benim Projelerim": "🗂️ My Projects",
+    // Sınıf paneli (v2.18.0)
+    "Önerilen fiyatlar": "Suggested prices", "CSV İndir": "Download CSV",
+    "Risk Altındaki Öğrenciler": "Students At Risk",
+    "Fiyatlanamayan Malzemeler": "Unpriced Materials",
+    // Arşiv
     "👁️ Görüntüle": "👁️ View", "📤 Yedekle (JSON)": "📤 Export (JSON)", "📥 Geri Yükle": "📥 Import", "🧹 Tümünü Temizle": "🧹 Clear All", "Kapat": "Close",
     // Adım takibi
     "🛠️": "🛠️", " adım tamamlandı (%": " steps done (%",
@@ -5148,9 +5153,11 @@ function openClassModal() {
         <div class="panel-kbd">${en
           ? "Import .klasor files, then open the PDF report with the leaderboard."
           : ".klasor dosyalarını içe aktar, ardından lider tablosuyla PDF raporu aç."}</div>
+        ${(() => { const sug = catalogSuggestions(); return sug.length ? `<div class="price-chips"><span class="price-chips-label">🏷️ ${t("Önerilen fiyatlar")}</span>${sug.slice(0, 6).map((nm) => `<button type="button" class="price-chip" data-pchip="${esc(nm)}">${esc(nm)}</button>`).join("")}</div>` : ""; })()}
       </div>
       <div class="panel-card">
         <div class="panel-subhead"><h3>📥 ${t("Gönderiler")}</h3><span class="count-badge">${subs.length}</span></div>
+        ${subs.length ? `<div class="row" style="margin:0 0 0.6rem"><button class="btn btn-ghost btn-small" id="classCsvBtn" type="button">📊 ${t("CSV İndir")}</button></div>` : ""}
         ${subs.length ? `<div class="archive-grid">${subs.map((s) => {
           const k = esc(s.student + "|" + s.project);
           const total = Number(s.total) || 0;
@@ -5168,6 +5175,22 @@ function openClassModal() {
           </div>`; }).join("")}</div>` : `<p class="panel-empty">${t("Henüz gönderi yok — öğrenci \"📋 Gönderim Dosyası İndir\" ile dosya üretir, sen buradan içe aktarırsın.")}</p>`}
       </div>
     </div>
+    ${(() => { const risk = atRiskStudents(subs); return risk.length ? `
+    <div class="panel-card at-risk-card" style="margin-top:1.1rem">
+      <div class="panel-subhead"><h3>🚨 ${t("Risk Altındaki Öğrenciler")}</h3><span class="count-badge">${risk.length}</span></div>
+      <div class="panel-kbd">${en
+        ? "No new steps in the last 10 days and the project is unfinished — a friendly nudge may help."
+        : "Son 10 gündür yeni adım yok ve proje bitmemiş — samimi bir hatırlatma iyi gelir."}</div>
+      <div class="risk-rows">${risk.map((s) => `<div class="risk-row"><strong>${esc(s.name)}</strong><span class="arch-badge">${esc(s.project)}</span><span class="risk-when">📅 ${new Date(s.ts).toLocaleDateString(en ? "en-US" : "tr-TR")}</span></div>`).join("")}</div>
+    </div>` : ""; })()}
+    ${(() => { const unk = unknownMaterials(subs); return unk.length ? `
+    <div class="panel-card" style="margin-top:1.1rem">
+      <div class="panel-subhead"><h3>❓ ${t("Fiyatlanamayan Malzemeler")}</h3><span class="count-badge">${unk.length}</span></div>
+      <div class="panel-kbd">${en
+        ? "These parts are missing from every price catalog — add them in Settings → 🏷️ Price Catalog."
+        : "Bu parçalar hiçbir fiyat kataloğunda yok — Ayarlar → 🏷️ Malzeme Fiyat Kataloğu'ndan ekleyebilirsin."}</div>
+      <div class="unk-rows">${unk.map((u) => `<span class="unk-chip">${esc(u.name)}${u.qty > 1 ? ` ×${u.qty}` : ""}</span>`).join("")}</div>
+    </div>` : ""; })()}
     ${pending.length ? `
     <div class="panel-card" style="margin-top:1.1rem">
       <div class="panel-subhead"><h3>⚡ ${t("Toplu Geri Bildirim")}</h3><span class="count-badge">${pending.length}</span></div>
@@ -5208,6 +5231,20 @@ function openClassModal() {
   if (reportBtn && subs.length) reportBtn.addEventListener("click", downloadClassReport);
   const bulkBtn = $("bulkFbBtn");
   if (bulkBtn) bulkBtn.addEventListener("click", applyBulkFeedback);
+  const csvBtn = $("classCsvBtn");
+  if (csvBtn) csvBtn.addEventListener("click", downloadClassCSV);
+  $("classBody").querySelectorAll("[data-pchip]").forEach((b) => b.addEventListener("click", () => {
+    const nm = b.dataset.pchip || "";
+    const fc = loadFileCatalog();
+    if (!nm || !fc || fc.prices[nm] == null) return;
+    const map = loadCustomPrices();
+    map[nm] = fc.prices[nm];
+    saveCustomPrices(map);
+    if (customPricesInput) updateCustomPricesEditor();
+    showError(en ? `🏷️ "${nm}" added to your price list at $${fc.prices[nm]}.` : `🏷️ "${nm}" fiyat listenize ${fc.prices[nm]} $ olarak eklendi.`);
+    errorBanner.classList.add("info");
+    setTimeout(() => { errorBanner.classList.remove("info"); errorBanner.hidden = true; }, 6000);
+  }));
   $("classCloseBtn").addEventListener("click", closeClassModal);
   classModal.classList.add("panel-mode");
   $("classBody").querySelectorAll("[data-delsub]").forEach((b) => b.addEventListener("click", () => {
@@ -5369,6 +5406,65 @@ function weeklyProgressSVG(subs) {
   return `<h3 style="margin:14px 0 4px">${title}</h3>` +
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img">` +
     `<line x1="${barX - 8}" y1="${H - bot}" x2="${W - 10}" y2="${H - bot}" stroke="#c9c2b0"/>${bars}</svg>`;
+}
+/* ── Sınıf paneli yardımcıları (v2.18.0) ──
+   1) Depo kataloğundan henüz özel fiyatı olmayan parçaları önerir. */
+function catalogSuggestions() {
+  const fc = loadFileCatalog();
+  if (!fc) return [];
+  const covered = new Set(Object.keys(loadCustomPrices()).map((k) => foldTR(k)));
+  return Object.keys(fc.prices).filter((nm) => !covered.has(foldTR(nm)));
+}
+/* 2) Risk altındaki öğrenciler: son `days` gündür (varsayılan 10) gönderi
+   yenilememiş ve projesini bitirmemiş olanlar; en eski tarihli önce. */
+function atRiskStudents(subs, days) {
+  const d = Number(days) > 0 ? Number(days) : 10;
+  const cutoff = Date.now() - d * 86400000;
+  return (subs || [])
+    .map((s) => ({
+      name: s.student || "?", project: s.project || "—", ts: s.ts || 0,
+      done: Object.keys(s.steps || {}).length, total: Number(s.total) || 0
+    }))
+    .filter((s) => s.ts < cutoff && (!s.total || s.done < s.total))
+    .sort((a, b) => a.ts - b.ts);
+}
+/* 3) Fiyatlanamayan malzemeler: tüm katalog katmanlarında karşılığı olmayan
+   parça adlarını toplar; adetle birlikte en çok kullanılan önce. */
+function unknownMaterials(subs) {
+  const counts = new Map(); // foldTR(ad) → { name, qty } — büyük/küçük harf farkı aynı gruba düşer
+  for (const s of subs || []) {
+    for (const m of (s && s.materials) || []) {
+      const nm = String((m && m.name) || "").trim();
+      if (!nm || priceOf(nm)) continue;
+      const key = foldTR(nm);
+      const cur = counts.get(key);
+      if (cur) cur.qty += Number(m.quantity) || 1;
+      else counts.set(key, { name: nm, qty: Number(m.quantity) || 1 });
+    }
+  }
+  return [...counts.values()]
+    .sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name, "tr"));
+}
+/* 4) Gönderileri CSV'ye döker: Excel uyumlu için BOM + ';' ayırıcı;
+   ';', tırnak ve satır sonu içeren hücreler çift tırnakla sarılır. */
+function classSubsToCSV(subs) {
+  const escCell = (v) => { const s = String(v == null ? "" : v); return /[";\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const head = ["Öğrenci", "Proje", "Tamamlanan Adım", "Toplam Adım", "İlerleme %", "Tahmini Maliyet USD", "Geri Bildirim", "Tarih"].map(escCell).join(";");
+  const lines = (subs || []).map((s) => {
+    const total = Number(s.total) || 0;
+    const done = Object.keys(s.steps || {}).length;
+    return [s.student || "?", s.project || "—", done, total, total ? Math.round((done / total) * 100) : 0,
+      (Math.round((estimateCost({ materials: s.materials || [] }).totalUSD || 0) * 100) / 100).toFixed(2),
+      s.fb || "", new Date(s.ts || Date.now()).toISOString().slice(0, 10)].map(escCell).join(";");
+  });
+  return "\uFEFF" + [head].concat(lines).join("\r\n");
+}
+function downloadClassCSV() {
+  const c = loadClassroom();
+  const subs = Object.values(c.submissions || {}).sort((a, b) => (a.student || "").localeCompare(b.student || "", "tr"));
+  if (!subs.length) return;
+  downloadFileBlob(new Blob([classSubsToCSV(subs)], { type: "text/csv;charset=utf-8" }),
+    "sinif-gonderimleri-" + new Date().toISOString().slice(0, 10) + ".csv");
 }
 /* Sınıf raporu: gönderimleri A4 dikey sayfalara döken basılı PDF (print-to-PDF) */
 function downloadClassReport() {
