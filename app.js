@@ -2615,6 +2615,7 @@ function renderGuide(g, idea) {
     <div class="guide-actions">
       <button class="btn btn-primary btn-small" data-act="pdf" type="button">${t("📄 PDF İndir")}</button>
       <button class="btn btn-ghost btn-small" data-act="share" type="button">${t("💬 WhatsApp'ta Paylaş")}</button>
+      <button class="btn btn-ghost btn-small" data-act="cart" type="button">🛒 ${t("Alışveriş Listesi")}</button>
       <button class="btn btn-ghost btn-small" data-act="card" type="button">🖼️ ${t("Kart Oluştur")}</button>
       <button class="btn btn-ghost btn-small" data-act="save" type="button">${t("💾 Arşive Kaydet")}</button>
       <button class="btn btn-ghost btn-small wokwi-btn" data-act="wokwi" type="button">⚡ ${t("Wokwi'de Dene")}</button>
@@ -3571,6 +3572,7 @@ function wireGuideActions(g) {
       const act = btn.dataset.act;
       if (act === "pdf") downloadPDF();
       else if (act === "share") shareWhatsApp();
+      else if (act === "cart") shareShoppingList();
       else if (act === "card") {
         const ok = await shareCard(g);
         btn.textContent = ok ? t("✅ Kart hazır!") : t("❌ Kart oluşturulamadı");
@@ -3901,6 +3903,35 @@ function shareWhatsApp() {
   ];
   const url = "https://wa.me/?text=" + encodeURIComponent(lines.join("\n").slice(0, 1500));
   window.open(url, "_blank", "noopener");
+}
+
+/* ── Alışveriş listesi (v2.19.0): malzemeleri satın alma listesine döker.
+   Her satırda parça × adet ve satır toplamı; sonda proje toplamı var.
+   qtyOv (costQty.v1 adet geçersiz kılmaları) desteklenir. ── */
+function shoppingListText(g, qtyOv) {
+  const en = getLang() === "en";
+  const cost = estimateCost(g, qtyOv);
+  const items = cost.rows.map((r) => `• ${r.name} × ${r.qty}${r.total != null ? ` — ${fmtTL(r.total)}` : ""}`);
+  const head = en ? `🛒 *Shopping list — ${g && g.title || ""}*` : `🛒 *Alışveriş listesi — ${g && g.title || ""}*`;
+  const foot = en
+    ? `💰 Estimated total: ${fmtTL(cost.totalUSD)}${cost.anyUnknown ? (en ? " (some parts unpriced)" : "") : ""}\n📱 Shared from Arduino Dream Lab`
+    : `💰 Tahmini toplam: ${fmtTL(cost.totalUSD)}${cost.anyUnknown ? " (bazı parçalar fiyatlanmadı)" : ""}\n📱 Arduino Rüya Atölyesi'nden paylaşıldı`;
+  return [head, "", ...items, "", foot].join("\n").slice(0, 3000);
+}
+function shareShoppingList() {
+  if (!currentGuide) return;
+  const en = getLang() === "en";
+  let qtyOv = null;
+  try { qtyOv = JSON.parse(localStorage.getItem("arduinoDreamLab.costQty.v1")) || {}; } catch { qtyOv = {}; }
+  const text = shoppingListText(currentGuide, qtyOv);
+  const w = window.open("https://wa.me/?text=" + encodeURIComponent(text.slice(0, 1500)), "_blank", "noopener");
+  if (!w && navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showError(en ? "🛒 Shopping list copied to clipboard (popup was blocked)." : "🛒 Alışveriş listesi panoya kopyalandı (açılır pencere engellendi).");
+      errorBanner.classList.add("info");
+      setTimeout(() => { errorBanner.classList.remove("info"); errorBanner.hidden = true; }, 6000);
+    });
+  }
 }
 
 /* ───────────────────── Adım Takibi ───────────────────── */
@@ -4865,6 +4896,8 @@ const I18N = {
     " Adım Adım Yapım": " Step-by-Step Build", " İpuçları & Güvenlik": " Tips & Safety",
     " Arduino Kodu": " Arduino Code",
     "📄 PDF İndir": "📄 Download PDF", "💬 WhatsApp'ta Paylaş": "💬 Share on WhatsApp",
+    "Alışveriş Listesi": "Shopping List", "🔍 Ara: öğrenci veya proje…": "🔍 Search: student or project…",
+    "Önceki sayfa": "Previous page", "Sonraki sayfa": "Next page",
     "💾 Arşive Kaydet": "💾 Save to Archive", "✅ Arşivde!": "✅ Archived!", "ℹ️ Zaten arşivde": "ℹ️ Already archived",
     "📋 Kopyala": "📋 Copy", "✅ Kopyalandı!": "✅ Copied!", "❌ Kopyalanamadı": "❌ Copy failed",
     "🔄 Yeni Fikir Dene": "🔄 Try a New Idea",
@@ -5135,6 +5168,70 @@ function openClassModal() {
   const c = loadClassroom();
   const subs = Object.values(c.submissions || {});
   const pending = subs.filter((s) => !s.fb);
+  /* Gönderi listesi durumu: arama + sayfa (v2.19.0) — liste bölümü bağımsız yeniden çizilir,
+     böylece arama yazarken odak kaybolmaz. */
+  const subState = { q: "", page: 1 };
+  function subListHtml() {
+    const pg = paginate(filterSubmissions(subs, subState.q), subState.page, 6);
+    const rows = pg.slice.map((s) => {
+      const k = esc(s.student + "|" + s.project);
+      const total = Number(s.total) || 0;
+      const done = Object.keys(s.steps || {}).length;
+      const pct = total ? Math.round((done / total) * 100) : 0;
+      return `
+          <div class="archive-item">
+            <h4>${esc(s.student || "?")} <span class="count-badge">%${pct}</span></h4>
+            <div class="arch-meta"><span class="arch-badge">${esc(s.project || "—")}</span><span class="arch-date">📅 ${new Date(s.ts).toLocaleDateString(en ? "en-US" : "tr-TR")}</span></div>
+            ${s.fb ? `<div class="fb-shown">💬 ${esc(s.fb)}</div>` : `<input type="text" class="cert-name-input fb-input" data-fbinput maxlength="600" placeholder="${t("Öğretmen yorumu…")}" />`}
+            <div class="row">
+              ${s.fb ? "" : `<button class="btn btn-ghost btn-small" data-fbdl="${k}" type="button">💬 ${t("Geri Bildirim")}</button>`}
+              <button class="btn btn-ghost btn-small" data-delsub="${k}" type="button">🗑️</button>
+            </div>
+          </div>`;
+    }).join("") || `<p class="panel-empty">${en ? "No submissions match your search." : "Aramayla eşleşen gönderi yok."}</p>`;
+    const pager = pg.pages > 1
+      ? `<div class="pager"><button class="btn btn-ghost btn-small" data-pg="${pg.page - 1}" ${pg.page <= 1 ? "disabled" : ""} type="button" aria-label="${t("Önceki sayfa")}">‹</button><span class="pager-label">${pg.page} / ${pg.pages}</span><button class="btn btn-ghost btn-small" data-pg="${pg.page + 1}" ${pg.page >= pg.pages ? "disabled" : ""} type="button" aria-label="${t("Sonraki sayfa")}">›</button></div>`
+      : "";
+    return `<div class="archive-grid">${rows}</div>${pager}`;
+  }
+  function bindSubRows() {
+    $("classBody").querySelectorAll("[data-delsub]").forEach((b) => b.addEventListener("click", () => {
+      const [student, project] = b.dataset.delsub.split("|");
+      const c2 = loadClassroom();
+      delete c2.submissions[student + "|" + project];
+      saveClassroom(c2);
+      openClassModal();
+    }));
+    /* Öğretmen geri bildirimi: yorumu yaz → .geribildirim.json indir */
+    $("classBody").querySelectorAll("[data-fbdl]").forEach((b) => b.addEventListener("click", () => {
+      const key = b.dataset.fbdl || "";
+      const sep = key.lastIndexOf("|");
+      const student = key.slice(0, sep);
+      const project = key.slice(sep + 1);
+      const item = b.closest(".archive-item");
+      const val = item && item.querySelector("[data-fbinput]");
+      const comment = String(val && val.value || "").trim();
+      if (!comment) {
+        showError(en ? "✍️ Write a comment first." : "✍️ Önce yorum yaz.");
+        if (val) val.focus();
+        return;
+      }
+      downloadClassFeedback(student, project, comment);
+      const c3 = loadClassroom();
+      if (c3.submissions[key]) { c3.submissions[key].fb = comment; saveClassroom(c3); }
+      openClassModal();
+    }));
+  }
+  function refreshSubList() {
+    const el = $("subList");
+    if (!el) return;
+    el.innerHTML = subListHtml();
+    el.querySelectorAll("[data-pg]").forEach((b) => b.addEventListener("click", () => {
+      subState.page = Number(b.dataset.pg) || 1;
+      refreshSubList();
+    }));
+    bindSubRows();
+  }
   $("classBody").innerHTML = `
     <div class="panel-grid">
       <div class="panel-card">
@@ -5158,21 +5255,9 @@ function openClassModal() {
       <div class="panel-card">
         <div class="panel-subhead"><h3>📥 ${t("Gönderiler")}</h3><span class="count-badge">${subs.length}</span></div>
         ${subs.length ? `<div class="row" style="margin:0 0 0.6rem"><button class="btn btn-ghost btn-small" id="classCsvBtn" type="button">📊 ${t("CSV İndir")}</button></div>` : ""}
-        ${subs.length ? `<div class="archive-grid">${subs.map((s) => {
-          const k = esc(s.student + "|" + s.project);
-          const total = Number(s.total) || 0;
-          const done = Object.keys(s.steps || {}).length;
-          const pct = total ? Math.round((done / total) * 100) : 0;
-          return `
-          <div class="archive-item">
-            <h4>${esc(s.student || "?")} <span class="count-badge">%${pct}</span></h4>
-            <div class="arch-meta"><span class="arch-badge">${esc(s.project || "—")}</span><span class="arch-date">📅 ${new Date(s.ts).toLocaleDateString(en ? "en-US" : "tr-TR")}</span></div>
-            ${s.fb ? `<div class="fb-shown">💬 ${esc(s.fb)}</div>` : `<input type="text" class="cert-name-input fb-input" data-fbinput maxlength="600" placeholder="${t("Öğretmen yorumu…")}" />`}
-            <div class="row">
-              ${s.fb ? "" : `<button class="btn btn-ghost btn-small" data-fbdl="${k}" type="button">💬 ${t("Geri Bildirim")}</button>`}
-              <button class="btn btn-ghost btn-small" data-delsub="${k}" type="button">🗑️</button>
-            </div>
-          </div>`; }).join("")}</div>` : `<p class="panel-empty">${t("Henüz gönderi yok — öğrenci \"📋 Gönderim Dosyası İndir\" ile dosya üretir, sen buradan içe aktarırsın.")}</p>`}
+        ${subs.length ? `
+        <input type="text" id="subSearch" class="cert-name-input" style="width:100%;margin:0 0 0.6rem" placeholder="${t("🔍 Ara: öğrenci veya proje…")}" value="" />
+        <div id="subList"></div>` : `<p class="panel-empty">${t("Henüz gönderi yok — öğrenci \"📋 Gönderim Dosyası İndir\" ile dosya üretir, sen buradan içe aktarırsın.")}</p>`}
       </div>
     </div>
     ${(() => { const risk = atRiskStudents(subs); return risk.length ? `
@@ -5247,32 +5332,13 @@ function openClassModal() {
   }));
   $("classCloseBtn").addEventListener("click", closeClassModal);
   classModal.classList.add("panel-mode");
-  $("classBody").querySelectorAll("[data-delsub]").forEach((b) => b.addEventListener("click", () => {
-    const [student, project] = b.dataset.delsub.split("|");
-    const c = loadClassroom();
-    delete c.submissions[student + "|" + project];
-    saveClassroom(c);
-    openClassModal();
-  }));
-  /* Öğretmen geri bildirimi: yorumu yaz → .geribildirim.json indir */
-  $("classBody").querySelectorAll("[data-fbdl]").forEach((b) => b.addEventListener("click", () => {
-    const key = b.dataset.fbdl || "";
-    const sep = key.lastIndexOf("|");
-    const student = key.slice(0, sep);
-    const project = key.slice(sep + 1);
-    const item = b.closest(".archive-item");
-    const val = item && item.querySelector("[data-fbinput]");
-    const comment = String(val && val.value || "").trim();
-    if (!comment) {
-      showError(en ? "✍️ Write a comment first." : "✍️ Önce yorum yaz.");
-      if (val) val.focus();
-      return;
-    }
-    downloadClassFeedback(student, project, comment);
-    const c = loadClassroom();
-    if (c.submissions[key]) { c.submissions[key].fb = comment; saveClassroom(c); }
-    openClassModal();
-  }));
+  const subSearchInput = $("subSearch");
+  if (subSearchInput) subSearchInput.addEventListener("input", () => {
+    subState.q = subSearchInput.value;
+    subState.page = 1;
+    refreshSubList();
+  });
+  refreshSubList();
   classModal.hidden = false;
 }
 function closeClassModal() { classModal.hidden = true; }
@@ -5370,14 +5436,6 @@ function loadClassSize() {
    kümelendirip o hafta tamamlanan toplam adım sayısını çubuk grafiğe döker. */
 function weeklyProgressSVG(subs) {
   const en = getLang() === "en";
-  // Her gönderim için hafta başlangıcı (Pazartesi, yerel zaman)
-  const mondayOf = (ts) => {
-    const d = new Date(ts);
-    const day = (d.getDay() + 6) % 7; // Pzt=0
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - day);
-    return d.getTime();
-  };
   const perWeek = new Map(); // hafta → tamamlanan adım sayısı
   for (const s of subs || []) {
     const done = Object.keys(s.steps || {}).length;
@@ -5406,6 +5464,45 @@ function weeklyProgressSVG(subs) {
   return `<h3 style="margin:14px 0 4px">${title}</h3>` +
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img">` +
     `<line x1="${barX - 8}" y1="${H - bot}" x2="${W - 10}" y2="${H - bot}" stroke="#c9c2b0"/>${bars}</svg>`;
+}
+/* Pazartesi başlangıçlı hafta anahtarı (yerel zaman) — haftalık grafik ve
+   en aktif hafta analizi ortak kullanır. */
+function mondayOf(ts) {
+  const d = new Date(ts);
+  const day = (d.getDay() + 6) % 7; // Pzt=0
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - day);
+  return d.getTime();
+}
+/* En aktif hafta (v2.19.0): Pazartesi kümelerinde en çok adım tamamlanan hafta.
+   Raporun haftalık grafiğinin altına özet satırı olarak basılır. */
+function mostActiveWeek(subs) {
+  const per = new Map();
+  for (const s of subs || []) {
+    const done = Object.keys(s.steps || {}).length;
+    if (!done) continue;
+    const wk = mondayOf(s.ts || Date.now());
+    per.set(wk, (per.get(wk) || 0) + done);
+  }
+  let best = null;
+  for (const [wk, v] of per) if (!best || v > best.steps) best = { weekStart: wk, steps: v };
+  return best;
+}
+/* ── Sınıf paneli arama + sayfalama (v2.19.0) ──
+   filterSubmissions: öğrenci/proje adında foldTR "içerir" araması.
+   paginate: sayfalama yardımcısı — sayfa taşarsa kenara kelepçeler. */
+function filterSubmissions(subs, query) {
+  const q = foldTR(String(query || "").trim());
+  const list = subs || [];
+  if (!q) return list.slice();
+  return list.filter((s) => foldTR(((s && s.student) || "") + " " + ((s && s.project) || "")).includes(q));
+}
+function paginate(items, page, perPage) {
+  const per = Math.max(1, Number(perPage) || 8);
+  const list = items || [];
+  const pages = Math.max(1, Math.ceil(list.length / per));
+  const p = Math.min(Math.max(1, Number(page) || 1), pages);
+  return { slice: list.slice((p - 1) * per, p * per), page: p, pages, total: list.length };
 }
 /* ── Sınıf paneli yardımcıları (v2.18.0) ──
    1) Depo kataloğundan henüz özel fiyatı olmayan parçaları önerir. */
@@ -5502,6 +5599,7 @@ function downloadClassReport() {
   ${(() => { const sum = subs.reduce((acc, s) => acc + (estimateCost({ materials: s.materials || [] }).totalUSD || 0), 0); return sum > 0 ? `<p style="font-size:13px;margin:10px 0"><strong>${en ? "💰 Class total budget" : "💰 Sınıf toplam bütçesi"}:</strong> ${fmtTL(sum)}${isOverBudget(sum) ? ` — ⚠️ ${en ? "over budget" : "bütçe aşımı"}` : ""}</p>` : ""; })()}
   ${(() => { const n = loadClassSize(); const per = subs.reduce((acc, s) => acc + (estimateCost({ materials: s.materials || [] }).totalUSD || 0), 0); if (!n || !per) return ""; const total = n * per; return `<p style="font-size:13px;margin:10px 0"><strong>${en ? "🎯 Full-class budget plan" : "🎯 Tüm sınıf bütçe planı"}:</strong> ${n} ${en ? "students ×" : "öğrenci ×"} ${fmtTL(per)} = <strong>${fmtTL(total)}</strong>${isOverBudget(total) ? ` — ⚠️ ${en ? "over teacher budget" : "öğretmen bütçesini aşıyor"}` : ""}</p>`; })()}
   ${weeklyProgressSVG(subs)}
+  ${(() => { const m = mostActiveWeek(subs); return m ? `<p style="font-size:12px;margin:4px 0 0;color:#666">🔥 ${en ? "Most active week" : "En aktif hafta"}: ${new Date(m.weekStart).toLocaleDateString(en ? "en-US" : "tr-TR")} — ${m.steps} ${en ? "steps" : "adım"}</p>` : ""; })()}
   <table><thead><tr><th>${en ? "Student" : "Öğrenci"}</th><th>${en ? "Project" : "Proje"}</th><th>${en ? "Steps" : "Adım"}</th><th>${en ? "Est. Cost" : "Maliyet"}</th><th>${en ? "Progress" : "İlerleme"}</th><th>${en ? "Feedback" : "Geri Bildirim"}</th><th>${en ? "Date" : "Tarih"}</th></tr></thead><tbody>${rows}</tbody></table>
   <footer>${en ? "Generated with Arduino Dream Lab — progress data is collected locally, no server involved." : "Arduino Rüya Atölyesi ile üretildi — ilerleme verisi yerel toplanır, sunucu yok."}</footer>
   <scr${""}ipt>window.onload=function(){setTimeout(function(){window.print()},300)}</scr${""}ipt></body></html>`;

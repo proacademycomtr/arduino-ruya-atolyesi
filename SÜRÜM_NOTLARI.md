@@ -60,6 +60,13 @@ Tüm fiyatlar **₺ ana, $ ikincil** gösterilir (kur ≈ 34, bilgi amaçlı).
 - **Sınıf bütçe planlayıcısı:** Ayarlar'a sınıf mevcudu girilir; rapor mevcut × ortalama proje maliyetiyle tüm sınıfın bütçe ihtiyacını hesaplar ve öğretmen sınırıyla karşılaştırır.
 - **README görseli + CI E2E:** canlı uygulama ekran görüntüsü repoda; GitHub Actions artık Playwright E2E'yi de koşar.
 
+## 🧭 v2.19.0 — Paylaş ve Bul
+
+- **Alışveriş listesi:** rehber aksiyonlarında 🛒 düğme — malzemeleri "parça × adet — satır toplamı" olarak WhatsApp'a hazır metne döker; adet geçersiz kılmaları yansır, popup engellenirse panoya kopyalanır.
+- **Gönderi arama + sayfalama:** panelde Türkçe harf duyarsız arama (foldTR) + 6'şarlı sayfalama; arama yazarken odak kaybolmaz.
+- **En aktif hafta:** sınıf raporunda haftalık grafiğin altında özet satırı — ortak mondayOf yardımcısı Pazartesi kümelerini hem grafikte hem özette kullanır.
+- **Test:** 67 birim (4 yeni), E2E 15 kontrol (4 yeni).
+
 ## 🧭 v2.18.0 — Akıllı Öğretmen Paneli
 
 - **Katalog öneri çipleri:** panel, depo kataloğunda (fiyat-katalogu.json) olup henüz özel fiyatı olmayan parçaları çip olarak önerir; tek tıkla özel fiyat listesine depo fiyatıyla eklenir, Ayarlar editörüyle senkron kalır.

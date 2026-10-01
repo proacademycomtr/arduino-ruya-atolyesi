@@ -89,6 +89,32 @@ try {
   const hint = await page.$eval("#costHint", (e) => e.textContent);
   ok("+ canlı ipucu (demo şablonu)", hint.includes("≈"), hint);
 
+  /* ── 6) v2.19.0: panel arama + sayfalama + alışveriş listesi düğmesi ── */
+  await page.evaluate(() => {
+    const subs = {};
+    for (let i = 1; i <= 8; i++) {
+      subs[`Öğrenci ${i}|Proje ${i}`] = { student: `Öğrenci ${i}`, project: `Proje ${i}`, total: 3, steps: { 0: 1 }, ts: Date.now() - i * 86400000, materials: [] };
+    }
+    localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({ code: "E2E-19", submissions: subs }));
+  });
+  await page.click("#classBtn");
+  await page.waitForSelector("#subList .archive-item");
+  const perPage = (await page.$$("#subList .archive-item")).length;
+  ok("6a. sayfa başına 6 gönderi + sayfalayıcı", perPage === 6 && !!(await page.$("#subList .pager")), perPage + " satır");
+  await page.fill("#subSearch", "ogrenci 7");
+  await page.waitForTimeout(300);
+  const filtered = (await page.$$("#subList .archive-item")).length;
+  ok("6b. arama Türkçe harf duyarsız", filtered === 1, filtered + " eşleşme");
+  await page.fill("#subSearch", "");
+  await page.waitForTimeout(300);
+  await page.click('#subList [data-pg="2"]');
+  await page.waitForTimeout(300);
+  const page2 = (await page.$$("#subList .archive-item")).length;
+  ok("6c. 2. sayfada kalan 2 gönderi", page2 === 2, page2 + " satır");
+  ok("6d. alışveriş listesi düğmesi var", !!(await page.$('[data-act="cart"]')));
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+
 } catch (e) {
   ok("AKIŞ", false, e.message);
 } finally {

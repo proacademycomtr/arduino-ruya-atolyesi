@@ -1104,6 +1104,76 @@ test("v2.18.0 downloadClassCSV: gönderi yoksa sessiz kalır, varsa .csv indirir
   assert.match(downloads[0], /^sinif-gonderimleri-\d{4}-\d{2}-\d{2}\.csv$/);
 });
 
+/* ─────────── v2.19.0: alışveriş listesi + panel arama/sayfalama + en aktif hafta ─────────── */
+
+test("v2.19.0 shoppingListText: parça × adet + satır toplamları + proje toplamı", () => {
+  const g = core.makeDemoGuide("LCD'li dijital saat");
+  const txt = core.shoppingListText(g);
+  assert.ok(txt.startsWith("🛒"), "başlıkta alışveriş ikonu");
+  assert.ok(txt.includes("Alışveriş listesi") && txt.includes(g.title), "başlıkta proje adı");
+  assert.ok(txt.includes("× "), "satırlar parça × adet biçiminde");
+  assert.ok(txt.includes("Tahmini toplam"), "sonda proje toplamı");
+  // Adet override: Uno 2 adet yapılınca hem satır hem toplam büyümeli
+  const uno = (g.materials || []).find((m) => /uno/i.test(m.name));
+  if (uno) {
+    const base = core.estimateCost(g).totalUSD;
+    const ov = core.estimateCost(g, { [uno.name]: "2" }).totalUSD;
+    const txt2 = core.shoppingListText(g, { [uno.name]: "2" });
+    assert.ok(txt2.includes("× 2"), "override adet satıra yansımalı");
+    assert.ok(ov > base, "override toplamı artırmalı");
+  }
+  // Fiyatlanamayan parça: satırda fiyat yok ama anyUnknown işareti var
+  const g2 = { title: "Deney", summary: "", materials: [{ name: "Kuantum Sensör MK-9", quantity: 1 }] };
+  const txt3 = core.shoppingListText(g2);
+  assert.ok(txt3.includes("Kuantum Sensör MK-9"), "bilinmeyen parça listelenir");
+  assert.ok(txt3.includes("bazı parçalar fiyatlanmadı"), "anyUnknown işareti");
+});
+
+test("v2.19.0 filterSubmissions: foldTR duyarsız arama, boş sorgu tümünü döndürür", () => {
+  const subs = [
+    { student: "Cem Kaya", project: "Akıllı Saksı" },
+    { student: "Ada", project: "Gece Lambası" },
+    { student: "Öğrenci 7", project: "Robot Kol" }
+  ];
+  assert.equal(core.filterSubmissions(subs, "").length, 3, "boş → tümü");
+  assert.equal(core.filterSubmissions(subs, null).length, 3, "null → tümü");
+  assert.deepEqual(core.filterSubmissions(subs, "cem kaya").map((s) => s.student), ["Cem Kaya"], "büyük/küçük harf duyarsız");
+  assert.deepEqual(core.filterSubmissions(subs, "OGRENCI").map((s) => s.student), ["Öğrenci 7"], "Türkçe harf katlanmalı (Ö→O)");
+  assert.deepEqual(core.filterSubmissions(subs, "lamba").map((s) => s.project), ["Gece Lambası"], "proje adında arar (ı→I)");
+  assert.equal(core.filterSubmissions(subs, "yok boyle").length, 0);
+});
+
+test("v2.19.0 paginate: dilimleme + sayfa kelepçeleme", () => {
+  const items = Array.from({ length: 10 }, (_, i) => i);
+  const p1 = core.paginate(items, 1, 3);
+  assert.deepEqual(p1.slice, [0, 1, 2]);
+  assert.equal(p1.pages, 4);
+  const p3 = core.paginate(items, 3, 3);
+  assert.deepEqual(p3.slice, [6, 7, 8]);
+  const p99 = core.paginate(items, 99, 3);
+  assert.equal(p99.page, 4, "taşan sayfa sona kelepçelenir");
+  assert.deepEqual(p99.slice, [9]);
+  assert.equal(core.paginate(items, 0, 3).page, 1, "geçersiz sayfa → 1");
+  assert.equal(core.paginate([], 1, 3).pages, 1, "boş liste → 1 sayfa");
+  assert.deepEqual(core.paginate(items, 2).slice, [8, 9], "perPage yoksa 8; son sayfada kalanlar");
+});
+
+test("v2.19.0 mostActiveWeek: en çok adımın tamamlandığı Pazartesi'yi döndürür", () => {
+  assert.equal(core.mostActiveWeek([]), null, "veri yok → null");
+  assert.equal(core.mostActiveWeek([{ steps: {}, ts: Date.now() }]), null, "adımsız → null");
+  // Deterministik: iki sabit Pazartesi haftası
+  const w1 = core.mondayOf(new Date(2026, 8, 28, 12).getTime()); // Pzt (hafta 1)
+  const w2 = w1 + 7 * 86400000;                                  // sonraki hafta
+  const best = core.mostActiveWeek([
+    { steps: { 0: 1, 1: 1 }, ts: w2 + 3 * 86400000 },                 // hafta 2 → 2
+    { steps: { 0: 1 }, ts: w2 + 4 * 86400000 },                        // hafta 2 → 3
+    { steps: { 0: 1, 1: 1, 2: 1, 3: 1, 4: 1 }, ts: w1 + 2 * 86400000 } // hafta 1 → 5
+  ]);
+  assert.equal(best.steps, 5, "5 adımlı hafta kazanır");
+  assert.equal(best.weekStart, w1, "weekStart o haftanın Pazartesi'si");
+  assert.ok(new Date(core.mondayOf(Date.now())).getDay() === 1, "mondayOf bugün için Pazartesi döndürür");
+});
+
 test("v2.8.0 portfolyo: sertifikasız durumda sessizce hata gösterir", () => {
   sandbox.localStorage.removeItem("arduinoDreamLab.badges.v1");
   let shown = "";
