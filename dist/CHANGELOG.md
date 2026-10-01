@@ -4,7 +4,9 @@ Bu dosya `build.py` tarafından otomatik güncellenir.
 
 ## [2.20.0] - 2026-10-01
 
-- Sürüm 2.20.0 olarak derlendi.
+- Yeni: 📅 **CSV tarih filtresi** — öğretmen panelinde başlangıç/bitiş tarihi seç; CSV indirimi ve gönderi listesi bu aralığa göre süzülür, aralık korunur. Rapor başlığında "CSV tarih aralığı: … (n/total)" yazar; temizle düğmesi tek tıkla tüm gönderilere döner
+- Yeni: ⭐ **Arşiv favori/etiket sistemi** — ⭐ ile favorile, 🏷️ ile virgülle ayırarak (en çok 5) etiket ver; ⭐ Favoriler / 🏷️ etiket çipleriyle filtrele. Favoriler Portfolyo.zip'te öne alınır, zip'e favoriler + etiket özetli RAPOR.md girer
+- Yeni: 👁️ **Göz serbest modu** — "Bana Anlat" artık adım adım okur: her adım bitince 2 sn bekler, adımı otomatik işaretler ve sonrakine geçer; işaretli adımlardan kaldığı yerden devam eder. Durdur/Yeniden üret modu güvenle keser
 
 ## [2.19.0] - 2026-10-01
 
