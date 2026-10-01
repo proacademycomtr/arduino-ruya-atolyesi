@@ -5,6 +5,10 @@ Bu dosya `build.py` tarafından otomatik güncellenir.
 ## [2.19.0] - 2026-10-01
 
 - Sürüm 2.19.0 olarak derlendi.
+- Yeni: 🛒 **Alışveriş listesi** — rehber aksiyonlarına "Alışveriş Listesi" düğmesi; malzemeleri "parça × adet — satır toplamı" biçiminde WhatsApp'a hazır metne döker, sonda proje toplamı var. Adet geçersiz kılmaları (−/+ kutuları) metne yansır; popup engellenirse liste panoya kopyalanır
+- Yeni: 🔍 **Gönderi arama + sayfalama** — öğretmen panelinde öğrenci/proje adında Türkçe harf duyarsız (foldTR) arama; 6'şarlı sayfalama, odak kaybı olmadan anlık filtreleme
+- Yeni: 🔥 **En aktif hafta** — sınıf raporunda haftalık grafiğin altında "En aktif hafta: tarih — N adım" özeti ( Pazartesi kümeleri ortak mondayOf yardımcısıyla)
+- Test: 63→67 birim (4 yeni: shoppingListText, filterSubmissions, paginate, mostActiveWeek), E2E 11→15 kontrol (6a-6d: sayfalama, arama, alışveriş düğmesi)
 
 ## [2.18.0] - 2026-10-01
 
