@@ -1,4 +1,4 @@
-# 📋 Sürüm Notları — Fiyat Tahmini Dönemi (v2.10.0 → v2.21.0)
+# 📋 Sürüm Notları — Fiyat Tahmini Dönemi (v2.10.0 → v2.22.0)
 
 Arduino Rüya Atölyesi'nin malzeme fiyatı modülünün baştan sona hikâyesi.
 Tüm fiyatlar **₺ ana, $ ikincil** gösterilir (kur ≈ 34, bilgi amaçlı).
@@ -59,6 +59,13 @@ Tüm fiyatlar **₺ ana, $ ikincil** gösterilir (kur ≈ 34, bilgi amaçlı).
 - **Haftalık ilerleme grafiği:** sınıf raporunda gönderimlerin tamamlanan adımları haftaya kümelendirilir, son 8 haftanın çubuk grafiği basılır.
 - **Sınıf bütçe planlayıcısı:** Ayarlar'a sınıf mevcudu girilir; rapor mevcut × ortalama proje maliyetiyle tüm sınıfın bütçe ihtiyacını hesaplar ve öğretmen sınırıyla karşılaştırır.
 - **README görseli + CI E2E:** canlı uygulama ekran görüntüsü repoda; GitHub Actions artık Playwright E2E'yi de koşar.
+
+## 🧭 v2.22.0 — Çoklu Sınıf ve Canlı Grafik
+
+- **Çoklu sınıf:** panelde sınıf seçici — gönderi dosyalarının taşıdığı classCode'lardan otomatik listelenir; CSV ve PDF raporu seçili sınıfa süzülür, "Tüm sınıflar" ile herkes görünür.
+- **Canlı panel grafiği:** haftalık adım çubukları artık panelde de var (raporla aynı weeklyBarsData kaynağı); CSS değişkenleriyle temaya uyar.
+- **Arşiv sıralama:** En yeni / Favoriler önce / A→Z; kartlarda son açılış günü (🔓).
+- **Test:** 79 birim (4 yeni), E2E 21 kontrol (2 yeni).
 
 ## 🧭 v2.21.0 — Bul ve İzle
 

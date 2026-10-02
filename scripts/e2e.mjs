@@ -154,11 +154,33 @@ try {
   await page.fill("#archSearch", "veli");
   await page.waitForTimeout(300);
   const byTag = (await page.$$("#archGrid .archive-item")).length;
-  ok("8b. etikette arama", byTag === 1, byTag + " eşleşme");
-  await page.keyboard.press("Escape");
+  ok("8b. etikette arama", byTag === 1, byTag + " eşleşme");  await page.keyboard.press("Escape");
   await page.waitForTimeout(200);
   await page.evaluate(() => localStorage.removeItem("arduinoDreamLab.archive.v1"));
 
+  /* ── 9) v2.22.0: çoklu sınıf seçici + panel haftalık grafiği ── */
+  await page.evaluate(() => {
+    const iso = (ts) => { const d = new Date(ts); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+    const subs = {};
+    subs["A|P1"] = { student: "A", project: "P1", total: 2, steps: { 0: 1 }, ts: Date.now() - 86400000, classCode: "7A", materials: [] };
+    subs["B|P2"] = { student: "B", project: "P2", total: 2, steps: { 0: 1 }, ts: Date.now() - 2 * 86400000, classCode: "8B", materials: [] };
+    localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({ code: "7A", submissions: subs }));
+    localStorage.setItem("arduinoDreamLab.activeClass.v1", "");
+    localStorage.setItem("arduinoDreamLab.csvRange.v1", JSON.stringify({ from: iso(Date.now() - 14 * 86400000), to: "" }));
+  });
+  await page.click("#classBtn");
+  await page.waitForSelector("#activeClassSel");
+  const allRows = (await page.$$("#subList .archive-item")).length;
+  const chartSvg = await page.$("#classBody svg[aria-label='weekly steps']");
+  ok("9a. tüm sınıflar: 2 gönderi + canlı grafik", allRows === 2 && !!chartSvg, allRows + " satır, svg=" + !!chartSvg);
+  await page.selectOption("#activeClassSel", "8B");
+  await page.waitForTimeout(400);
+  const b8Rows = (await page.$$("#subList .archive-item")).length;
+  const firstStudent = await page.$eval("#subList .archive-item h4", (h) => h.textContent.trim());
+  ok("9b. 8B seçili: sadece B görünür", b8Rows === 1 && firstStudent.includes("B"), b8Rows + " satır | " + firstStudent);
+  await page.click("#classCloseBtn");
+  await page.waitForTimeout(300);
+  await page.evaluate(() => { localStorage.removeItem("arduinoDreamLab.classroom.v1"); localStorage.removeItem("arduinoDreamLab.activeClass.v1"); localStorage.removeItem("arduinoDreamLab.csvRange.v1"); });
 
 } catch (e) {
   ok("AKIŞ", false, e.message);

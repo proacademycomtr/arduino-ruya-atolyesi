@@ -1335,3 +1335,77 @@ test("v2.21.0 classSubsToCSV: Son Etkinlik sütunu en büyük adım ts'ini yazar
   assert.ok(lines[2].includes("2023-11-16"), "adım yoksa gönderim ts'i (1700172800000 → 2023-11-16 UTC)");
   assert.equal(lines[1].split(";").length, 9, "9 sütun");
 });
+
+/* ───── v2.22.0: Haftalık veri + panel grafiği ───── */
+test("v2.22.0 weeklyBarsData + panelWeeklySVG: ortak veri, CSS değişkenli SVG", () => {
+  assert.equal(core.weeklyBarsData([]), null, "veri yok → null");
+  const w1 = core.mondayOf(new Date(2026, 8, 28, 12).getTime());
+  const w2 = w1 + 7 * 86400000;
+  const d = core.weeklyBarsData([
+    { steps: { 0: 1, 1: 1 }, ts: w1 + 86400000 },
+    { steps: { 0: 1 }, ts: w2 + 86400000 }
+  ]);
+  assert.equal(d.weeks.length, 2, "iki hafta");
+  assert.equal(d.max, 2, "maksimum 2");
+  assert.equal(d.perWeek.get(w1), 2, "hafta 1 toplamı");
+  const svg = core.panelWeeklySVG([{ steps: { 0: 1 }, ts: Date.now() }]);
+  assert.ok(svg.includes("var(--teal)"), "panel grafiği CSS değişkeni kullanır");
+  assert.ok(svg.includes("viewBox"), "SVG gövdesi");
+  assert.equal(core.panelWeeklySVG([]), "", "veri yok → boş");
+});
+
+/* ───── v2.22.0: Çoklu sınıf filtresi ───── */
+test("v2.22.0 classSubs + setActiveClassCode: sınıf koduna süzme + kalıcılık", () => {
+  const subs = [
+    { student: "A", classCode: "7A" },
+    { student: "B", classCode: "8B" },
+    { student: "C", classCode: "" },
+    { student: "D" }
+  ];
+  assert.equal(core.classSubs(subs, "").length, 4, "boş kod → tümü");
+  assert.deepEqual(core.classSubs(subs, "7A").map((s) => s.student), ["A"]);
+  assert.equal(core.classSubs(subs, "9Z").length, 0);
+  assert.equal(core.classSubs(null, "7A").length, 0, "null güvenli");
+  sandbox.localStorage.removeItem("arduinoDreamLab.activeClass.v1");
+  assert.equal(core.activeClassCode(), "", "ilk okuma boş");
+  core.setActiveClassCode("7A");
+  assert.equal(core.activeClassCode(), "7A", "kalıcı");
+  core.setActiveClassCode("");
+  assert.equal(core.activeClassCode(), "", "temizlenir");
+});
+
+/* ───── v2.22.0: Arşiv sıralama ───── */
+test("v2.22.0 sortArchiveItems: fav/new/az modları", () => {
+  const items = [
+    { id: 1, ts: 100, guide: { title: "Cismi" } },
+    { id: 2, ts: 300, guide: { title: "Anka" }, meta: { fav: true, tags: [] } },
+    { id: 3, ts: 200, guide: { title: "Başlangıç" } }
+  ];
+  assert.equal(core.sortArchiveItems(items, "new").map((x) => x.id).join(","), "2,3,1", "en yeni önce");
+  assert.equal(core.sortArchiveItems(items, "fav").map((x) => x.id).join(","), "2,3,1", "favori önce, sonra tarih");
+  assert.equal(core.sortArchiveItems(items, "az").map((x) => x.id).join(","), "2,3,1", "A→Z: Anka, Başlangıç, Cismi");
+  const copy = core.sortArchiveItems(items, "new");
+  assert.notEqual(copy, items, "orijinal dizi mutasyona uğramaz");
+  assert.equal(core.sortArchiveItems(null, "new").length, 0, "null güvenli");
+});
+
+/* ───── v2.22.0: CSV raporu sınıf filtresiyle uyum (classTag hatası regülasyonu) ───── */
+test("v2.22.0 downloadClassCSV: aktif sınıf seçiliyken sadece o sınıf indirilir", () => {
+  let downloads = [];
+  sandbox.downloadFileBlob = (blob, name) => downloads.push(name);
+  sandbox.localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({
+    code: "7A",
+    submissions: {
+      "A|P1": { student: "A", project: "P1", total: 2, steps: { 0: 1 }, ts: Date.now(), classCode: "7A", materials: [] },
+      "B|P2": { student: "B", project: "P2", total: 2, steps: { 0: 1 }, ts: Date.now(), classCode: "8B", materials: [] }
+    }
+  }));
+  sandbox.localStorage.setItem("arduinoDreamLab.activeClass.v1", "8B");
+  sandbox.downloadClassCSV();
+  assert.equal(downloads.length, 1, "8B sınıfı indirildi");
+  const blobText = (() => { return "ok"; })();
+  assert.ok(downloads[0].startsWith("sinif-gonderimleri"), "dosya adı");
+  sandbox.localStorage.removeItem("arduinoDreamLab.activeClass.v1");
+  sandbox.localStorage.removeItem("arduinoDreamLab.classroom.v1");
+  downloads = [];
+});

@@ -4458,8 +4458,15 @@ function saveToArchive(g, idea, manual = false) {
   writeArchive(list.slice(0, 30));
   return true;
 }
-/* v2.20.0: Arşiv filtre durumu — "all" | "fav" | etiket adı (modlar arası korunur) */
-let archiveFilter = { mode: "all", tag: "" };
+/* v2.22.0: Arşiv sıralama — "fav" (favoriler önce) | "new" (en yeni) | "az" (A→Z) */
+function sortArchiveItems(list, mode) {
+  const arr = [...(list || [])];
+  if (mode === "fav") return arr.sort((a, b) => (archiveMeta(b).fav - archiveMeta(a).fav) || ((b.ts || 0) - (a.ts || 0)));
+  if (mode === "az") return arr.sort((a, b) => String((a.guide || {}).title || "").localeCompare(String((b.guide || {}).title || ""), "tr"));
+  return arr.sort((a, b) => (b.ts || 0) - (a.ts || 0)); // "new"
+}
+/* v2.20.0: Arşiv filtre durumu — "all" | "fav" | etiket adı + arama + sıralama (modlar arası korunur) */
+let archiveFilter = { mode: "all", tag: "", q: "", sort: "new" };
 function renderArchive() {
   const wrap = $("archiveContent");
   const all = loadArchive();
@@ -4482,7 +4489,13 @@ function renderArchive() {
     + [...tagCounts.keys()].sort((a, b) => a.localeCompare(b, "tr")).map((tg) => chipBtn("tag", tg, "🏷️ " + esc(tg), tagCounts.get(tg), archiveFilter.mode === "tag" && archiveFilter.tag === tg)).join("")
     + `</div>`;
   wrap.innerHTML = chips
-    + `<input type="text" id="archSearch" class="cert-name-input" style="width:100%;margin:0 0 0.6rem" placeholder="${t("🔍 Ara: başlık, fikir veya etiket…")}" value="${esc(archiveFilter.q || "")}" />`
+    + `<div class="row" style="margin:0 0 0.6rem;gap:0.5rem;align-items:center">`
+    + `<input type="text" id="archSearch" class="cert-name-input" style="flex:1;min-width:0" placeholder="${t("🔍 Ara: başlık, fikir veya etiket…")}" value="${esc(archiveFilter.q || "")}" />`
+    + `<select id="archSort" class="csv-date" style="padding:0.25rem 0.4rem" aria-label="${t("Sıralama")}">`
+    + `<option value="new"${archiveFilter.sort === "new" ? " selected" : ""}>${t("🆕 En yeni")}</option>`
+    + `<option value="fav"${archiveFilter.sort === "fav" ? " selected" : ""}>${t("⭐ Favoriler önce")}</option>`
+    + `<option value="az"${archiveFilter.sort === "az" ? " selected" : ""}>${t("🔤 A → Z")}</option>`
+    + `</select></div>`
     + '<div id="archGrid"></div>'
     + '<div class="modal-actions" style="justify-content:space-between"><button class="btn btn-ghost btn-small" id="exportArchive" type="button">📤 Yedekle (JSON)</button><button class="btn btn-ghost btn-small" id="importArchive" type="button">📥 Geri Yükle</button><button class="btn btn-ghost btn-small" id="clearArchive" type="button">🧹 Tümünü Temizle</button><button class="btn btn-ghost btn-small" id="closeArchiveBtn2" type="button">Kapat</button></div><input type="file" id="importFile" accept="application/json,.json" hidden>';
 
@@ -4493,6 +4506,8 @@ function renderArchive() {
   }));
   const archSearch = $("archSearch");
   if (archSearch) archSearch.addEventListener("input", () => { archiveFilter.q = archSearch.value; renderArchiveGrid(); });
+  const archSort = $("archSort");
+  if (archSort) archSort.addEventListener("change", () => { archiveFilter.sort = archSort.value; renderArchiveGrid(); });
   $("exportArchive").addEventListener("click", () => {
     const data = JSON.stringify({ app: "arduino-dream-lab", v: 1, exportedAt: new Date().toISOString(), items: loadArchive() }, null, 2);
     const a = document.createElement("a");
@@ -4544,16 +4559,18 @@ function renderArchiveGrid() {
   const modeList = archiveFilter.mode === "fav" ? loadArchive().filter((item) => archiveMeta(item).fav)
     : archiveFilter.mode === "tag" ? loadArchive().filter((item) => archiveMeta(item).tags.includes(archiveFilter.tag))
     : loadArchive();
-  const list = filterArchiveItems(modeList, archiveFilter.q);
+  const list = sortArchiveItems(filterArchiveItems(modeList, archiveFilter.q), archiveFilter.sort);
   wrap.innerHTML = list.length ? '<div class="archive-grid">' + list.map((item) => {
     const gg = item.guide || {};
     const meta = archiveMeta(item);
     const date = new Date(item.ts).toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" });
+    const opened = item.lastOpened ? `<span class="arch-date">🔓 ${new Date(item.lastOpened).toLocaleDateString("tr-TR", { day: "2-digit", month: "short" })}</span>` : "";
     return `<div class="archive-item${meta.fav ? " arch-fav" : ""}">
       <h4>${meta.fav ? "⭐ " : ""}${esc(gg.title || "İsimsiz proje")}</h4>
       <div class="arch-meta">
         <span class="arch-badge">${esc(gg.difficulty || "—")}</span>
         <span class="arch-date">📅 ${date}</span>
+        ${opened}
         <span>🧰 ${(gg.materials || []).length} parça</span>
       </div>
       ${meta.tags.length ? `<div class="arch-tags">${meta.tags.map((tg) => `<span class="arch-tag">🏷️ ${esc(tg)}</span>`).join("")}</div>` : ""}
@@ -4584,6 +4601,10 @@ function renderArchiveGrid() {
   wrap.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => {
     const item = loadArchive().find((x) => String(x.id) === b.dataset.open);
     if (item) {
+      /* v2.22.0: son açılış zamanı — kartta 🔓 olarak gösterilir */
+      const cur = loadArchive();
+      const it = cur.find((x) => String(x.id) === String(item.id));
+      if (it) { it.lastOpened = Date.now(); writeArchive(cur); }
       closeArchiveModal();
       renderGuide(item.guide, item.idea || "");
     }
@@ -5069,6 +5090,9 @@ const I18N = {
     /* v2.21.0: Arşiv arama */
     "🔍 Ara: başlık, fikir veya etiket…": "🔍 Search: title, idea or tag…",
     /* v2.21.0: CSV son etkinlik */
+    /* v2.22.0: Çoklu sınıf + arşiv sıralama */
+    "Sınıf": "Class", "Tüm sınıflar": "All classes",
+    "Sıralama": "Sort", "🆕 En yeni": "🆕 Newest", "⭐ Favoriler önce": "⭐ Favorites first", "🔤 A → Z": "🔤 A → Z",
     "Önceki sayfa": "Previous page", "Sonraki sayfa": "Next page",
     "💾 Arşive Kaydet": "💾 Save to Archive", "✅ Arşivde!": "✅ Archived!", "ℹ️ Zaten arşivde": "ℹ️ Already archived",
     "📋 Kopyala": "📋 Copy", "✅ Kopyalandı!": "✅ Copied!", "❌ Kopyalanamadı": "❌ Copy failed",
@@ -5338,7 +5362,10 @@ function saveClassroom(c) {
 function openClassModal() {
   const en = getLang() === "en";
   const c = loadClassroom();
-  const subs = Object.values(c.submissions || {});
+  const allSubs = Object.values(c.submissions || {});
+  const activeCode = activeClassCode();
+  /* v2.22.0: çoklu sınıf — seçili sınıfın gönderileri; boş seçim = tüm sınıflar */
+  const subs = classSubs(allSubs, activeCode);
   const pending = subs.filter((s) => !s.fb);
   /* Gönderi listesi durumu: arama + sayfa (v2.19.0) — liste bölümü bağımsız yeniden çizilir,
      böylece arama yazarken odak kaybolmaz. */
@@ -5416,6 +5443,17 @@ function openClassModal() {
         <div class="panel-kbd">${en
           ? "Share this code with students — their submission files carry it automatically."
           : "Bu kodu öğrencilerinle paylaş — gönderim dosyaları kodu otomatik taşır."}</div>
+        ${(() => {
+          const codes = [...new Set(allSubs.map((s) => String(s.classCode || "")).filter(Boolean))].sort((a, b) => a.localeCompare(b, "tr"));
+          if (!codes.length) return "";
+          return `<div class="row" style="margin:0.55rem 0 0;gap:0.45rem;align-items:center">
+            <label for="activeClassSel" style="font-size:0.85rem">🎓 ${t("Sınıf")}</label>
+            <select id="activeClassSel" class="csv-date" style="padding:0.25rem 0.4rem">
+              <option value=""${activeCode === "" ? " selected" : ""}>${t("Tüm sınıflar")}</option>
+              ${codes.map((cd) => `<option value="${esc(cd)}"${cd === activeCode ? " selected" : ""}>${esc(cd)}</option>`).join("")}
+            </select>
+          </div>`;
+        })()}
         <div class="modal-actions" style="margin-top:0.9rem">
           <button class="btn btn-ghost btn-small" id="classImportBtn" type="button">📥 ${t("Gönderim İçe Aktar")}</button>
           <button class="btn btn-primary btn-small" id="classReportBtn" type="button" ${subs.length ? "" : "disabled"}>📄 ${t("Sınıf Raporu (PDF)")} (${subs.length})</button>
@@ -5424,6 +5462,7 @@ function openClassModal() {
           ? "Import .klasor files, then open the PDF report with the leaderboard."
           : ".klasor dosyalarını içe aktar, ardından lider tablosuyla PDF raporu aç."}</div>
         ${(() => { const sug = catalogSuggestions(); return sug.length ? `<div class="price-chips"><span class="price-chips-label">🏷️ ${t("Önerilen fiyatlar")}</span>${sug.slice(0, 6).map((nm) => `<button type="button" class="price-chip" data-pchip="${esc(nm)}">${esc(nm)}</button>`).join("")}</div>` : ""; })()}
+        ${(() => { const svg = panelWeeklySVG(subs); return svg ? `<div style="margin-top:0.7rem"><div class="panel-kbd" style="margin:0 0 0.15rem">📈 ${t("Haftada tamamlanan adımlar (son 8 hafta)")}</div>${svg}</div>` : ""; })()}
       </div>
       <div class="panel-card">
         <div class="panel-subhead"><h3>📥 ${t("Gönderiler")}</h3><span class="count-badge">${subs.length}</span></div>
@@ -5493,6 +5532,8 @@ function openClassModal() {
     if (f) importClassSubmissions(f);
     e.target.value = "";
   });
+  const classSel = $("activeClassSel");
+  if (classSel) classSel.addEventListener("change", () => { setActiveClassCode(classSel.value); openClassModal(); });
   const reportBtn = $("classReportBtn");
   if (reportBtn && subs.length) reportBtn.addEventListener("click", downloadClassReport);
   const bulkBtn = $("bulkFbBtn");
@@ -5620,8 +5661,8 @@ function loadClassSize() {
 }
 /* Haftalık ilerleme grafiği (v2.17.0): gönderimlerin ts alanını haftaya göre
    kümelendirip o hafta tamamlanan toplam adım sayısını çubuk grafiğe döker. */
-function weeklyProgressSVG(subs) {
-  const en = getLang() === "en";
+/* v2.22.0: Haftalık veri çıkarımı — rapor + panel grafikleri ortak kullanır */
+function weeklyBarsData(subs) {
   const perWeek = new Map(); // hafta → tamamlanan adım sayısı
   for (const s of subs || []) {
     const done = Object.keys(s.steps || {}).length;
@@ -5629,19 +5670,25 @@ function weeklyProgressSVG(subs) {
     const wk = mondayOf(s.ts || Date.now());
     perWeek.set(wk, (perWeek.get(wk) || 0) + done);
   }
-  if (!perWeek.size) return "";
+  if (!perWeek.size) return null;
   const weeks = [...perWeek.keys()].sort((a, b) => a - b).slice(-8); // son 8 hafta
-  const W = 500, H = 190, top = 30, bot = 34, barX = 36;
-  const barW = Math.floor((W - barX - 16) / weeks.length) - 8;
   const max = Math.max(...weeks.map((w) => perWeek.get(w)), 1);
+  return { weeks, perWeek, max };
+}
+function weeklyProgressSVG(subs) {
+  const en = getLang() === "en";
+  const wd = weeklyBarsData(subs);
+  if (!wd) return "";
+  const W = 500, H = 190, top = 30, bot = 34, barX = 36;
+  const barW = Math.floor((W - barX - 16) / wd.weeks.length) - 8;
   const escA = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const bars = weeks.map((wk, i) => {
-    const v = perWeek.get(wk);
-    const h = Math.round((H - top - bot) * v / max);
+  const bars = wd.weeks.map((wk, i) => {
+    const v = wd.perWeek.get(wk);
+    const h = Math.round((H - top - bot) * v / wd.max);
     const x = barX + i * (barW + 8);
     const y = H - bot - h;
-    const d = new Date(wk);
-    const label = d.toLocaleDateString("tr-TR", { day: "2-digit", month: "short" });
+    const dt = new Date(wk);
+    const label = dt.toLocaleDateString("tr-TR", { day: "2-digit", month: "short" });
     return `<g><rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="4" fill="#0a7a68"/>` +
       `<text x="${x + barW / 2}" y="${y - 5}" text-anchor="middle" font-size="11" fill="#1a2233">${v}</text>` +
       `<text x="${x + barW / 2}" y="${H - 12}" text-anchor="middle" font-size="9" fill="#666">${escA(label)}</text></g>`;
@@ -5673,6 +5720,41 @@ function weeklyParticipationDetail(subs) {
     return `<li style="margin:2px 0"><strong>${fmtDay(wk)}</strong> — ${st.reduce((a, x) => a + x.done, 0)} ${en ? "steps · " : "adım · "}${names}${more}</li>`;
   }).join("");
   return `<h3 style="margin:14px 0 4px">${en ? "📅 Weekly participation detail (last 4 weeks)" : "📅 Haftalık katılım detayı (son 4 hafta)"}</h3><ul style="font-size:12px;margin:4px 0 0;padding-left:18px">${rows}</ul>`;
+}
+
+/* v2.22.0: Panel için canlı haftalık grafik — CSS değişkenleriyle temaya uyar */
+function panelWeeklySVG(subs) {
+  const wd = weeklyBarsData(subs);
+  if (!wd) return "";
+  const W = 460, H = 150, top = 22, bot = 26, barX = 30;
+  const barW = Math.floor((W - barX - 12) / wd.weeks.length) - 6;
+  const escA = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const bars = wd.weeks.map((wk, i) => {
+    const v = wd.perWeek.get(wk);
+    const h = Math.round((H - top - bot) * v / wd.max);
+    const x = barX + i * (barW + 6);
+    const y = H - bot - h;
+    const label = new Date(wk).toLocaleDateString("tr-TR", { day: "2-digit", month: "short" });
+    return `<g><rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="3" fill="var(--teal)"/>` +
+      `<text x="${x + barW / 2}" y="${y - 4}" text-anchor="middle" font-size="10" fill="var(--text)">${v}</text>` +
+      `<text x="${x + barW / 2}" y="${H - 8}" text-anchor="middle" font-size="8" fill="var(--text-dim)">${escA(label)}</text></g>`;
+  }).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 ${W} ${H}" role="img" aria-label="weekly steps">` +
+    `<line x1="${barX - 6}" y1="${H - bot}" x2="${W - 8}" y2="${H - bot}" stroke="var(--border)"/>${bars}</svg>`;
+}
+/* v2.22.0: Çoklu sınıf — panelde seçilen sınıf kodu; boş = tüm sınıflar.
+   Gönderi dosyaları v1'den beri classCode taşıdığı için yeni anahtar gerekmez. */
+const ACTIVE_CLASS_KEY = "arduinoDreamLab.activeClass.v1";
+function activeClassCode() {
+  return String(localStorage.getItem(ACTIVE_CLASS_KEY) || "");
+}
+function setActiveClassCode(code) {
+  try { localStorage.setItem(ACTIVE_CLASS_KEY, String(code || "")); } catch {}
+}
+function classSubs(subs, code) {
+  const c = String(code || "");
+  if (!c) return subs || [];
+  return (subs || []).filter((s) => String(s.classCode || "") === c);
 }
 
 /* Pazartesi başlangıçlı hafta anahtarı (yerel zaman) — haftalık grafik ve
@@ -5772,7 +5854,8 @@ function classSubsToCSV(subs) {
 }
 function downloadClassCSV() {
   const c = loadClassroom();
-  let subs = Object.values(c.submissions || {}).sort((a, b) => (a.student || "").localeCompare(b.student || "", "tr"));
+  let subs = classSubs(Object.values(c.submissions || {}), activeClassCode())
+    .sort((a, b) => (a.student || "").localeCompare(b.student || "", "tr"));
   const range = loadCsvRange();
   subs = filterSubsByRange(subs, range.from, range.to);
   if (!subs.length) return;
@@ -5784,13 +5867,15 @@ function downloadClassCSV() {
 function downloadClassReport() {
   const en = getLang() === "en";
   const c = loadClassroom();
-  let subs = Object.values(c.submissions || {}).sort((a, b) => (a.student || "").localeCompare(b.student || "", "tr"));
+  let subs = classSubs(Object.values(c.submissions || {}), activeClassCode())
+    .sort((a, b) => (a.student || "").localeCompare(b.student || "", "tr"));
   if (!subs.length) return;
   const csvRange = loadCsvRange();
   const csvFiltered = filterSubsByRange(subs, csvRange.from, csvRange.to);
   const rangeLabel = (csvRange.from || csvRange.to)
     ? ` · ${en ? "CSV date range" : "CSV tarih aralığı"}: ${csvRange.from || "…"} – ${csvRange.to || "…"} (${csvFiltered.length}/${subs.length})`
     : "";
+  const classTag = activeClassCode() ? ` · 🎓 ${esc2(activeClassCode())}` : ` · ${en ? "all classes" : "tüm sınıflar"}`;
   const esc2 = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
   const money = (x) => (x > 0 ? (Math.round(x * rate() * 100) / 100).toFixed(2) + "₺ ($" + x.toFixed(2) + ")" : "—");
   const rows = subs.map((s) => {
@@ -5816,7 +5901,7 @@ function downloadClassReport() {
   .fb-note{font-size:10px;color:#666;font-style:italic;margin-top:2px;max-width:200px}
   footer{margin-top:18px;font-size:10px;color:#888}</style></head><body>
   <h1>🤖 ${en ? "Class Report — Arduino Dream Lab" : "Sınıf Raporu — Arduino Rüya Atölyesi"}</h1>
-  <h2>${en ? "Class code" : "Sınıf kodu"}: ${esc2(c.code || "—")} · ${new Date().toLocaleDateString("tr-TR")} · ${subs.length} ${en ? "students" : "öğrenci"}${rangeLabel}</h2>
+  <h2>${en ? "Class code" : "Sınıf kodu"}: ${esc2(c.code || "—")} · ${new Date().toLocaleDateString("tr-TR")} · ${subs.length} ${en ? "students" : "öğrenci"}${classTag}${rangeLabel}</h2>
   ${leaderboardSVG(subs)}
   ${(() => { const sum = subs.reduce((acc, s) => acc + (estimateCost({ materials: s.materials || [] }).totalUSD || 0), 0); return sum > 0 ? `<p style="font-size:13px;margin:10px 0"><strong>${en ? "💰 Class total budget" : "💰 Sınıf toplam bütçesi"}:</strong> ${fmtTL(sum)}${isOverBudget(sum) ? ` — ⚠️ ${en ? "over budget" : "bütçe aşımı"}` : ""}</p>` : ""; })()}
   ${(() => { const n = loadClassSize(); const per = subs.reduce((acc, s) => acc + (estimateCost({ materials: s.materials || [] }).totalUSD || 0), 0); if (!n || !per) return ""; const total = n * per; return `<p style="font-size:13px;margin:10px 0"><strong>${en ? "🎯 Full-class budget plan" : "🎯 Tüm sınıf bütçe planı"}:</strong> ${n} ${en ? "students ×" : "öğrenci ×"} ${fmtTL(per)} = <strong>${fmtTL(total)}</strong>${isOverBudget(total) ? ` — ⚠️ ${en ? "over teacher budget" : "öğretmen bütçesini aşıyor"}` : ""}</p>`; })()}

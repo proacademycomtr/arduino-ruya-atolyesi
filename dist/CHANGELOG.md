@@ -2,6 +2,10 @@
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
 
+## [2.22.0] - 2026-10-02
+
+- Sürüm 2.22.0 olarak derlendi.
+
 ## [2.21.0] - 2026-10-02
 
 - Yeni: 🔍 **Arşiv arama** — arşiv penceresinde başlık, fikir ve etiketlerde Türkçe harf duyarsız (foldTR) anlık süzme; yazarken odak kaybolmaz (grid ayrı çizilir), ⭐/🏷️ çipleriyle birlikte çalışır
