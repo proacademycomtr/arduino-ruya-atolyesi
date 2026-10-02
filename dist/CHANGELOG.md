@@ -4,7 +4,9 @@ Bu dosya `build.py` tarafından otomatik güncellenir.
 
 ## [2.21.0] - 2026-10-02
 
-- Sürüm 2.21.0 olarak derlendi.
+- Yeni: 🔍 **Arşiv arama** — arşiv penceresinde başlık, fikir ve etiketlerde Türkçe harf duyarsız (foldTR) anlık süzme; yazarken odak kaybolmaz (grid ayrı çizilir), ⭐/🏷️ çipleriyle birlikte çalışır
+- Yeni: 📅 **Haftalık katılım detayı** — sınıf raporunda grafik altında en güncel 4 haftanın her biri için kim kaç adım tamamladı (hafta toplamıyla, en çok 6 isim + "+n")
+- Yeni: 🕒 **CSV "Son Etkinlik" sütunu** — öğrenci başına en son adım işaretlendiği gün (adım yoksa gönderim günü); dönem sonu Excel takibinde risk analizi kolaylaşır
 
 ## [2.20.0] - 2026-10-01
 
