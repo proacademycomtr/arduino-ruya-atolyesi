@@ -1285,3 +1285,53 @@ test("v2.20.0 orderPortfolioCerts: favoriler önce, sonra en yeni tarih", () => 
   sandbox.localStorage.removeItem("arduinoDreamLab.badges.v1");
   sandbox.localStorage.removeItem("arduinoDreamLab.archive.v1");
 });
+
+/* ───── v2.21.0: Arşiv arama ───── */
+test("v2.21.0 filterArchiveItems: başlık/fikir/etikette Türkçe harf duyarsız arama", () => {
+  const items = [
+    { id: 1, guide: { title: "Akıllı Saksı", code: "a" }, idea: "otomatik sulama" },
+    { id: 2, guide: { title: "Gece Lambası", code: "b" }, idea: "ışık sensörü", meta: { fav: true, tags: ["veli", "Dönem1"] } },
+    { id: 3, guide: { title: "Robot Kol", code: "c" }, idea: "", meta: { fav: false, tags: [] } }
+  ];
+  assert.equal(core.filterArchiveItems(items, "").length, 3, "boş sorgu → tümü");
+  assert.equal(core.filterArchiveItems(items, null).length, 3, "null → tümü");
+  assert.deepEqual(core.filterArchiveItems(items, "saksi").map((x) => x.id), [1], "başlıkta arar (ı→I, ş→S)");
+  assert.deepEqual(core.filterArchiveItems(items, "SAKSI").map((x) => x.id), [1], "büyük harf de yakalar");
+  assert.deepEqual(core.filterArchiveItems(items, "sensör").map((x) => x.id), [2], "fikir alanında arar");
+  assert.deepEqual(core.filterArchiveItems(items, "DÖNEM").map((x) => x.id), [2], "etikette arar (Ö→O)");
+  assert.deepEqual(core.filterArchiveItems(items, "veli").map((x) => x.id), [2]);
+  assert.equal(core.filterArchiveItems(items, "yok boyle").length, 0);
+  assert.equal(core.filterArchiveItems(null, "x").length, 0, "null liste güvenli");
+  assert.equal(core.filterArchiveItems(items, "  ").length, 3, "boşluk → tümü");
+});
+
+/* ───── v2.21.0: Haftalık katılım detayı ───── */
+test("v2.21.0 weeklyParticipationDetail: haftaları azalan dizer, adım sayısıyla", () => {
+  assert.equal(core.weeklyParticipationDetail([]), "", "veri yok → boş");
+  assert.equal(core.weeklyParticipationDetail([{ steps: {}, ts: Date.now() }]), "", "adımsız → boş");
+  const w1 = core.mondayOf(new Date(2026, 8, 28, 12).getTime());
+  const w2 = w1 + 7 * 86400000;
+  const html = core.weeklyParticipationDetail([
+    { student: "Ada", steps: { 0: 1, 1: 1 }, ts: w1 + 86400000 },
+    { student: "Cem", steps: { 0: 1 }, ts: w1 + 2 * 86400000 },
+    { student: "Ece", steps: { 0: 1, 1: 1, 2: 1 }, ts: w2 + 86400000 }
+  ]);
+  assert.ok(html.includes("Haftalık katılım detayı"), "başlık");
+  assert.ok(html.includes("Ada (2)"), "öğrenci + adım sayısı");
+  assert.ok(html.includes("Ece (3)"), "ikinci hafta");
+  assert.ok(html.indexOf("Ece") < html.indexOf("Ada"), "en güncel hafta üstte (azalan)");
+  assert.ok(html.includes("3 adım"), "hafta toplamı");
+});
+
+/* ───── v2.21.0: CSV son etkinlik sütunu ───── */
+test("v2.21.0 classSubsToCSV: Son Etkinlik sütunu en büyük adım ts'ini yazar", () => {
+  const csv = core.classSubsToCSV([
+    { student: "Ada", project: "P1", total: 3, steps: { 0: 1700000000000, 1: 1700086400000 }, ts: 1700001000000 },
+    { student: "Cem", project: "P2", total: 2, steps: {}, ts: 1700172800000 }
+  ]);
+  const lines = csv.slice(1).split("\r\n");
+  assert.ok(lines[0].endsWith("Son Etkinlik"), "yeni başlık sonda: " + lines[0]);
+  assert.ok(lines[1].includes("2023-11-15"), "adım ts'inin max'i (1700086400000 → 2023-11-15 UTC)");
+  assert.ok(lines[2].includes("2023-11-16"), "adım yoksa gönderim ts'i (1700172800000 → 2023-11-16 UTC)");
+  assert.equal(lines[1].split(";").length, 9, "9 sütun");
+});

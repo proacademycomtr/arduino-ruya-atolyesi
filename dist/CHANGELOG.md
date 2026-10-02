@@ -2,6 +2,10 @@
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
 
+## [2.21.0] - 2026-10-02
+
+- Sürüm 2.21.0 olarak derlendi.
+
 ## [2.20.0] - 2026-10-01
 
 - Yeni: 📅 **CSV tarih filtresi** — öğretmen panelinde başlangıç/bitiş tarihi seç; CSV indirimi ve gönderi listesi bu aralığa göre süzülür, aralık korunur. Rapor başlığında "CSV tarih aralığı: … (n/total)" yazar; temizle düğmesi tek tıkla tüm gönderilere döner

@@ -112,7 +112,7 @@ try {
   const page2 = (await page.$$("#subList .archive-item")).length;
   ok("6c. 2. sayfada kalan 2 gönderi", page2 === 2, page2 + " satır");
   ok("6d. alışveriş listesi düğmesi var", !!(await page.$('[data-act="cart"]')));
-  await page.keyboard.press("Escape");
+  await page.click("#classCloseBtn");
   await page.waitForTimeout(300);
 
   /* ── 7) v2.20.0: CSV tarih filtresi gönderi listesini süzer ── */
@@ -132,7 +132,33 @@ try {
   await page.waitForTimeout(300);
   const cSubs = (await page.$$("#subList .archive-item")).length;
   ok("7b. filtre temizle → tüm gönderiler", cSubs === 2, cSubs + " satır");
+  await page.click("#classCloseBtn");
+  await page.waitForTimeout(300);
   await page.evaluate(() => localStorage.removeItem("arduinoDreamLab.csvRange.v1"));
+
+  /* ── 8) v2.21.0: arşiv arama — başlık/etikette Türkçe duyarsız süzme ── */
+  await page.evaluate(() => {
+    localStorage.setItem("arduinoDreamLab.archive.v1", JSON.stringify([
+      { id: 1, ts: 1, idea: "otomatik sulama", guide: { title: "Akıllı Saksı", code: "a", difficulty: "Orta", materials: [] } },
+      { id: 2, ts: 2, idea: "", guide: { title: "Gece Lambası", code: "b", difficulty: "Kolay", materials: [] }, meta: { fav: true, tags: ["veli"] } }
+    ]));
+  });
+  await page.click("#archiveBtn");
+  await page.waitForSelector("#archSearch");
+  const allItems = (await page.$$("#archGrid .archive-item")).length;
+  await page.fill("#archSearch", "saksi");
+  await page.waitForTimeout(300);
+  const searched = (await page.$$("#archGrid .archive-item")).length;
+  const firstTitle = await page.$eval("#archGrid .archive-item h4", (h) => h.textContent.trim());
+  ok("8a. arama Türkçe duyarsız (saksi→Akıllı Saksı)", allItems === 2 && searched === 1 && firstTitle.includes("Akıllı Saksı"), allItems + "→" + searched + " | " + firstTitle);
+  await page.fill("#archSearch", "veli");
+  await page.waitForTimeout(300);
+  const byTag = (await page.$$("#archGrid .archive-item")).length;
+  ok("8b. etikette arama", byTag === 1, byTag + " eşleşme");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+  await page.evaluate(() => localStorage.removeItem("arduinoDreamLab.archive.v1"));
+
 
 } catch (e) {
   ok("AKIŞ", false, e.message);

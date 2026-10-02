@@ -137,6 +137,7 @@ function loadCore() {
     "catalogSuggestions", "atRiskStudents", "unknownMaterials", "classSubsToCSV", "downloadClassCSV",
     "shoppingListText", "shareShoppingList", "filterSubmissions", "paginate", "mostActiveWeek", "mondayOf",
     "loadCsvRange", "saveCsvRange", "filterSubsByRange", "archiveMeta", "setArchiveMeta", "loadArchive", "writeArchive",
+    "filterArchiveItems", "weeklyParticipationDetail",
     "buildAmbientPlan", "nextAmbientStep", "markAmbientStep", "orderPortfolioCerts"
   ];
   // Sanal ortamda app.js tümüyle çalıştı; örneklemesi gerekenler const/let ise

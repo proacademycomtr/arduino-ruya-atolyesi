@@ -2917,6 +2917,18 @@ function setArchiveMeta(id, patch) {
   it.meta = next;
   writeArchive(list);
 }
+/* v2.21.0: Arşiv arama — başlık, fikir ve etiketlerde Türkçe harf duyarsız (foldTR) süzme */
+function filterArchiveItems(list, q) {
+  const needle = foldTR(String(q || "").trim());
+  if (!needle) return list || [];
+  return (list || []).filter((item) => {
+    const gg = (item && item.guide) || {};
+    const meta = archiveMeta(item);
+    const hay = foldTR([gg.title || "", item.idea || "", meta.tags.join(" ")].join(" "));
+    return hay.includes(needle);
+  });
+}
+
 /* Göz serbest modu: adımları kuyruğa alıp sırayla okur; biten adım otomatik işaretlenir.
    settings const'ı yükleme anında okunduğu için işaretlemeyi localStorage'a doğrudan yazar. */
 function buildAmbientPlan(g) {
@@ -4469,52 +4481,18 @@ function renderArchive() {
     + chipBtn("fav", "", en ? "⭐ Favorites" : "⭐ Favoriler", favCount, archiveFilter.mode === "fav")
     + [...tagCounts.keys()].sort((a, b) => a.localeCompare(b, "tr")).map((tg) => chipBtn("tag", tg, "🏷️ " + esc(tg), tagCounts.get(tg), archiveFilter.mode === "tag" && archiveFilter.tag === tg)).join("")
     + `</div>`;
-  let list = all;
-  if (archiveFilter.mode === "fav") list = all.filter((item) => archiveMeta(item).fav);
-  else if (archiveFilter.mode === "tag") list = all.filter((item) => archiveMeta(item).tags.includes(archiveFilter.tag));
-  const grid = list.length ? '<div class="archive-grid">' + list.map((item) => {
-    const gg = item.guide || {};
-    const meta = archiveMeta(item);
-    const date = new Date(item.ts).toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" });
-    return `<div class="archive-item${meta.fav ? " arch-fav" : ""}">
-      <h4>${meta.fav ? "⭐ " : ""}${esc(gg.title || "İsimsiz proje")}</h4>
-      <div class="arch-meta">
-        <span class="arch-badge">${esc(gg.difficulty || "—")}</span>
-        <span class="arch-date">📅 ${date}</span>
-        <span>🧰 ${(gg.materials || []).length} parça</span>
-      </div>
-      ${meta.tags.length ? `<div class="arch-tags">${meta.tags.map((tg) => `<span class="arch-tag">🏷️ ${esc(tg)}</span>`).join("")}</div>` : ""}
-      <div class="row">
-        <button class="btn btn-ghost btn-small" data-open="${item.id}" type="button">👁️ Görüntüle</button>
-        <button class="btn btn-ghost btn-small" data-fav="${item.id}" type="button" title="${meta.fav ? t("Favoriden çıkar") : t("Favorilere ekle")}">${meta.fav ? "⭐" : "☆"}</button>
-        <button class="btn btn-ghost btn-small" data-tag="${item.id}" type="button" title="${t("Etiketleri düzenle (virgülle ayır, en çok 5)")}">🏷️</button>
-        <button class="btn btn-ghost btn-small" data-cert="${item.id}" type="button" title="${t("Sertifika üret")}">🏅</button>
-        <button class="btn btn-ghost btn-small" data-del="${item.id}" type="button" aria-label="Sil">🗑️</button>
-      </div>
-    </div>`;
-  }).join("") + "</div>" : `<p class="panel-empty">${en ? "No projects match this filter." : "Bu filtreyle eşleşen proje yok."}</p>`;
-  wrap.innerHTML = chips + grid + '<div class="modal-actions" style="justify-content:space-between"><button class="btn btn-ghost btn-small" id="exportArchive" type="button">📤 Yedekle (JSON)</button><button class="btn btn-ghost btn-small" id="importArchive" type="button">📥 Geri Yükle</button><button class="btn btn-ghost btn-small" id="clearArchive" type="button">🧹 Tümünü Temizle</button><button class="btn btn-ghost btn-small" id="closeArchiveBtn2" type="button">Kapat</button></div><input type="file" id="importFile" accept="application/json,.json" hidden>';
+  wrap.innerHTML = chips
+    + `<input type="text" id="archSearch" class="cert-name-input" style="width:100%;margin:0 0 0.6rem" placeholder="${t("🔍 Ara: başlık, fikir veya etiket…")}" value="${esc(archiveFilter.q || "")}" />`
+    + '<div id="archGrid"></div>'
+    + '<div class="modal-actions" style="justify-content:space-between"><button class="btn btn-ghost btn-small" id="exportArchive" type="button">📤 Yedekle (JSON)</button><button class="btn btn-ghost btn-small" id="importArchive" type="button">📥 Geri Yükle</button><button class="btn btn-ghost btn-small" id="clearArchive" type="button">🧹 Tümünü Temizle</button><button class="btn btn-ghost btn-small" id="closeArchiveBtn2" type="button">Kapat</button></div><input type="file" id="importFile" accept="application/json,.json" hidden>';
 
   wrap.querySelectorAll("[data-archchip]").forEach((b) => b.addEventListener("click", () => {
     const mode = b.dataset.archchip;
     archiveFilter = mode === "tag" ? { mode: "tag", tag: b.dataset.archtag || "" } : { mode, tag: "" };
     renderArchive();
   }));
-  wrap.querySelectorAll("[data-fav]").forEach((b) => b.addEventListener("click", () => {
-    const item = loadArchive().find((x) => String(x.id) === b.dataset.fav);
-    if (!item) return;
-    setArchiveMeta(item.id, { fav: !archiveMeta(item).fav });
-    renderArchive();
-  }));
-  wrap.querySelectorAll("[data-tag]").forEach((b) => b.addEventListener("click", () => {
-    const item = loadArchive().find((x) => String(x.id) === b.dataset.tag);
-    if (!item) return;
-    const cur = archiveMeta(item).tags.join(", ");
-    const val = window.prompt(t("Etiketler (virgülle ayır, örn. veli, dönem1):"), cur);
-    if (val === null) return;
-    setArchiveMeta(item.id, { tags: String(val).split(",").map((x) => x.trim()).filter(Boolean) });
-    renderArchive();
-  }));
+  const archSearch = $("archSearch");
+  if (archSearch) archSearch.addEventListener("input", () => { archiveFilter.q = archSearch.value; renderArchiveGrid(); });
   $("exportArchive").addEventListener("click", () => {
     const data = JSON.stringify({ app: "arduino-dream-lab", v: 1, exportedAt: new Date().toISOString(), items: loadArchive() }, null, 2);
     const a = document.createElement("a");
@@ -4551,12 +4529,58 @@ function renderArchive() {
     reader.readAsText(file);
     e.target.value = "";
   });
-
   wrap.querySelector("#clearArchive").addEventListener("click", () => {
     writeArchive([]);
     renderArchive();
   });
   wrap.querySelector("#closeArchiveBtn2").addEventListener("click", closeArchiveModal);
+  renderArchiveGrid();
+}
+/* v2.21.0: Arşiv grid'i ayrı çizilir — arama yazarken araç çubuğu ve odak korunur */
+function renderArchiveGrid() {
+  const wrap = $("archGrid");
+  if (!wrap) return;
+  const en = getLang() === "en";
+  const modeList = archiveFilter.mode === "fav" ? loadArchive().filter((item) => archiveMeta(item).fav)
+    : archiveFilter.mode === "tag" ? loadArchive().filter((item) => archiveMeta(item).tags.includes(archiveFilter.tag))
+    : loadArchive();
+  const list = filterArchiveItems(modeList, archiveFilter.q);
+  wrap.innerHTML = list.length ? '<div class="archive-grid">' + list.map((item) => {
+    const gg = item.guide || {};
+    const meta = archiveMeta(item);
+    const date = new Date(item.ts).toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" });
+    return `<div class="archive-item${meta.fav ? " arch-fav" : ""}">
+      <h4>${meta.fav ? "⭐ " : ""}${esc(gg.title || "İsimsiz proje")}</h4>
+      <div class="arch-meta">
+        <span class="arch-badge">${esc(gg.difficulty || "—")}</span>
+        <span class="arch-date">📅 ${date}</span>
+        <span>🧰 ${(gg.materials || []).length} parça</span>
+      </div>
+      ${meta.tags.length ? `<div class="arch-tags">${meta.tags.map((tg) => `<span class="arch-tag">🏷️ ${esc(tg)}</span>`).join("")}</div>` : ""}
+      <div class="row">
+        <button class="btn btn-ghost btn-small" data-open="${item.id}" type="button">👁️ Görüntüle</button>
+        <button class="btn btn-ghost btn-small" data-fav="${item.id}" type="button" title="${meta.fav ? t("Favoriden çıkar") : t("Favorilere ekle")}">${meta.fav ? "⭐" : "☆"}</button>
+        <button class="btn btn-ghost btn-small" data-tag="${item.id}" type="button" title="${t("Etiketleri düzenle (virgülle ayır, en çok 5)")}">🏷️</button>
+        <button class="btn btn-ghost btn-small" data-cert="${item.id}" type="button" title="${t("Sertifika üret")}">🏅</button>
+        <button class="btn btn-ghost btn-small" data-del="${item.id}" type="button" aria-label="Sil">🗑️</button>
+      </div>
+    </div>`;
+  }).join("") + "</div>" : `<p class="panel-empty">${en ? "No projects match this filter." : "Bu filtreyle eşleşen proje yok."}</p>`;
+  wrap.querySelectorAll("[data-fav]").forEach((b) => b.addEventListener("click", () => {
+    const item = loadArchive().find((x) => String(x.id) === b.dataset.fav);
+    if (!item) return;
+    setArchiveMeta(item.id, { fav: !archiveMeta(item).fav });
+    renderArchive();
+  }));
+  wrap.querySelectorAll("[data-tag]").forEach((b) => b.addEventListener("click", () => {
+    const item = loadArchive().find((x) => String(x.id) === b.dataset.tag);
+    if (!item) return;
+    const cur = archiveMeta(item).tags.join(", ");
+    const val = window.prompt(t("Etiketler (virgülle ayır, örn. veli, dönem1):"), cur);
+    if (val === null) return;
+    setArchiveMeta(item.id, { tags: String(val).split(",").map((x) => x.trim()).filter(Boolean) });
+    renderArchive();
+  }));
   wrap.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => {
     const item = loadArchive().find((x) => String(x.id) === b.dataset.open);
     if (item) {
@@ -5042,6 +5066,9 @@ const I18N = {
     " Arduino Kodu": " Arduino Code",
     "📄 PDF İndir": "📄 Download PDF", "💬 WhatsApp'ta Paylaş": "💬 Share on WhatsApp",
     "Alışveriş Listesi": "Shopping List", "🔍 Ara: öğrenci veya proje…": "🔍 Search: student or project…",
+    /* v2.21.0: Arşiv arama */
+    "🔍 Ara: başlık, fikir veya etiket…": "🔍 Search: title, idea or tag…",
+    /* v2.21.0: CSV son etkinlik */
     "Önceki sayfa": "Previous page", "Sonraki sayfa": "Next page",
     "💾 Arşive Kaydet": "💾 Save to Archive", "✅ Arşivde!": "✅ Archived!", "ℹ️ Zaten arşivde": "ℹ️ Already archived",
     "📋 Kopyala": "📋 Copy", "✅ Kopyalandı!": "✅ Copied!", "❌ Kopyalanamadı": "❌ Copy failed",
@@ -5624,6 +5651,30 @@ function weeklyProgressSVG(subs) {
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img">` +
     `<line x1="${barX - 8}" y1="${H - bot}" x2="${W - 10}" y2="${H - bot}" stroke="#c9c2b0"/>${bars}</svg>`;
 }
+/* v2.21.0: Haftalık katılım detayı — son 8 haftanın her biri için kim kaç adım
+   tamamladı; sınıf raporuna grafik altına girer (ayrıca PDF'e yazdırılabilir). */
+function weeklyParticipationDetail(subs) {
+  const en = getLang() === "en";
+  const byWeek = new Map();
+  for (const s of subs || []) {
+    const done = Object.keys(s.steps || {}).length;
+    if (!done) continue;
+    const wk = mondayOf(s.ts || Date.now());
+    if (!byWeek.has(wk)) byWeek.set(wk, []);
+    byWeek.get(wk).push({ student: s.student || "?", done });
+  }
+  if (!byWeek.size) return "";
+  const weeks = [...byWeek.keys()].sort((a, b) => b - a).slice(0, 4); // en güncel 4 hafta
+  const fmtDay = (ts) => new Date(ts).toLocaleDateString(en ? "en-US" : "tr-TR", { day: "2-digit", month: "short" });
+  const rows = weeks.map((wk) => {
+    const st = byWeek.get(wk).sort((a, b) => b.done - a.done || String(a.student).localeCompare(String(b.student), "tr"));
+    const names = st.slice(0, 6).map((x) => `${esc(x.student)} (${x.done})`).join(", ");
+    const more = st.length > 6 ? ` +${st.length - 6}` : "";
+    return `<li style="margin:2px 0"><strong>${fmtDay(wk)}</strong> — ${st.reduce((a, x) => a + x.done, 0)} ${en ? "steps · " : "adım · "}${names}${more}</li>`;
+  }).join("");
+  return `<h3 style="margin:14px 0 4px">${en ? "📅 Weekly participation detail (last 4 weeks)" : "📅 Haftalık katılım detayı (son 4 hafta)"}</h3><ul style="font-size:12px;margin:4px 0 0;padding-left:18px">${rows}</ul>`;
+}
+
 /* Pazartesi başlangıçlı hafta anahtarı (yerel zaman) — haftalık grafik ve
    en aktif hafta analizi ortak kullanır. */
 function mondayOf(ts) {
@@ -5705,13 +5756,17 @@ function unknownMaterials(subs) {
    ';', tırnak ve satır sonu içeren hücreler çift tırnakla sarılır. */
 function classSubsToCSV(subs) {
   const escCell = (v) => { const s = String(v == null ? "" : v); return /[";\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const head = ["Öğrenci", "Proje", "Tamamlanan Adım", "Toplam Adım", "İlerleme %", "Tahmini Maliyet USD", "Geri Bildirim", "Tarih"].map(escCell).join(";");
+  const head = ["Öğrenci", "Proje", "Tamamlanan Adım", "Toplam Adım", "İlerleme %", "Tahmini Maliyet USD", "Geri Bildirim", "Tarih", "Son Etkinlik"].map(escCell).join(";");
   const lines = (subs || []).map((s) => {
     const total = Number(s.total) || 0;
     const done = Object.keys(s.steps || {}).length;
+    /* Son etkinlik: adım ts'lerinin en büyüğü; hiçbiri yoksa gönderim ts'si */
+    const stepTs = Object.values(s.steps || {}).map(Number).filter((n) => n > 0);
+    const lastAct = stepTs.length ? Math.max(...stepTs) : (Number(s.ts) || 0);
+    const fmtDay = (ts) => (ts ? new Date(ts).toISOString().slice(0, 10) : "");
     return [s.student || "?", s.project || "—", done, total, total ? Math.round((done / total) * 100) : 0,
       (Math.round((estimateCost({ materials: s.materials || [] }).totalUSD || 0) * 100) / 100).toFixed(2),
-      s.fb || "", new Date(s.ts || Date.now()).toISOString().slice(0, 10)].map(escCell).join(";");
+      s.fb || "", fmtDay(Number(s.ts) || 0), fmtDay(lastAct)].map(escCell).join(";");
   });
   return "\uFEFF" + [head].concat(lines).join("\r\n");
 }
@@ -5767,6 +5822,7 @@ function downloadClassReport() {
   ${(() => { const n = loadClassSize(); const per = subs.reduce((acc, s) => acc + (estimateCost({ materials: s.materials || [] }).totalUSD || 0), 0); if (!n || !per) return ""; const total = n * per; return `<p style="font-size:13px;margin:10px 0"><strong>${en ? "🎯 Full-class budget plan" : "🎯 Tüm sınıf bütçe planı"}:</strong> ${n} ${en ? "students ×" : "öğrenci ×"} ${fmtTL(per)} = <strong>${fmtTL(total)}</strong>${isOverBudget(total) ? ` — ⚠️ ${en ? "over teacher budget" : "öğretmen bütçesini aşıyor"}` : ""}</p>`; })()}
   ${weeklyProgressSVG(subs)}
   ${(() => { const m = mostActiveWeek(subs); return m ? `<p style="font-size:12px;margin:4px 0 0;color:#666">🔥 ${en ? "Most active week" : "En aktif hafta"}: ${new Date(m.weekStart).toLocaleDateString(en ? "en-US" : "tr-TR")} — ${m.steps} ${en ? "steps" : "adım"}</p>` : ""; })()}
+  ${weeklyParticipationDetail(subs)}
   <table><thead><tr><th>${en ? "Student" : "Öğrenci"}</th><th>${en ? "Project" : "Proje"}</th><th>${en ? "Steps" : "Adım"}</th><th>${en ? "Est. Cost" : "Maliyet"}</th><th>${en ? "Progress" : "İlerleme"}</th><th>${en ? "Feedback" : "Geri Bildirim"}</th><th>${en ? "Date" : "Tarih"}</th></tr></thead><tbody>${rows}</tbody></table>
   <footer>${en ? "Generated with Arduino Dream Lab — progress data is collected locally, no server involved." : "Arduino Rüya Atölyesi ile üretildi — ilerleme verisi yerel toplanır, sunucu yok."}</footer>
   <scr${""}ipt>window.onload=function(){setTimeout(function(){window.print()},300)}</scr${""}ipt></body></html>`;
