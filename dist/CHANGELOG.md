@@ -4,7 +4,9 @@ Bu dosya `build.py` tarafından otomatik güncellenir.
 
 ## [2.22.0] - 2026-10-02
 
-- Sürüm 2.22.0 olarak derlendi.
+- Yeni: 🏫 **Çoklu sınıf desteği** — panelde sınıf seçici (gönderi dosyalarındaki classCode'lardan otomatik); CSV indirmesi ve PDF raporu seçili sınıfa göre süzülür, seçim korunur; "Tüm sınıflar" görünümü de var. Rapor başlığında aktif sınıf etiketi (🎓) yazar
+- Yeni: 📈 **Panelde canlı haftalık grafik** — rapor açmadan son 8 haftanın adım toplamları sağ kartta görünür; CSS değişkenleriyle koyu/açık temaya uyar (rapordaki grafikle aynı veri kaynağı)
+- Yeni: 🔃 **Arşiv sıralama + son açılış** — 🆕 En yeni / ⭐ Favoriler önce / 🔤 A→Z seçici; kartlar en son açıldıkları günü (🔓) gösterir
 
 ## [2.21.0] - 2026-10-02
 
