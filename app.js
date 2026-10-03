@@ -4467,6 +4467,24 @@ function sortArchiveItems(list, mode) {
 }
 /* v2.20.0: Arşiv filtre durumu — "all" | "fav" | etiket adı + arama + sıralama (modlar arası korunur) */
 let archiveFilter = { mode: "all", tag: "", q: "", sort: "new" };
+/* v3.0.0: Arşiv mini önizleme — açık kartların id'leri; renderArchiveGrid
+   yeniden çizilirken korunur, modal kapanınca temizlenir. */
+const archPreviewOpen = new Set();
+/* v3.0.0: Kart önizleme içeriği — özet + ilk 3 adım başlığı + ilk ipucu.
+   Eksik alanlar güvenle atlanır (eski kayıtlarda summary/tips olmayabilir). */
+function archivePreviewData(item) {
+  const g = (item && item.guide) || {};
+  const steps = (Array.isArray(g.steps) ? g.steps : [])
+    .map((s) => String((s && s.title) || "").trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const tips = Array.isArray(g.tips) ? g.tips : [];
+  return {
+    summary: String(g.summary || "").trim(),
+    steps,
+    tip: tips.length ? String(tips[0] || "").trim() : ""
+  };
+}
 function renderArchive() {
   const wrap = $("archiveContent");
   const all = loadArchive();
@@ -4565,7 +4583,10 @@ function renderArchiveGrid() {
     const meta = archiveMeta(item);
     const date = new Date(item.ts).toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" });
     const opened = item.lastOpened ? `<span class="arch-date">🔓 ${new Date(item.lastOpened).toLocaleDateString("tr-TR", { day: "2-digit", month: "short" })}</span>` : "";
-    return `<div class="archive-item${meta.fav ? " arch-fav" : ""}">
+    /* v3.0.0: mini önizleme — 📄 ile kart açılır/kapanır; özet + ilk 3 adım + ipucu */
+    const prevOpen = archPreviewOpen.has(String(item.id));
+    const pv = prevOpen ? archivePreviewData(item) : null;
+    return `<div class="archive-item${meta.fav ? " arch-fav" : ""}${prevOpen ? " arch-open" : ""}">
       <h4>${meta.fav ? "⭐ " : ""}${esc(gg.title || "İsimsiz proje")}</h4>
       <div class="arch-meta">
         <span class="arch-badge">${esc(gg.difficulty || "—")}</span>
@@ -4574,8 +4595,14 @@ function renderArchiveGrid() {
         <span>🧰 ${(gg.materials || []).length} parça</span>
       </div>
       ${meta.tags.length ? `<div class="arch-tags">${meta.tags.map((tg) => `<span class="arch-tag">🏷️ ${esc(tg)}</span>`).join("")}</div>` : ""}
+      ${pv ? `<div class="arch-preview">
+        ${pv.summary ? `<p class="arch-prev-sum">${esc(pv.summary)}</p>` : ""}
+        ${pv.steps.length ? `<ol class="arch-prev-steps">${pv.steps.map((st) => `<li>${esc(st)}</li>`).join("")}</ol>` : ""}
+        ${pv.tip ? `<p class="arch-prev-tip">💡 ${esc(pv.tip)}</p>` : ""}
+      </div>` : ""}
       <div class="row">
         <button class="btn btn-ghost btn-small" data-open="${item.id}" type="button">👁️ Görüntüle</button>
+        <button class="btn btn-ghost btn-small" data-prev="${item.id}" type="button" title="${t("Önizleme")}" aria-pressed="${prevOpen}">${prevOpen ? "📄 ▲" : "📄 Önizleme"}</button>
         <button class="btn btn-ghost btn-small" data-fav="${item.id}" type="button" title="${meta.fav ? t("Favoriden çıkar") : t("Favorilere ekle")}">${meta.fav ? "⭐" : "☆"}</button>
         <button class="btn btn-ghost btn-small" data-tag="${item.id}" type="button" title="${t("Etiketleri düzenle (virgülle ayır, en çok 5)")}">🏷️</button>
         <button class="btn btn-ghost btn-small" data-cert="${item.id}" type="button" title="${t("Sertifika üret")}">🏅</button>
@@ -4609,7 +4636,13 @@ function renderArchiveGrid() {
       renderGuide(item.guide, item.idea || "");
     }
   }));
+  wrap.querySelectorAll("[data-prev]").forEach((b) => b.addEventListener("click", () => {
+    const id = String(b.dataset.prev);
+    if (archPreviewOpen.has(id)) archPreviewOpen.delete(id); else archPreviewOpen.add(id);
+    renderArchiveGrid();
+  }));
   wrap.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => {
+    archPreviewOpen.delete(String(b.dataset.del));
     writeArchive(loadArchive().filter((x) => String(x.id) !== b.dataset.del));
     renderArchive();
   }));
@@ -4631,6 +4664,7 @@ function openArchiveModal() {
 }
 function closeArchiveModal() {
   archiveModal.hidden = true;
+  archPreviewOpen.clear(); // v3.0.0: önizleme durumu modal ile kapanır
 }
 $("archiveBtn").addEventListener("click", openArchiveModal);
 $("closeArchive").addEventListener("click", closeArchiveModal);
@@ -5220,6 +5254,16 @@ const I18N = {
     "Önerilen fiyatlar": "Suggested prices", "CSV İndir": "Download CSV",
     "Risk Altındaki Öğrenciler": "Students At Risk",
     "Fiyatlanamayan Malzemeler": "Unpriced Materials",
+    // v3.0.0: karşılaştırma + zaman çizelgesi + arşiv önizleme
+    "Sınıf Karşılaştırma": "Class Comparison",
+    "Karşılaştırma sınıfı A": "Comparison class A",
+    "Karşılaştırma sınıfı B": "Comparison class B",
+    "karşı": "vs",
+    "Zaman çizelgesi": "Timeline",
+    "Gönderim": "Submission",
+    "Adım": "Step",
+    "⏱️ Henüz zaman verisi yok": "⏱️ No timeline data yet",
+    "Önizleme": "Preview",
     // Arşiv
     "👁️ Görüntüle": "👁️ View", "📤 Yedekle (JSON)": "📤 Export (JSON)", "📥 Geri Yükle": "📥 Import", "🧹 Tümünü Temizle": "🧹 Clear All", "Kapat": "Close",
     // Adım takibi
@@ -5334,6 +5378,8 @@ updateStatusPill();
    kodu gönderir (Ayarlar → Sınıf Modu). Öğretmen gönderimleri içe aktarıp
    adım ilerlemelerini gösteren PDF sınıf raporu indirebilir. */
 const CLASS_KEY = "arduinoDreamLab.classroom.v1";
+/* v3.0.0: Karşılaştırma seçimi — panel yeniden çizimlerinde korunur */
+const cmpState = { a: "", b: "" };
 const classModal = $("classModal");
 $("classBtn").addEventListener("click", () => { openClassModal(); });
 $("closeClass").addEventListener("click", closeClassModal);
@@ -5368,13 +5414,14 @@ function openClassModal() {
   const subs = classSubs(allSubs, activeCode);
   const pending = subs.filter((s) => !s.fb);
   /* Gönderi listesi durumu: arama + sayfa (v2.19.0) — liste bölümü bağımsız yeniden çizilir,
-     böylece arama yazarken odak kaybolmaz. */
-  const subState = { q: "", page: 1 };
+     böylece arama yazarken odak kaybolmaz. v3.0.0: tl = açık zaman çizelgesinin anahtarı. */
+  const subState = { q: "", page: 1, tl: "" };
   function subListHtml() {
     const range = loadCsvRange();
     const pg = paginate(filterSubsByRange(filterSubmissions(subs, subState.q), range.from, range.to), subState.page, 6);
     const rows = pg.slice.map((s) => {
-      const k = esc(s.student + "|" + s.project);
+      const rawKey = s.student + "|" + s.project; // v3.0.0: tl aç/kapa eşleşmesi ham anahtarla
+      const k = esc(rawKey);
       const total = Number(s.total) || 0;
       const done = Object.keys(s.steps || {}).length;
       const pct = total ? Math.round((done / total) * 100) : 0;
@@ -5383,8 +5430,22 @@ function openClassModal() {
             <h4>${esc(s.student || "?")} <span class="count-badge">%${pct}</span></h4>
             <div class="arch-meta"><span class="arch-badge">${esc(s.project || "—")}</span><span class="arch-date">📅 ${new Date(s.ts).toLocaleDateString(en ? "en-US" : "tr-TR")}</span></div>
             ${s.fb ? `<div class="fb-shown">💬 ${esc(s.fb)}</div>` : `<input type="text" class="cert-name-input fb-input" data-fbinput maxlength="600" placeholder="${t("Öğretmen yorumu…")}" />`}
+            ${subState.tl === rawKey ? (() => {
+              const evs = studentTimeline(s);
+              if (!evs.length) return `<div class="tl-empty">${t("⏱️ Henüz zaman verisi yok")}</div>`;
+              const fmtD = (ts) => new Date(ts).toLocaleDateString(en ? "en-US" : "tr-TR", { day: "2-digit", month: "short" });
+              const fmtT = (ts) => new Date(ts).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+              return `<div class="timeline" role="list">${evs.map((e) => `
+                <div class="tl-row${e.kind === "submit" ? " tl-submit" : ""}" role="listitem">
+                  <span class="tl-dot">${e.kind === "submit" ? "📤" : "✓"}</span>
+                  <span class="tl-date">${fmtD(e.ts)}</span>
+                  <span class="tl-label">${e.kind === "submit" ? t("Gönderim") : `${t("Adım")} ${e.n}`}</span>
+                  <span class="tl-time">${fmtT(e.ts)}</span>
+                </div>`).join("")}</div>`;
+            })() : ""}
             <div class="row">
               ${s.fb ? "" : `<button class="btn btn-ghost btn-small" data-fbdl="${k}" type="button">💬 ${t("Geri Bildirim")}</button>`}
+              <button class="btn btn-ghost btn-small" data-tl="${k}" type="button" title="${t("Zaman çizelgesi")}" aria-pressed="${subState.tl === rawKey}">⏱️</button>
               <button class="btn btn-ghost btn-small" data-delsub="${k}" type="button">🗑️</button>
             </div>
           </div>`;
@@ -5395,6 +5456,11 @@ function openClassModal() {
     return `<div class="archive-grid">${rows}</div>${pager}`;
   }
   function bindSubRows() {
+    $("classBody").querySelectorAll("[data-tl]").forEach((b) => b.addEventListener("click", () => {
+      const key = b.dataset.tl || "";
+      subState.tl = subState.tl === key ? "" : key;
+      refreshSubList();
+    }));
     $("classBody").querySelectorAll("[data-delsub]").forEach((b) => b.addEventListener("click", () => {
       const [student, project] = b.dataset.delsub.split("|");
       const c2 = loadClassroom();
@@ -5480,6 +5546,28 @@ function openClassModal() {
         <div id="subList"></div>` : `<p class="panel-empty">${t("Henüz gönderi yok — öğrenci \"📋 Gönderim Dosyası İndir\" ile dosya üretir, sen buradan içe aktarırsın.")}</p>`}
       </div>
     </div>
+    ${(() => {
+      /* v3.0.0: ⚖️ Sınıf karşılaştırma — en az 2 sınıf kodu varsa görünür */
+      const codes = [...new Set(allSubs.map((s) => String(s.classCode || "")).filter(Boolean))].sort((a, b) => a.localeCompare(b, "tr"));
+      if (codes.length < 2) return "";
+      if (!codes.includes(cmpState.a)) cmpState.a = codes[0];
+      if (!codes.includes(cmpState.b) || cmpState.b === cmpState.a) cmpState.b = codes.find((c) => c !== cmpState.a) || codes[0];
+      const opt = (sel) => codes.map((cd) => `<option value="${esc(cd)}"${cd === sel ? " selected" : ""}>${esc(cd)}</option>`).join("");
+      return `<div class="panel-card cmp-card" style="margin-top:1.1rem">
+        <div class="panel-subhead"><h3>⚖️ ${t("Sınıf Karşılaştırma")}</h3></div>
+        <div class="panel-kbd">${en
+          ? "Compare two classes side by side — size, average progress, steps, budget and most active week."
+          : "İki sınıfı yan yana karşılaştır — mevcut, ortalama ilerleme, tamamlanan adım, tahmini bütçe ve en aktif hafta."}</div>
+        <div class="row cmp-pick" style="margin:0.55rem 0 0.4rem;gap:0.5rem;align-items:center">
+          <label class="cmp-pick-lab" for="cmpSelA">A</label>
+          <select id="cmpSelA" class="csv-date" style="padding:0.25rem 0.45rem" aria-label="${t("Karşılaştırma sınıfı A")}">${opt(cmpState.a)}</select>
+          <span class="cmp-vs">${t("karşı")}</span>
+          <label class="cmp-pick-lab" for="cmpSelB">B</label>
+          <select id="cmpSelB" class="csv-date" style="padding:0.25rem 0.45rem" aria-label="${t("Karşılaştırma sınıfı B")}">${opt(cmpState.b)}</select>
+        </div>
+        <div id="cmpTable">${compareTableHTML(compareClasses(allSubs, cmpState.a, cmpState.b), en)}</div>
+      </div>`;
+    })()}
     ${(() => { const risk = atRiskStudents(subs); return risk.length ? `
     <div class="panel-card at-risk-card" style="margin-top:1.1rem">
       <div class="panel-subhead"><h3>🚨 ${t("Risk Altındaki Öğrenciler")}</h3><span class="count-badge">${risk.length}</span></div>
@@ -5534,6 +5622,29 @@ function openClassModal() {
   });
   const classSel = $("activeClassSel");
   if (classSel) classSel.addEventListener("change", () => { setActiveClassCode(classSel.value); openClassModal(); });
+  /* v3.0.0: karşılaştırma seçicileri — yalnız tablo yeniden çizilir, panel açılmaz */
+  const renderCmp = () => {
+    const box = $("cmpTable");
+    if (!box) return;
+    box.innerHTML = compareTableHTML(compareClasses(allSubs, cmpState.a, cmpState.b), en);
+  };
+  const cmpA = $("cmpSelA"), cmpB = $("cmpSelB");
+  if (cmpA) cmpA.addEventListener("change", () => {
+    cmpState.a = cmpA.value;
+    if (cmpState.a === cmpState.b) { // aynı sınıf seçilemez — diğerini ilk farklı koda taşı
+      const other = [...new Set(allSubs.map((s) => String(s.classCode || "")).filter(Boolean))].sort((x, y) => x.localeCompare(y, "tr")).find((c) => c !== cmpState.a);
+      if (other) { cmpState.b = other; if (cmpB) cmpB.value = other; }
+    }
+    renderCmp();
+  });
+  if (cmpB) cmpB.addEventListener("change", () => {
+    cmpState.b = cmpB.value;
+    if (cmpState.b === cmpState.a) {
+      const other = [...new Set(allSubs.map((s) => String(s.classCode || "")).filter(Boolean))].sort((x, y) => x.localeCompare(y, "tr")).find((c) => c !== cmpState.b);
+      if (other) { cmpState.a = other; if (cmpA) cmpA.value = other; }
+    }
+    renderCmp();
+  });
   const reportBtn = $("classReportBtn");
   if (reportBtn && subs.length) reportBtn.addEventListener("click", downloadClassReport);
   const bulkBtn = $("bulkFbBtn");
@@ -5756,6 +5867,111 @@ function classSubs(subs, code) {
   if (!c) return subs || [];
   return (subs || []).filter((s) => String(s.classCode || "") === c);
 }
+/* v3.0.0: Sınıf karşılaştırma yardımcıları — iki sınıfın özet metrikleri.
+   classMetrics tek tarafı hesaplar, compareClasses A/B yan yana döker. */
+function classMetrics(subs) {
+  const list = subs || [];
+  const n = list.length;
+  if (!n) return { students: 0, avgPct: 0, done: 0, steps: 0, cost: 0, activeWeek: null };
+  let done = 0, steps = 0, cost = 0;
+  for (const s of list) {
+    done += Object.keys(s.steps || {}).length;
+    steps += Number(s.total) || 0;
+    cost += estimateCost({ materials: (s && s.materials) || [] }).totalUSD || 0;
+  }
+  const aw = mostActiveWeek(list);
+  return {
+    students: n,
+    avgPct: steps ? Math.round((done / steps) * 100) : 0,
+    done, steps,
+    cost: Math.round(cost * 100) / 100,
+    activeWeek: aw ? { start: aw.weekStart, steps: aw.steps } : null
+  };
+}
+function compareClasses(subs, codeA, codeB) {
+  return {
+    a: Object.assign({ code: String(codeA || "") }, classMetrics(classSubs(subs, codeA))),
+    b: Object.assign({ code: String(codeB || "") }, classMetrics(classSubs(subs, codeB)))
+  };
+}
+/* v3.0.0: Karşılaştırma tablosu HTML — compareClasses çıktısını yan yana
+   sütunlara döker; daha iyi değer (ilerleme/adım) vurgulu yazılır. */
+function compareTableHTML(cmp, en) {
+  const escT = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const fmtWeek = (m) => m.activeWeek
+    ? new Date(m.activeWeek.start).toLocaleDateString(en ? "en-US" : "tr-TR", { day: "2-digit", month: "short" }) + ` (${m.activeWeek.steps})`
+    : "—";
+  const rows = [
+    { k: en ? "Students" : "Öğrenci", a: String(cmp.a.students), b: String(cmp.b.students), better: "high" },
+    { k: en ? "Avg progress" : "Ort. ilerleme", a: "%" + cmp.a.avgPct, b: "%" + cmp.b.avgPct, better: "high" },
+    { k: en ? "Steps done" : "Tamamlanan adım", a: `${cmp.a.done}/${cmp.a.steps}`, b: `${cmp.b.done}/${cmp.b.steps}`, better: "high" },
+    { k: en ? "Est. budget" : "Tahmini bütçe", a: fmtTL(cmp.a.cost), b: fmtTL(cmp.b.cost), better: "none" },
+    { k: en ? "Most active week" : "En aktif hafta", a: fmtWeek(cmp.a), b: fmtWeek(cmp.b), better: "none" }
+  ];
+  const num = (v) => parseFloat(String(v).replace(/[^\d.,-]/g, "").replace(",", ".")) || 0;
+  const cells = rows.map((r) => {
+    let wa = false, wb = false;
+    if (r.better === "high") {
+      const na = num(r.a), nb = num(r.b);
+      wa = na > nb; wb = nb > na;
+    }
+    return `<tr><th scope="row">${escT(r.k)}</th><td class="${wa ? "cmp-win" : ""}">${escT(r.a)}</td><td class="${wb ? "cmp-win" : ""}">${escT(r.b)}</td></tr>`;
+  }).join("");
+  return `<table class="cmp-table">
+    <thead><tr><th></th><th>🎓 ${escT(cmp.a.code || (en ? "(no class)" : "(sınıfsız)"))}</th><th>🎓 ${escT(cmp.b.code || (en ? "(no class)" : "(sınıfsız)"))}</th></tr></thead>
+    <tbody>${cells}</tbody></table>`;
+}
+/* v3.0.0: Öğrenci zaman çizelgesi — gönderimdeki adım zaman damgaları +
+   gönderim günü, kronolojik olay listesi. Bayrak değeri (1 gibi gerçek
+   zaman olmayan) ve bozuk ts'ler atlanır. */
+function studentTimeline(sub) {
+  if (!sub || typeof sub !== "object") return [];
+  const out = [];
+  const steps = sub.steps || {};
+  for (const k of Object.keys(steps)) {
+    const ts = Number(steps[k]);
+    if (Number.isFinite(ts) && ts > 1e11) out.push({ ts, kind: "step", n: Number(k) + 1 });
+  }
+  const sts = Number(sub.ts);
+  if (Number.isFinite(sts) && sts > 0) out.push({ ts: sts, kind: "submit", n: 0 });
+  return out.sort((x, y) => x.ts - y.ts);
+}
+/* v3.0.0: Zaman çizelgesi özeti — gün bazlı: aynı güne düşen adımlar tek
+   parçaya iner ("01 Eki (2 adım) · 03 Eki (gönderim)"); raporun satır içi
+   mini çizelgesi bu metni kullanır. */
+function timelineSummary(sub, en) {
+  const ev = studentTimeline(sub);
+  if (!ev.length) return "";
+  const fmt = (ts) => new Date(ts).toLocaleDateString(en ? "en-US" : "tr-TR", { day: "2-digit", month: "short" });
+  const days = new Map(); // gün başı ts → { steps, submit }
+  for (const e of ev) {
+    const d = new Date(e.ts);
+    d.setHours(0, 0, 0, 0);
+    const key = d.getTime();
+    const cur = days.get(key) || { steps: 0, submit: false };
+    if (e.kind === "submit") cur.submit = true; else cur.steps++;
+    days.set(key, cur);
+  }
+  return [...days.entries()].sort((x, y) => x[0] - y[0]).map(([ts, v]) => {
+    const parts = [];
+    if (v.steps) parts.push(v.steps + " " + (en ? "steps" : "adım"));
+    if (v.submit) parts.push(en ? "submitted" : "gönderim");
+    return fmt(ts) + " (" + parts.join(", ") + ")";
+  }).join(" · ");
+}
+/* v3.0.0: Sınıf turları — gönderileri sınıf koduna göre alfabetik (tr) gruplar;
+   classCode olmayanlar "" grubunda kalır. PDF raporu her turu ayrı bölümde basar. */
+function groupSubsByClass(subs) {
+  const g = new Map();
+  for (const s of subs || []) {
+    const code = String((s && s.classCode) || "");
+    if (!g.has(code)) g.set(code, []);
+    g.get(code).push(s);
+  }
+  return [...g.entries()]
+    .sort((x, y) => x[0].localeCompare(y[0], "tr"))
+    .map(([code, list]) => ({ code, subs: list }));
+}
 
 /* Pazartesi başlangıçlı hafta anahtarı (yerel zaman) — haftalık grafik ve
    en aktif hafta analizi ortak kullanır. */
@@ -5875,21 +6091,35 @@ function downloadClassReport() {
   const rangeLabel = (csvRange.from || csvRange.to)
     ? ` · ${en ? "CSV date range" : "CSV tarih aralığı"}: ${csvRange.from || "…"} – ${csvRange.to || "…"} (${csvFiltered.length}/${subs.length})`
     : "";
-  const classTag = activeClassCode() ? ` · 🎓 ${esc2(activeClassCode())}` : ` · ${en ? "all classes" : "tüm sınıflar"}`;
+  /* v3.0.0: esc2 artık classTag'tan ÖNCE — eski sırada classTag başlatılırken
+     esc2'ye erişilir (TDZ); aktif sınıf seçiliyken rapor açmak çöküyordu. */
   const esc2 = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+  const activeCls = activeClassCode();
+  const classTag = activeCls ? ` · 🎓 ${esc2(activeCls)}` : ` · ${en ? "all classes" : "tüm sınıflar"}`;
   const money = (x) => (x > 0 ? (Math.round(x * rate() * 100) / 100).toFixed(2) + "₺ ($" + x.toFixed(2) + ")" : "—");
-  const rows = subs.map((s) => {
+  /* v3.0.0: satır üretici — öğrenci hücresine sınıf kodu rozeti taşır */
+  const rowHtml = (s) => {
     const total = Number(s.total) || 0;
     const done = Object.keys(s.steps || {}).length;
     const pct = total ? Math.round((done / total) * 100) : 0;
-    return `<tr><td>${esc2(s.student)}</td><td>${esc2(s.project)}</td><td>${done}/${total}</td>
+    const badge = s.classCode ? ` <span class="cls-tag">🎓 ${esc2(s.classCode)}</span>` : "";
+    return `<tr><td>${esc2(s.student)}${badge}</td><td>${esc2(s.project)}</td><td>${done}/${total}</td>
       <td>${money(estimateCost({ materials: s.materials || [] }).totalUSD)}</td>
       <td><span class="pbar"><span style="width:${pct}%"></span></span> %${pct}</td>
       <td>${s.fb
         ? `<span class="fb-ok">✓ ${en ? "Given" : "Verildi"}</span>${s.fb.comment ? `<div class="fb-note">${esc2(String(s.fb.comment).slice(0, 80))}${String(s.fb.comment).length > 80 ? "…" : ""}</div>` : ""}`
         : `<span class="fb-wait">${en ? "Pending" : "Bekliyor"}</span>`}</td>
       <td>${new Date(s.ts).toLocaleDateString("tr-TR")}</td></tr>`;
-  }).join("");
+  };
+  /* v3.0.0: Sınıf turları — "tüm sınıflar" görünümünde ve ≥2 sınıf kodu
+     varsa her sınıf kendi 🎓 başlığıyla ayrı tabloda basılır; tek sınıf
+     seçiliyken (veya tek grup varken) tek tablo aynen korunur. */
+  const groups = groupSubsByClass(subs);
+  const tourMode = !activeCls && groups.length > 1;
+  const tableFor = (list) => `<table><thead><tr><th>${en ? "Student" : "Öğrenci"}</th><th>${en ? "Project" : "Proje"}</th><th>${en ? "Steps" : "Adım"}</th><th>${en ? "Est. Cost" : "Maliyet"}</th><th>${en ? "Progress" : "İlerleme"}</th><th>${en ? "Feedback" : "Geri Bildirim"}</th><th>${en ? "Date" : "Tarih"}</th></tr></thead><tbody>${list.map(rowHtml).join("")}</tbody></table>`;
+  const bodyHtml = tourMode
+    ? groups.map((g) => `<h3 class="cls-tour">🎓 ${esc2(g.code || (en ? "no class code" : "sınıfsız"))} — ${g.subs.length} ${en ? "students" : "öğrenci"}</h3>${tableFor(g.subs)}`).join("\n  ")
+    : tableFor(subs);
   const html = `<!DOCTYPE html><html lang="${en ? "en" : "tr"}"><head><meta charset="UTF-8"><title>${en ? "Class Report" : "Sınıf Raporu"}</title>
   <style>body{font-family:Georgia,serif;margin:2.2cm;color:#1a2233}
   h1{font-size:22px;margin:0 0 4px}h2{font-size:14px;color:#666;font-weight:400;margin:0 0 18px}
@@ -5899,6 +6129,9 @@ function downloadClassReport() {
   .pbar span{display:block;height:8px;border-radius:4px;background:#0a7a68}
   .fb-ok{color:#0a7a68;font-weight:bold}.fb-wait{color:#a08c50}
   .fb-note{font-size:10px;color:#666;font-style:italic;margin-top:2px;max-width:200px}
+  .cls-tag{display:inline-block;font-size:9px;background:#e7f3f0;color:#0a7a68;border:1px solid #0a7a68;border-radius:8px;padding:1px 5px;margin-left:5px;vertical-align:middle;font-weight:600}
+  .cls-tour{font-size:15px;color:#0a7a68;margin:16px 0 6px;border-bottom:1px solid #c9c2b0;padding-bottom:3px}
+  .tl-line{font-size:11px;color:#555;margin:2px 0}
   footer{margin-top:18px;font-size:10px;color:#888}</style></head><body>
   <h1>🤖 ${en ? "Class Report — Arduino Dream Lab" : "Sınıf Raporu — Arduino Rüya Atölyesi"}</h1>
   <h2>${en ? "Class code" : "Sınıf kodu"}: ${esc2(c.code || "—")} · ${new Date().toLocaleDateString("tr-TR")} · ${subs.length} ${en ? "students" : "öğrenci"}${classTag}${rangeLabel}</h2>
@@ -5908,7 +6141,8 @@ function downloadClassReport() {
   ${weeklyProgressSVG(subs)}
   ${(() => { const m = mostActiveWeek(subs); return m ? `<p style="font-size:12px;margin:4px 0 0;color:#666">🔥 ${en ? "Most active week" : "En aktif hafta"}: ${new Date(m.weekStart).toLocaleDateString(en ? "en-US" : "tr-TR")} — ${m.steps} ${en ? "steps" : "adım"}</p>` : ""; })()}
   ${weeklyParticipationDetail(subs)}
-  <table><thead><tr><th>${en ? "Student" : "Öğrenci"}</th><th>${en ? "Project" : "Proje"}</th><th>${en ? "Steps" : "Adım"}</th><th>${en ? "Est. Cost" : "Maliyet"}</th><th>${en ? "Progress" : "İlerleme"}</th><th>${en ? "Feedback" : "Geri Bildirim"}</th><th>${en ? "Date" : "Tarih"}</th></tr></thead><tbody>${rows}</tbody></table>
+  ${(() => { const lines = subs.map((s) => { const tl = timelineSummary(s, en); return tl ? `<li class="tl-line"><strong>${esc2(s.student)}</strong> — ${tl}</li>` : ""; }).filter(Boolean).join(""); return lines ? `<h3 style="margin:14px 0 4px">⏱️ ${en ? "Student timelines" : "Öğrenci zaman çizelgeleri"}</h3><ul style="margin:4px 0 0;padding-left:18px">${lines}</ul>` : ""; })()}
+  ${bodyHtml}
   <footer>${en ? "Generated with Arduino Dream Lab — progress data is collected locally, no server involved." : "Arduino Rüya Atölyesi ile üretildi — ilerleme verisi yerel toplanır, sunucu yok."}</footer>
   <scr${""}ipt>window.onload=function(){setTimeout(function(){window.print()},300)}</scr${""}ipt></body></html>`;
   const w = window.open("", "_blank");

@@ -4,7 +4,7 @@
 
 Katkı yapmak isterseniz [CONTRIBUTING.md](CONTRIBUTING.md) ile başlayın; yayına çıkarmak için `./publish.sh` tek komut.
 
-![sürüm](https://img.shields.io/badge/s%C3%BCr%C3%BCm-v2.22.0-00d1b2) ![test](https://img.shields.io/badge/testler-79%20birim%20%2B%2021%20E2E-brightgreen) ![lisans](https://img.shields.io/badge/lisans-MIT-blue) [![Tests](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml/badge.svg)](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml)
+![sürüm](https://img.shields.io/badge/s%C3%BCr%C3%BCm-v3.0.0-00d1b2) ![test](https://img.shields.io/badge/testler-86%20birim%20%2B%2031%20E2E-brightgreen) ![lisans](https://img.shields.io/badge/lisans-MIT-blue) [![Tests](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml/badge.svg)](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml)
 
 > 🎨 **Kart Oluştur** düğmesiyle her rehberden paylaşılabilir proje kartı (PNG) çıkar — README'ye eklemek istediğin kartı bize söyle, buraya koyalım.
 

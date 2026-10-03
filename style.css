@@ -706,6 +706,45 @@ pre.code-block .num { color: #7dd3fc; }
   font-size: 0.78rem; color: var(--text-dim);
 }
 
+/* ═══════════ v3.0.0: Sınıf karşılaştırma + öğrenci zaman çizelgesi ═══════════ */
+.cmp-pick-lab {
+  font-size: 0.78rem; font-weight: 700; color: var(--teal);
+  border: 1px solid var(--teal); border-radius: 6px; padding: 0.05rem 0.4rem;
+}
+.cmp-vs { font-size: 0.8rem; color: var(--text-dim); font-style: italic; }
+.cmp-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; margin-top: 0.3rem; }
+.cmp-table th, .cmp-table td {
+  border: 1px solid var(--border); padding: 0.35rem 0.5rem; text-align: center;
+}
+.cmp-table thead th { background: var(--teal-soft); color: var(--teal); font-size: 0.82rem; }
+.cmp-table tbody th { text-align: left; font-weight: 600; color: var(--text-dim); white-space: nowrap; }
+.cmp-table td.cmp-win { background: var(--teal-soft); color: var(--teal); font-weight: 700; }
+.tl-empty { font-size: 0.8rem; color: var(--text-dim); padding: 0.35rem 0; }
+.timeline {
+  display: flex; flex-direction: column; gap: 0.18rem;
+  margin: 0.4rem 0 0.15rem; padding: 0.45rem 0.6rem;
+  border-left: 3px solid var(--teal); background: var(--teal-soft);
+  border-radius: 0 10px 10px 0;
+}
+.tl-row { display: flex; gap: 0.5rem; align-items: baseline; font-size: 0.8rem; }
+.tl-dot { width: 1.1rem; text-align: center; flex-shrink: 0; }
+.tl-date { color: var(--text-dim); font-variant-numeric: tabular-nums; min-width: 4.6rem; }
+.tl-label { flex: 1; min-width: 0; }
+.tl-submit .tl-label { font-weight: 700; color: var(--teal); }
+.tl-time { color: var(--text-dim); font-size: 0.74rem; font-variant-numeric: tabular-nums; }
+
+/* ═══════════ v3.0.0: Arşiv mini önizleme ═══════════ */
+.archive-item.arch-open { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal-soft); }
+.arch-preview {
+  margin: 0.4rem 0 0.5rem; padding: 0.5rem 0.65rem;
+  background: var(--teal-soft); border: 1px dashed var(--teal);
+  border-radius: 10px; font-size: 0.84rem;
+}
+.arch-prev-sum { margin: 0 0 0.35rem; line-height: 1.45; }
+.arch-prev-steps { margin: 0 0 0.35rem; padding-left: 1.15rem; }
+.arch-prev-steps li { margin: 0.12rem 0; }
+.arch-prev-tip { margin: 0; color: var(--text-dim); font-size: 0.78rem; }
+
 /* 🛒 alışveriş listesi + 🔍 gönderi arama/sayfalama (v2.19.0) */
 .pager { display: flex; align-items: center; justify-content: center; gap: 0.6rem; margin-top: 0.7rem; }
 .pager-label { font-size: 0.85rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }

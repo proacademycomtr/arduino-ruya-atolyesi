@@ -1409,3 +1409,170 @@ test("v2.22.0 downloadClassCSV: aktif sınıf seçiliyken sadece o sınıf indir
   sandbox.localStorage.removeItem("arduinoDreamLab.classroom.v1");
   downloads = [];
 });
+
+/* ───── v3.0.0: Sınıf karşılaştırma ───── */
+
+test("v3.0.0 compareClasses: iki sınıfın özet metrikleri + kenar durumlar", () => {
+  const subs = [
+    { student: "A", project: "P1", total: 4, steps: { 0: 1, 1: 1 }, ts: Date.now(), classCode: "7A", materials: [{ name: "Arduino Uno", quantity: "1" }] },
+    { student: "B", project: "P2", total: 4, steps: { 0: 1 }, ts: Date.now(), classCode: "7A", materials: [] },
+    { student: "C", project: "P3", total: 2, steps: { 0: 1, 1: 1 }, ts: Date.now(), classCode: "8B", materials: [{ name: "Arduino Uno", quantity: "1" }] }
+  ];
+  const cmp = core.compareClasses(subs, "7A", "8B");
+  assert.equal(cmp.a.code, "7A");
+  assert.equal(cmp.a.students, 2, "7A'da 2 öğrenci");
+  assert.equal(cmp.a.done, 3);
+  assert.equal(cmp.a.steps, 8);
+  assert.equal(cmp.a.avgPct, Math.round((3 / 8) * 100), "ortalama ilerleme %38");
+  assert.equal(cmp.b.students, 1);
+  assert.equal(cmp.b.avgPct, 100);
+  assert.ok(cmp.a.cost > 0, "7A bütçesi > 0");
+  assert.equal(cmp.a.cost, cmp.b.cost, "her iki tarafta da 1 Uno var → eşit bütçe");
+  assert.ok(cmp.a.activeWeek && typeof cmp.a.activeWeek.start === "number", "en aktif hafta döner");
+  // Olmayan kod → boş metrikler (çökmez)
+  const none = core.compareClasses(subs, "9Z", "9Z");
+  assert.equal(none.a.students, 0);
+  assert.equal(none.a.avgPct, 0);
+  assert.equal(none.a.cost, 0);
+  assert.equal(none.a.activeWeek, null);
+});
+
+test("v3.0.0 compareTableHTML: iki sütun + kazanan hücre vurgusu", () => {
+  const subs = [
+    { student: "A", project: "P", total: 4, steps: { 0: 1, 1: 1 }, ts: Date.now(), classCode: "7A", materials: [] },
+    { student: "B", project: "P", total: 4, steps: { 0: 1 }, ts: Date.now(), classCode: "8B", materials: [] }
+  ];
+  const cmp = core.compareClasses(subs, "7A", "8B");
+  const html = core.compareTableHTML(cmp, false);
+  assert.match(html, /<table class="cmp-table">/, "tablo sınıfı");
+  assert.ok(html.includes("7A") && html.includes("8B"), "iki sınıf başlığı");
+  assert.ok(html.includes("cmp-win"), "ilerlemede daha iyi taraf vurgulu");
+  // 7A %50 > 8B %25 → ilk vurgulu hücre 7A sütununda olmalı
+  const winIdx = html.indexOf("cmp-win");
+  const bIdx = html.indexOf(">%25<");
+  assert.ok(winIdx > 0 && (bIdx < 0 || winIdx < bIdx), "kazanan hücre 8B'den önce gelir");
+  const empty = core.compareTableHTML(core.compareClasses([], "", ""), true);
+  assert.ok(empty.includes("(no class)"), "boş kenar durumu çökmez");
+});
+
+/* ───── v3.0.0: Öğrenci zaman çizelgesi ───── */
+
+test("v3.0.0 studentTimeline: kronolojik olaylar, bozuk damga dayanıklılığı", () => {
+  const t1 = Date.now() - 3 * 86400000;
+  const t2 = Date.now() - 2 * 86400000;
+  const t3 = Date.now() - 86400000;
+  // Adımlar bilinçli olarak ters sırada verildi → sonuç sıralı olmalı
+  const ev = core.studentTimeline({ steps: { 2: t3, 0: t1, 1: t2 }, ts: t3 });
+  assert.equal(ev.length, 4, "3 adım + 1 gönderim");
+  // vm-realm dizileri host prototipinden farklı → Array.from ile host'a taşı
+  assert.deepEqual(Array.from(ev, (e) => e.ts), [t1, t2, t3, t3].sort((a, b) => a - b));
+  assert.equal(ev[0].kind, "step");
+  assert.equal(ev[0].n, 1, "0. adım → 1 numara");
+  assert.equal(ev[3].kind, "submit");
+  // Bayrak değeri (1) ve bozuk damgalar atlanır, gerçek ts korunur
+  const legacy = core.studentTimeline({ steps: { 0: 1, 1: "bozuk", 2: t1 }, ts: t3 });
+  assert.equal(legacy.length, 2, "bayrak + bozuk atlandı");
+  assert.ok(legacy.every((e) => e.ts > 1e11), "kalanlar gerçek damga");
+  assert.equal(core.studentTimeline(null).length, 0, "null güvenli");
+  assert.equal(core.studentTimeline({}).length, 0, "boş gönderim güvenli");
+  assert.equal(core.studentTimeline({ steps: {}, ts: 0 }).length, 0, "ts=0 atlanır");
+});
+
+test("v3.0.0 timelineSummary: gün bazlı özet + İngilizce", () => {
+  const day = 86400000;
+  const now = Date.now();
+  const sub = {
+    steps: { 0: now - 2 * day, 1: now - 2 * day + 3600000, 2: now - day },
+    ts: now - 12 * 3600000
+  };
+  const tr = core.timelineSummary(sub, false);
+  assert.ok(tr.includes("2 adım"), "aynı güne 2 adım tek parçada: " + tr);
+  assert.ok(tr.includes("gönderim"), "gönderim günü işaretli");
+  assert.ok(tr.includes(" · "), "günler ayracıyla");
+  const en = core.timelineSummary(sub, true);
+  assert.ok(en.includes("steps") && en.includes("submitted"), "İngilizce: " + en);
+  assert.equal(core.timelineSummary({ steps: {} }, false), "", "olay yoksa boş dize");
+  // Sıralama: günler eskiden yenisine değil, yeniden eskiye değil artan
+  const idxA = tr.indexOf("2 adım");
+  assert.ok(idxA >= 0);
+});
+
+/* ───── v3.0.0: Rapor sınıf turları ───── */
+
+test("v3.0.0 groupSubsByClass: alfabetik turlar + sınıf kodusuzlar ayrı grupta", () => {
+  const subs = [
+    { student: "A", classCode: "8B" },
+    { student: "B", classCode: "7A" },
+    { student: "C", classCode: "7A" },
+    { student: "D" },
+    { student: "E", classCode: "" }
+  ];
+  const groups = core.groupSubsByClass(subs);
+  assert.deepEqual(Array.from(groups, (g) => g.code), ["", "7A", "8B"], "alfabetik (tr), kodsuz en başta");
+  assert.equal(groups[0].subs.length, 2, "D + E (kodsuz) aynı turda");
+  assert.equal(groups[1].subs.length, 2);
+  assert.equal(groups[2].subs.length, 1);
+  assert.equal(core.groupSubsByClass(null).length, 0, "null güvenli");
+});
+
+test("v3.0.0 rapor: sınıf turları + satır rozeti + zaman çizelgesi bölümü", () => {
+  let html = "";
+  sandbox.open = () => ({ document: { write: (h) => { html = h; }, close: () => {} } });
+  const day = 86400000;
+  sandbox.localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({
+    code: "7A",
+    submissions: {
+      "Ali|P1": { student: "Ali", project: "P1", total: 3, steps: { 0: Date.now() - 2 * day, 1: Date.now() - day }, ts: Date.now() - day, classCode: "7A", materials: [] },
+      "Veli|P2": { student: "Veli", project: "P2", total: 3, steps: { 0: Date.now() - 5 * day }, ts: Date.now() - 4 * day, classCode: "8B", materials: [] },
+      "Ayşe|P3": { student: "Ayşe", project: "P3", total: 3, steps: {}, ts: Date.now(), materials: [] }
+    }
+  }));
+  sandbox.localStorage.removeItem("arduinoDreamLab.activeClass.v1");
+  sandbox.downloadClassReport();
+  // Tur modu: 3 grup (7A, 8B, kodsuz) ayrı başlıklarla (CSS'teki .cls-tour değil, gerçek h3)
+  assert.ok(html.includes('<h3 class="cls-tour">'), "tur başlığı yok");
+  assert.ok(html.includes("🎓 7A") && html.includes("🎓 8B"), "7A/8B tur başlıkları yok");
+  assert.ok(html.includes("sınıfsız"), "kodsuz tur başlığı yok");
+  // Satır rozeti + zaman çizelgesi bölümü
+  assert.ok(html.includes('<span class="cls-tag">'), "satır rozeti yok");
+  assert.ok(html.includes("Öğrenci zaman çizelgeleri"), "zaman çizelgesi bölümü yok");
+  assert.ok(html.includes("gönderim"), "çizelge özeti gönderim günü taşımıyor");
+  // Tek sınıf seçili: tur yok, başlık etiketi + tek tablo
+  sandbox.localStorage.setItem("arduinoDreamLab.activeClass.v1", "8B");
+  html = "";
+  sandbox.downloadClassReport();
+  assert.ok(html.includes("· 🎓 8B"), "aktif sınıf etiketi yok (TDZ regresyonu)");
+  assert.ok(!html.includes('<h3 class="cls-tour">'), "tek sınıfta tur başlığı olmamalı");
+  assert.equal((html.match(/<table>/g) || []).length, 1, "tek tablo");
+  sandbox.localStorage.removeItem("arduinoDreamLab.activeClass.v1");
+  sandbox.localStorage.removeItem("arduinoDreamLab.classroom.v1");
+});
+
+/* ───── v3.0.0: Arşiv mini önizleme ───── */
+
+test("v3.0.0 archivePreviewData: özet + ilk 3 adım + ilk ipucu, eksik alan dayanıklı", () => {
+  const item = { guide: {
+    title: "Akıllı Saksı",
+    summary: "Toprağı ölçen, bitkiyi sulayan saksı.",
+    steps: [
+      { title: "Nem sensörünü tak" }, { title: "Pompayı bağla" },
+      { title: "Eşiği ayarla" }, { title: "Kodu yükle" }, { title: "Sulama testi" }
+    ],
+    tips: ["Fazla su kök çürütür.", "İkinci ipucu."]
+  } };
+  const pv = core.archivePreviewData(item);
+  assert.equal(pv.summary, "Toprağı ölçen, bitkiyi sulayan saksı.");
+  assert.deepEqual(Array.from(pv.steps), ["Nem sensörünü tak", "Pompayı bağla", "Eşiği ayarla"], "yalnız ilk 3 adım");
+  assert.equal(pv.tip, "Fazla su kök çürütür.", "yalnız ilk ipucu");
+  // Eski kayıtlar: summary/steps/tips yok → güvenle boş (realm nesnesi, alan alan)
+  const bare = core.archivePreviewData({ guide: { title: "Eski" } });
+  assert.equal(bare.summary, "");
+  assert.equal(bare.steps.length, 0);
+  assert.equal(bare.tip, "");
+  // Adımlar başlıksızsa atlanır ama ilk-3 sınırı korunur
+  const mixed = core.archivePreviewData({ guide: { steps: [{ detail: "yok" }, { title: "Var" }, { title: "İkinci" }, { title: "Üçüncü" }, { title: "Dördüncü" }] } });
+  assert.deepEqual(Array.from(mixed.steps), ["Var", "İkinci", "Üçüncü"], "başlıksızlar sayılır");
+  const nul = core.archivePreviewData(null);
+  assert.equal(nul.summary, "");
+  assert.equal(nul.steps.length, 0, "null güvenli");
+});

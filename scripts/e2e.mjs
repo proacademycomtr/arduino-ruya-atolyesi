@@ -182,6 +182,100 @@ try {
   await page.waitForTimeout(300);
   await page.evaluate(() => { localStorage.removeItem("arduinoDreamLab.classroom.v1"); localStorage.removeItem("arduinoDreamLab.activeClass.v1"); localStorage.removeItem("arduinoDreamLab.csvRange.v1"); });
 
+  /* ── 10) v3.0.0: sınıf karşılaştırma kartı ── */
+  await page.evaluate(() => {
+    const subs = {};
+    subs["A|P1"] = { student: "A", project: "P1", total: 4, steps: { 0: 1, 1: 1 }, ts: Date.now() - 86400000, classCode: "7A", materials: [] };
+    subs["B|P2"] = { student: "B", project: "P2", total: 4, steps: { 0: 1 }, ts: Date.now() - 2 * 86400000, classCode: "7A", materials: [] };
+    subs["C|P3"] = { student: "C", project: "P3", total: 4, steps: { 0: 1, 1: 1, 2: 1 }, ts: Date.now() - 86400000, classCode: "8B", materials: [] };
+    localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({ code: "7A", submissions: subs }));
+    localStorage.setItem("arduinoDreamLab.activeClass.v1", "");
+  });
+  await page.click("#classBtn");
+  await page.waitForSelector("#cmpTable .cmp-table");
+  const cmpHeads = await page.$$eval("#cmpTable thead th", (ths) => ths.map((t) => t.textContent.trim()));
+  ok("10a. karşılaştırma: iki sınıf başlığı", cmpHeads.join("|").includes("7A") && cmpHeads.join("|").includes("8B"), cmpHeads.join(" / "));
+  const winCells = (await page.$$("#cmpTable td.cmp-win")).length;
+  ok("10b. kazanan hücre vurgusu var", winCells >= 1, winCells + " vurgulu hücre");
+  await page.selectOption("#cmpSelB", "8B");
+  await page.waitForTimeout(250);
+  const cmpRows = await page.$$eval("#cmpTable tbody tr th", (ths) => ths.map((t) => t.textContent.trim()));
+  ok("10c. 5 metrik satırı (öğrenci…en aktif hafta)", cmpRows.length === 5, cmpRows.join(" | "));
+  await page.click("#classCloseBtn");
+  await page.waitForTimeout(300);
+  await page.evaluate(() => localStorage.removeItem("arduinoDreamLab.classroom.v1"));
+
+  /* ── 11) v3.0.0: öğrenci zaman çizelgesi ── */
+  await page.evaluate(() => {
+    const d = 86400000;
+    const subs = {};
+    subs["Elif|Robot Kol"] = { student: "Elif", project: "Robot Kol", total: 4, steps: { 0: Date.now() - 3 * d, 1: Date.now() - 2 * d, 2: Date.now() - d }, ts: Date.now() - d, classCode: "7A", materials: [] };
+    localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({ code: "7A", submissions: subs }));
+  });
+  await page.click("#classBtn");
+  await page.waitForSelector("#subList .archive-item");
+  const tlBtnBefore = await page.$("#subList [data-tl]");
+  ok("11a. kartta ⏱️ düğmesi var", !!tlBtnBefore);
+  const tlHidden0 = !(await page.$("#subList .timeline"));
+  await tlBtnBefore.click();
+  await page.waitForSelector("#subList .timeline");
+  const tlRows = (await page.$$("#subList .timeline .tl-row")).length;
+  ok("11b. çizelge açıldı: 3 adım + gönderim = 4 satır", tlRows === 4, tlRows + " satır");
+  await page.click("#subList [data-tl]");
+  await page.waitForTimeout(250);
+  const tlGone = !(await page.$("#subList .timeline"));
+  ok("11c. tekrar tıklayınca kapanır", tlHidden0 && tlGone);
+  await page.click("#classCloseBtn");
+  await page.waitForTimeout(300);
+  await page.evaluate(() => localStorage.removeItem("arduinoDreamLab.classroom.v1"));
+
+  /* ── 12) v3.0.0: arşiv mini önizleme ── */
+  await page.evaluate(() => {
+    localStorage.setItem("arduinoDreamLab.archive.v1", JSON.stringify([
+      { id: 1, ts: 1, idea: "saksı", guide: { title: "Akıllı Saksı", code: "a", difficulty: "Orta", summary: "Toprağı ölçen saksı.", materials: [], steps: [{ title: "Sensörü tak" }, { title: "Pompayı bağla" }, { title: "Eşiği ayarla" }, { title: "Kodu yükle" }], tips: ["Fazla su kök çürütür."] } }
+    ]));
+  });
+  await page.click("#archiveBtn");
+  await page.waitForSelector("#archSearch");
+  await page.fill("#archSearch", ""); // senaryo 8'den kalma arama filtresi modül durumunda korunur
+  await page.waitForTimeout(300);
+  await page.waitForSelector("#archGrid [data-prev]");
+  const prevHidden0 = !(await page.$("#archGrid .arch-preview"));
+  await page.click("#archGrid [data-prev]");
+  await page.waitForSelector("#archGrid .arch-preview");
+  const pvSteps = (await page.$$("#archGrid .arch-preview li")).length;
+  const pvSum = await page.$eval("#archGrid .arch-prev-sum", (e) => e.textContent);
+  ok("12a. önizleme açıldı: özet + ilk 3 adım + ipucu", pvSum.includes("Toprağı ölçen") && pvSteps === 3 && !!(await page.$("#archGrid .arch-prev-tip")), pvSteps + " adım");
+  await page.click("#archGrid [data-prev]");
+  await page.waitForTimeout(250);
+  const pvGone = !(await page.$("#archGrid .arch-preview"));
+  ok("12b. tekrar tıklayınca kapanır", prevHidden0 && pvGone);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+  await page.evaluate(() => localStorage.removeItem("arduinoDreamLab.archive.v1"));
+
+  /* ── 13) v3.0.0: rapor sınıf turları + satır rozeti + çizelge bölümü ── */
+  await page.evaluate(() => {
+    const d = 86400000;
+    const subs = {};
+    subs["Ali|P1"] = { student: "Ali", project: "P1", total: 3, steps: { 0: Date.now() - 2 * d, 1: Date.now() - d }, ts: Date.now() - d, classCode: "7A", materials: [] };
+    subs["Veli|P2"] = { student: "Veli", project: "P2", total: 3, steps: { 0: Date.now() - 5 * d }, ts: Date.now() - 4 * d, classCode: "8B", materials: [] };
+    localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({ code: "7A", submissions: subs }));
+    localStorage.setItem("arduinoDreamLab.activeClass.v1", "");
+    window.__repHtml = "";
+    window.open = () => ({ document: { write: (h) => { window.__repHtml = h; }, close: () => {} } });
+  });
+  await page.click("#classBtn");
+  await page.waitForSelector("#classReportBtn:not([disabled])");
+  await page.click("#classReportBtn");
+  await page.waitForTimeout(400);
+  const rep = await page.evaluate(() => window.__repHtml || "");
+  ok("13a. rapor: tur başlıkları (7A + 8B) + satır rozeti", rep.includes("cls-tour") && rep.includes("🎓 7A") && rep.includes("🎓 8B") && rep.includes("cls-tag"), rep ? rep.length + " kr" : "boş");
+  ok("13b. rapor: öğrenci zaman çizelgesi bölümü", rep.includes("Öğrenci zaman çizelgeleri") && rep.includes("gönderim"), "");
+  await page.click("#classCloseBtn");
+  await page.waitForTimeout(300);
+  await page.evaluate(() => { localStorage.removeItem("arduinoDreamLab.classroom.v1"); localStorage.removeItem("arduinoDreamLab.activeClass.v1"); });
+
 } catch (e) {
   ok("AKIŞ", false, e.message);
 } finally {

@@ -1,4 +1,4 @@
-# 📋 Sürüm Notları — Fiyat Tahmini Dönemi (v2.10.0 → v2.22.0)
+# 📋 Sürüm Notları — Fiyat Tahmini Dönemi (v2.10.0 → v3.0.0)
 
 Arduino Rüya Atölyesi'nin malzeme fiyatı modülünün baştan sona hikâyesi.
 Tüm fiyatlar **₺ ana, $ ikincil** gösterilir (kur ≈ 34, bilgi amaçlı).
@@ -59,6 +59,15 @@ Tüm fiyatlar **₺ ana, $ ikincil** gösterilir (kur ≈ 34, bilgi amaçlı).
 - **Haftalık ilerleme grafiği:** sınıf raporunda gönderimlerin tamamlanan adımları haftaya kümelendirilir, son 8 haftanın çubuk grafiği basılır.
 - **Sınıf bütçe planlayıcısı:** Ayarlar'a sınıf mevcudu girilir; rapor mevcut × ortalama proje maliyetiyle tüm sınıfın bütçe ihtiyacını hesaplar ve öğretmen sınırıyla karşılaştırır.
 - **README görseli + CI E2E:** canlı uygulama ekran görüntüsü repoda; GitHub Actions artık Playwright E2E'yi de koşar.
+
+## 🧭 v3.0.0 — Karşılaştırmalı Sınıf Takibi
+
+- **Sınıf karşılaştırma:** panelde ⚖️ kart — iki sınıfı seç (A vs B), öğrenci sayısı / ortalama ilerleme / tamamlanan adım / tahmini bütçe / en aktif hafta yan yanda; daha iyi değer teal vurgulu. ≥2 sınıf kodunda görünür.
+- **Öğrenci zaman çizelgesi:** öğrenci kartında ⏱️ ile açılır — adım zaman damgaları + gönderim günü, gün/saat ile kronolojik. PDF raporda her öğrenci için gün bazlı özet: `01 Eki (2 adım) · 03 Eki (gönderim)`.
+- **Arşiv mini önizleme:** kartta 📄 ile kart açılır — rehber özeti + ilk 3 adım + ilk ipucu; tekrar tıklayınca kapanır, arama/sıralama odak kaybettirmez.
+- **Rapor sınıf turları:** "Tüm sınıflar" görünümünde rapor her sınıfı kendi 🎓 başlığıyla ayrı tabloda dizer; satırlarda sınıf kodu rozeti. Tek sınıf seçiliyken başlık etiketi korunur.
+- **Düzeltme:** sınıf seçiliyken PDF raporu `esc2` TDZ hatasıyla çöküyordu — tanım başa alındı.
+- **Test:** 86 birim (7 yeni), E2E 31 kontrol (10 yeni).
 
 ## 🧭 v2.22.0 — Çoklu Sınıf ve Canlı Grafik
 
