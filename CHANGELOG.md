@@ -10,6 +10,9 @@ Bu dosya `build.py` tarafından otomatik güncellenir.
 - Yeni: 🎓 **Rapor sınıf turları** — "Tüm sınıflar" görünümünde PDF raporu her sınıfı kendi 🎓 bölüm başlığıyla ayrı tabloda dizer; tablo satırlarına sınıf kodu rozeti (cls-tag) eklenir
 - Düzeltme: sınıf seçiliyken PDF raporu açmak `esc2` tanımlanmadan erişim (TDZ) nedeniyle hataya düşüyordu — tanım başa alındı
 - Test: 86 birim (7 yeni: compareClasses, compareTableHTML, studentTimeline, timelineSummary, groupSubsByClass, rapor turu, archivePreviewData), E2E 21→31 kontrol (10 yeni: 10a-10c, 11a-11c, 12a-12b, 13a-13b)
+- Test altyapısı: E2E senaryoları 13 bağımsız bloğa ayrıldı — her senaryo kendi browser context'inde, temiz localStorage ve sıfır modül durumuyla koşar; sıralamaya bağımlılık ve "senaryo N kalıntısı" kırılmaları bitti
+- Düzeltme: `6d` kontrolü yanlış hedefi arıyordu (`[data-act="cart"]` gönderi listesinde değil, ana rehberde var; 1. senaryodan kalma rehbere bakıyordu). Artık satırdaki gerçek aksiyonları doğruluyor: geri bildirim + ⏱️ + sil
+- Düzeltme: Sertifika adı (`#certNameInput`) yazıldıktan sonra rehber yeniden render olduğunda (canlı maliyet ipucu ~400 ms) kayboluyordu — input değeri yalnızca sertifika oluşturulunca saklanıyordu. Artık her tuş vuruşunda saklanıyor; öğrenci "🏅 Sertifika Oluştur"a basınca ad yerinde duruyor
 
 ## [2.22.0] - 2026-10-02
 

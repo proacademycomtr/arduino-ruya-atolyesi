@@ -2,15 +2,19 @@
 /* ── Arduino Rüya Atölyesi — uçtan uca tarayıcı testleri (Playwright) ──
    Çalıştırma: node scripts/e2e.mjs [url]
    - URL verilmezse dist/index.html file:// ile açılır.
-   - 5 senaryo: rehber üretimi + fiyat tablosu, sıralama, bütçe uyarısı,
-     sertifika akışı, localStorage ısrarlılığı (adet override). */
+   - Her senaryo KENDİ browser context'inde, temiz localStorage ve sıfır
+     modül durumuyla koşar → senaryolar birbirinden ve sıralamadan bağımsızdır.
+     (Eskiden arşiv arama filtresi gibi modül seviyesi kalıntılar bir sonraki
+      senaryoyu bozuyordu.)
+   - Senaryolar: rehber üretimi + fiyat tablosu, sıralama, bütçe uyarısı,
+     sertifika akışı, adet override kalıcılığı, canlı ipucu, panel arama +
+     sayfalama, CSV tarih filtresi, arşiv arama, çoklu sınıf seçici + grafik,
+     sınıf karşılaştırma, öğrenci zaman çizelgesi, arşiv mini önizleme,
+     rapor sınıf turları. */
 
 import { chromium } from "playwright";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 const target = process.argv[2]
   || pathToFileURL(resolve(process.cwd(), "dist/index.html")).href;
@@ -21,25 +25,100 @@ const ok = (name, cond, extra = "") => {
   console.log((cond ? "✅" : "❌") + " " + name + (extra ? ` — ${extra}` : ""));
 };
 
-const browser = await chromium.launch();
-const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-const page = await ctx.newPage();
-page.setDefaultTimeout(15000);
+/* ── Ortak veri kurulum yardımcıları ── */
 
-try {
-  await page.goto(target, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#ideaInput");
+const DAY = 86400000;
 
-  /* ── 1) Rehber üretimi + fiyat tablosu ── */
-  await page.fill("#ideaInput", "LCD'li dijital saat");
+/** Bir gönderi kaydı üretir. steps değerleri gerçek zaman damgası olabilir. */
+const sub = (student, project, o = {}) => ({
+  student,
+  project,
+  total: o.total ?? 2,
+  steps: o.steps ?? { 0: 1 },
+  ts: o.ts ?? Date.now() - DAY,
+  ...(o.classCode ? { classCode: o.classCode } : {}),
+  materials: o.materials ?? [],
+});
+
+/** localStorage'a yazar; string verilmezse JSON olarak saklar. */
+const setStore = (page, key, value) =>
+  page.evaluate(([k, v]) => localStorage.setItem(k, typeof v === "string" ? v : JSON.stringify(v)), [key, value]);
+
+const iso = (ts) => {
+  const d = new Date(ts);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+};
+
+/** Sınıf gönderilerini "Öğrenci|Proje" anahtarlı haritaya çevirip saklar. */
+const seedClassroom = (page, submissions, { code = "7A", activeClass = null } = {}) =>
+  page.evaluate(([subs, clsCode, active]) => {
+    const map = {};
+    for (const s of subs) map[`${s.student}|${s.project}`] = s;
+    localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({ code: clsCode, submissions: map }));
+    if (active !== null) localStorage.setItem("arduinoDreamLab.activeClass.v1", active);
+  }, [submissions, code, activeClass]);
+
+/** Arşiv kayıtlarını saklar (her kayıt rehber alanlarını içerir). */
+const seedArchive = (page, items) =>
+  page.evaluate((v) => localStorage.setItem("arduinoDreamLab.archive.v1", JSON.stringify(v)), items);
+
+/** window.open yerine sahte pencere döndürür; çağrılan HTML'i __repHtml'e yazar. */
+const stubWindowOpen = (page) =>
+  page.evaluate(() => {
+    window.__repHtml = "";
+    window.open = () => ({ document: { write: (h) => { window.__repHtml = h; }, close: () => {} } });
+  });
+
+/** Testin değişken girdisi + üretim (demo yolu anında, ~2 sn üst sınır). */
+const generate = async (page, idea = "LCD'li dijital saat") => {
+  await page.fill("#ideaInput", idea);
   await page.click("#generateBtn");
-  await page.waitForSelector(".materials-table .cost-total");
+  await page.waitForSelector(".materials-table .cost-total", { timeout: 20000 });
+};
+
+/** Sınıf panelini açar (panel açılışında localStorage okunur). */
+const openClassroom = async (page, sel = "#subList .archive-item") => {
+  await page.click("#classBtn");
+  await page.waitForSelector(sel);
+};
+
+const closeClassroom = async (page) => {
+  await page.click("#classCloseBtn");
+  await page.waitForTimeout(300);
+};
+
+const browser = await chromium.launch();
+
+/**
+ * Senaryo koşucusu: her senaryo için yepyeni bir context açar, localStorage'ı
+ * temizleyip sayfayı yeniden yükler (modül durumu sıfırlanır), sonra görevi
+ * çalıştırır. Hata olursa yalnızca o senaryo başarısız olur, diğerleri koşar.
+ */
+async function scenario(title, fn) {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(15000);
+  try {
+    await page.goto(target, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => localStorage.clear());
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForSelector("#ideaInput");
+    await fn(page);
+  } catch (e) {
+    ok(title + " — AKIŞ", false, e.message);
+  } finally {
+    await ctx.close();
+  }
+}
+
+/* ── 1) Rehber üretimi + fiyat tablosu + sıralama döngüsü ── */
+await scenario("1-2", async (page) => {
+  await generate(page);
   const headers = await page.$$eval(".materials-table thead th", (ths) => ths.map((t) => t.textContent.trim()));
   ok("1a. fiyat tablosu 5 sütunlu", headers.join("|").includes("Birim Fiyat") && headers.join("|").includes("Tutar"), headers.join(" / "));
   const totalTxt = await page.$eval(".cost-total td:nth-child(4)", (t) => t.textContent.trim());
   ok("1b. toplam ₺+çift gösterim", /^\d+\.\d{2}₺ \(\$\d+\.\d{2}\)$/.test(totalTxt), totalTxt);
 
-  /* ── 2) Fiyata göre sıralama döngüsü ── */
   const names = () => page.$$eval(".materials-table tbody tr:not(.cost-total) td:first-child", (tds) => tds.map((t) => t.textContent.trim()));
   const before = await names();
   await page.click(".th-sort-btn");
@@ -51,54 +130,61 @@ try {
   ok("2a. desc: ilk satır en pahalı", desc[0].includes("Arduino Uno"), desc.join(" > "));
   ok("2b. asc: ilk satır en ucuz", asc[0].includes("Breadboard") || asc[0].includes("LCD"), asc.join(" > "));
   ok("2c. üçüncü tık orijinal sıra", JSON.stringify(back) === JSON.stringify(before));
+});
 
-  /* ── 3) Bütçe uyarısı ── */
-  await page.evaluate(() => localStorage.setItem("arduinoDreamLab.budget.v1", "15"));
-  await page.click("#generateBtn"); // yeniden üret (2000ms AI gecikmesi olabilir; demo anında)
+/* ── 2) Bütçe uyarısı ── */
+await scenario("3", async (page) => {
+  await setStore(page, "arduinoDreamLab.budget.v1", "15");
+  await generate(page);
   await page.waitForSelector(".cost-over", { timeout: 10000 }).catch(() => {});
   const overRow = await page.$(".cost-over");
   const overText = overRow ? await overRow.$eval("td:nth-child(5)", (t) => t.textContent) : "";
   ok("3. bütçe aşımı uyarısı", !!overRow && overText.includes("Bütçe aşımı"), overText.trim().slice(0, 60));
-  await page.evaluate(() => localStorage.removeItem("arduinoDreamLab.budget.v1"));
+});
 
-  /* ── 4) Sertifika akışı (window.open stub + badge kaydı) ── */
-  await page.evaluate(() => window.open = () => null); // popup engelle (context yıkılmasın)
+/* ── 3) Sertifika akışı (rozet kaydı) ── */
+await scenario("4", async (page) => {
+  await page.evaluate(() => { window.open = () => null; }); // popup engelle
+  await generate(page);
   await page.$$eval(".step-check", (cbs) => cbs.forEach((c) => { if (!c.checked) c.click(); }));
   await page.waitForSelector("#certRow:not([hidden])", { state: "attached" });
   await page.fill("#certNameInput", "E2E Öğrenci");
   await page.click('[data-act="cert"]');
-  await page.waitForTimeout(1500);
+  await page.waitForFunction(() => !!localStorage.getItem("arduinoDreamLab.badges.v1"), null, { timeout: 10000 });
   const badges = await page.evaluate(() => JSON.parse(localStorage.getItem("arduinoDreamLab.badges.v1") || "[]"));
   ok("4. sertifika → rozet kaydı", badges.length === 1 && badges[0].type === "cert" && !!badges[0].guide, badges.length + " rozet");
+});
 
-  /* ── 5) Adet override kalıcılığı ── */
-  const plusBtn = await page.$('.qty-btn[data-qdir="1"]');
-  await plusBtn.click();
+/* ── 4) Adet override kalıcılığı ── */
+await scenario("5", async (page) => {
+  await generate(page);
+  await page.click('.qty-btn[data-qdir="1"]');
   await page.waitForTimeout(300);
   const unoVal = await page.$eval(".qty-input", (i) => i.value);
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("arduinoDreamLab.costQty.v1") || "{}"));
   const totalAfter = await page.$eval(".cost-total td:nth-child(4)", (t) => t.textContent.trim());
   ok("5a. + düğmesi adedi 2 yaptı", unoVal === "2", "input=" + unoVal);
   ok("5b. override localStorage'da", stored["Arduino Uno"] === "2", JSON.stringify(stored));
-  // Toplam +10$ artmış olmalı (2×Uno): kur ne olursa olsun $24.00 (16+8)
+  // Toplam +10$ artmış olmalı (2×Uno): $16.00 + $8.00 = $24.00
   ok("5c. toplam güncellendi (2×Uno)", totalAfter.endsWith("($24.00)"), totalAfter);
+});
 
-  /* ── Canlı maliyet ipucu (senkron demo yolu) ── */
+/* ── 5) Canlı maliyet ipucu (senkron demo yolu) ── */
+await scenario("ipucu", async (page) => {
   await page.fill("#ideaInput", "Odam için sıcaklığı ölçüp lamba yakan otomatik bir gece lambası istiyorum");
   await page.waitForTimeout(900);
   const hint = await page.$eval("#costHint", (e) => e.textContent);
   ok("+ canlı ipucu (demo şablonu)", hint.includes("≈"), hint);
+});
 
-  /* ── 6) v2.19.0: panel arama + sayfalama + alışveriş listesi düğmesi ── */
-  await page.evaluate(() => {
-    const subs = {};
-    for (let i = 1; i <= 8; i++) {
-      subs[`Öğrenci ${i}|Proje ${i}`] = { student: `Öğrenci ${i}`, project: `Proje ${i}`, total: 3, steps: { 0: 1 }, ts: Date.now() - i * 86400000, materials: [] };
-    }
-    localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({ code: "E2E-19", submissions: subs }));
-  });
-  await page.click("#classBtn");
-  await page.waitForSelector("#subList .archive-item");
+/* ── 6) Panel arama + sayfalama + alışveriş listesi düğmesi ── */
+await scenario("6", async (page) => {
+  const subs = [];
+  for (let i = 1; i <= 8; i++) {
+    subs.push(sub(`Öğrenci ${i}`, `Proje ${i}`, { total: 3, ts: Date.now() - i * DAY }));
+  }
+  await seedClassroom(page, subs, { code: "E2E-19" });
+  await openClassroom(page);
   const perPage = (await page.$$("#subList .archive-item")).length;
   ok("6a. sayfa başına 6 gönderi + sayfalayıcı", perPage === 6 && !!(await page.$("#subList .pager")), perPage + " satır");
   await page.fill("#subSearch", "ogrenci 7");
@@ -111,38 +197,39 @@ try {
   await page.waitForTimeout(300);
   const page2 = (await page.$$("#subList .archive-item")).length;
   ok("6c. 2. sayfada kalan 2 gönderi", page2 === 2, page2 + " satır");
-  ok("6d. alışveriş listesi düğmesi var", !!(await page.$('[data-act="cart"]')));
-  await page.click("#classCloseBtn");
-  await page.waitForTimeout(300);
+  // Satırdaki gerçek aksiyonlar: geri bildirim, zaman çizelgesi, sil.
+  // (data-act="cart" yalnızca ana rehber görünümünde var; gönderi satırında değil.)
+  const rowActs = await page.$$eval("#subList .archive-item", (items) => items.map((it) => ({
+    fb: !!it.querySelector("[data-fbdl]"),
+    tl: !!it.querySelector("[data-tl]"),
+    del: !!it.querySelector("[data-delsub]"),
+  })));
+  ok("6d. satır aksiyonları: geri bildirim + ⏱️ + sil", rowActs.length > 0 && rowActs.every((r) => r.fb && r.tl && r.del), rowActs.length + " satırda 3/3");
+});
 
-  /* ── 7) v2.20.0: CSV tarih filtresi gönderi listesini süzer ── */
-  await page.evaluate(() => {
-    const iso = (ts) => { const d = new Date(ts); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
-    const subs = {};
-    subs["Eski Öğrenci|Proje A"] = { student: "Eski Öğrenci", project: "Proje A", total: 2, steps: { 0: 1 }, ts: Date.now() - 40 * 86400000, materials: [] };
-    subs["Yeni Öğrenci|Proje B"] = { student: "Yeni Öğrenci", project: "Proje B", total: 2, steps: { 0: 1 }, ts: Date.now() - 86400000, materials: [] };
-    localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({ code: "E2E-20", submissions: subs }));
-    localStorage.setItem("arduinoDreamLab.csvRange.v1", JSON.stringify({ from: iso(Date.now() - 7 * 86400000), to: "" }));
-  });
-  await page.click("#classBtn");
-  await page.waitForSelector("#subList .archive-item");
+/* ── 7) CSV tarih filtresi gönderi listesini süzer ── */
+await scenario("7", async (page) => {
+  const subs = [
+    sub("Eski Öğrenci", "Proje A", { ts: Date.now() - 40 * DAY }),
+    sub("Yeni Öğrenci", "Proje B", { ts: Date.now() - DAY }),
+  ];
+  await seedClassroom(page, subs, { code: "E2E-20" });
+  await setStore(page, "arduinoDreamLab.csvRange.v1", { from: iso(Date.now() - 7 * DAY), to: "" });
+  await openClassroom(page);
   const fSubs = (await page.$$("#subList .archive-item")).length;
   ok("7a. tarih filtresi 1 gönderiye düşürür", fSubs === 1, fSubs + " satır");
   await page.click("#csvRangeClear");
   await page.waitForTimeout(300);
   const cSubs = (await page.$$("#subList .archive-item")).length;
   ok("7b. filtre temizle → tüm gönderiler", cSubs === 2, cSubs + " satır");
-  await page.click("#classCloseBtn");
-  await page.waitForTimeout(300);
-  await page.evaluate(() => localStorage.removeItem("arduinoDreamLab.csvRange.v1"));
+});
 
-  /* ── 8) v2.21.0: arşiv arama — başlık/etikette Türkçe duyarsız süzme ── */
-  await page.evaluate(() => {
-    localStorage.setItem("arduinoDreamLab.archive.v1", JSON.stringify([
-      { id: 1, ts: 1, idea: "otomatik sulama", guide: { title: "Akıllı Saksı", code: "a", difficulty: "Orta", materials: [] } },
-      { id: 2, ts: 2, idea: "", guide: { title: "Gece Lambası", code: "b", difficulty: "Kolay", materials: [] }, meta: { fav: true, tags: ["veli"] } }
-    ]));
-  });
+/* ── 8) Arşiv arama — başlık/etikette Türkçe duyarsız süzme ── */
+await scenario("8", async (page) => {
+  await seedArchive(page, [
+    { id: 1, ts: 1, idea: "otomatik sulama", guide: { title: "Akıllı Saksı", code: "a", difficulty: "Orta", materials: [] } },
+    { id: 2, ts: 2, idea: "", guide: { title: "Gece Lambası", code: "b", difficulty: "Kolay", materials: [] }, meta: { fav: true, tags: ["veli"] } },
+  ]);
   await page.click("#archiveBtn");
   await page.waitForSelector("#archSearch");
   const allItems = (await page.$$("#archGrid .archive-item")).length;
@@ -154,22 +241,18 @@ try {
   await page.fill("#archSearch", "veli");
   await page.waitForTimeout(300);
   const byTag = (await page.$$("#archGrid .archive-item")).length;
-  ok("8b. etikette arama", byTag === 1, byTag + " eşleşme");  await page.keyboard.press("Escape");
-  await page.waitForTimeout(200);
-  await page.evaluate(() => localStorage.removeItem("arduinoDreamLab.archive.v1"));
+  ok("8b. etikette arama", byTag === 1, byTag + " eşleşme");
+});
 
-  /* ── 9) v2.22.0: çoklu sınıf seçici + panel haftalık grafiği ── */
-  await page.evaluate(() => {
-    const iso = (ts) => { const d = new Date(ts); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
-    const subs = {};
-    subs["A|P1"] = { student: "A", project: "P1", total: 2, steps: { 0: 1 }, ts: Date.now() - 86400000, classCode: "7A", materials: [] };
-    subs["B|P2"] = { student: "B", project: "P2", total: 2, steps: { 0: 1 }, ts: Date.now() - 2 * 86400000, classCode: "8B", materials: [] };
-    localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({ code: "7A", submissions: subs }));
-    localStorage.setItem("arduinoDreamLab.activeClass.v1", "");
-    localStorage.setItem("arduinoDreamLab.csvRange.v1", JSON.stringify({ from: iso(Date.now() - 14 * 86400000), to: "" }));
-  });
-  await page.click("#classBtn");
-  await page.waitForSelector("#activeClassSel");
+/* ── 9) Çoklu sınıf seçici + panel haftalık grafiği ── */
+await scenario("9", async (page) => {
+  const subs = [
+    sub("A", "P1", { classCode: "7A", ts: Date.now() - DAY }),
+    sub("B", "P2", { classCode: "8B", ts: Date.now() - 2 * DAY }),
+  ];
+  await seedClassroom(page, subs, { code: "7A", activeClass: "" });
+  await setStore(page, "arduinoDreamLab.csvRange.v1", { from: iso(Date.now() - 14 * DAY), to: "" });
+  await openClassroom(page, "#activeClassSel");
   const allRows = (await page.$$("#subList .archive-item")).length;
   const chartSvg = await page.$("#classBody svg[aria-label='weekly steps']");
   ok("9a. tüm sınıflar: 2 gönderi + canlı grafik", allRows === 2 && !!chartSvg, allRows + " satır, svg=" + !!chartSvg);
@@ -178,21 +261,17 @@ try {
   const b8Rows = (await page.$$("#subList .archive-item")).length;
   const firstStudent = await page.$eval("#subList .archive-item h4", (h) => h.textContent.trim());
   ok("9b. 8B seçili: sadece B görünür", b8Rows === 1 && firstStudent.includes("B"), b8Rows + " satır | " + firstStudent);
-  await page.click("#classCloseBtn");
-  await page.waitForTimeout(300);
-  await page.evaluate(() => { localStorage.removeItem("arduinoDreamLab.classroom.v1"); localStorage.removeItem("arduinoDreamLab.activeClass.v1"); localStorage.removeItem("arduinoDreamLab.csvRange.v1"); });
+});
 
-  /* ── 10) v3.0.0: sınıf karşılaştırma kartı ── */
-  await page.evaluate(() => {
-    const subs = {};
-    subs["A|P1"] = { student: "A", project: "P1", total: 4, steps: { 0: 1, 1: 1 }, ts: Date.now() - 86400000, classCode: "7A", materials: [] };
-    subs["B|P2"] = { student: "B", project: "P2", total: 4, steps: { 0: 1 }, ts: Date.now() - 2 * 86400000, classCode: "7A", materials: [] };
-    subs["C|P3"] = { student: "C", project: "P3", total: 4, steps: { 0: 1, 1: 1, 2: 1 }, ts: Date.now() - 86400000, classCode: "8B", materials: [] };
-    localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({ code: "7A", submissions: subs }));
-    localStorage.setItem("arduinoDreamLab.activeClass.v1", "");
-  });
-  await page.click("#classBtn");
-  await page.waitForSelector("#cmpTable .cmp-table");
+/* ── 10) Sınıf karşılaştırma kartı ── */
+await scenario("10", async (page) => {
+  const subs = [
+    sub("A", "P1", { total: 4, steps: { 0: 1, 1: 1 }, classCode: "7A", ts: Date.now() - DAY }),
+    sub("B", "P2", { total: 4, steps: { 0: 1 }, classCode: "7A", ts: Date.now() - 2 * DAY }),
+    sub("C", "P3", { total: 4, steps: { 0: 1, 1: 1, 2: 1 }, classCode: "8B", ts: Date.now() - DAY }),
+  ];
+  await seedClassroom(page, subs, { code: "7A", activeClass: "" });
+  await openClassroom(page, "#cmpTable .cmp-table");
   const cmpHeads = await page.$$eval("#cmpTable thead th", (ths) => ths.map((t) => t.textContent.trim()));
   ok("10a. karşılaştırma: iki sınıf başlığı", cmpHeads.join("|").includes("7A") && cmpHeads.join("|").includes("8B"), cmpHeads.join(" / "));
   const winCells = (await page.$$("#cmpTable td.cmp-win")).length;
@@ -201,19 +280,18 @@ try {
   await page.waitForTimeout(250);
   const cmpRows = await page.$$eval("#cmpTable tbody tr th", (ths) => ths.map((t) => t.textContent.trim()));
   ok("10c. 5 metrik satırı (öğrenci…en aktif hafta)", cmpRows.length === 5, cmpRows.join(" | "));
-  await page.click("#classCloseBtn");
-  await page.waitForTimeout(300);
-  await page.evaluate(() => localStorage.removeItem("arduinoDreamLab.classroom.v1"));
+});
 
-  /* ── 11) v3.0.0: öğrenci zaman çizelgesi ── */
-  await page.evaluate(() => {
-    const d = 86400000;
-    const subs = {};
-    subs["Elif|Robot Kol"] = { student: "Elif", project: "Robot Kol", total: 4, steps: { 0: Date.now() - 3 * d, 1: Date.now() - 2 * d, 2: Date.now() - d }, ts: Date.now() - d, classCode: "7A", materials: [] };
-    localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({ code: "7A", submissions: subs }));
-  });
-  await page.click("#classBtn");
-  await page.waitForSelector("#subList .archive-item");
+/* ── 11) Öğrenci zaman çizelgesi ── */
+await scenario("11", async (page) => {
+  const subs = [sub("Elif", "Robot Kol", {
+    total: 4,
+    steps: { 0: Date.now() - 3 * DAY, 1: Date.now() - 2 * DAY, 2: Date.now() - DAY },
+    classCode: "7A",
+    ts: Date.now() - DAY,
+  })];
+  await seedClassroom(page, subs, { code: "7A" });
+  await openClassroom(page);
   const tlBtnBefore = await page.$("#subList [data-tl]");
   ok("11a. kartta ⏱️ düğmesi var", !!tlBtnBefore);
   const tlHidden0 = !(await page.$("#subList .timeline"));
@@ -225,20 +303,21 @@ try {
   await page.waitForTimeout(250);
   const tlGone = !(await page.$("#subList .timeline"));
   ok("11c. tekrar tıklayınca kapanır", tlHidden0 && tlGone);
-  await page.click("#classCloseBtn");
-  await page.waitForTimeout(300);
-  await page.evaluate(() => localStorage.removeItem("arduinoDreamLab.classroom.v1"));
+});
 
-  /* ── 12) v3.0.0: arşiv mini önizleme ── */
-  await page.evaluate(() => {
-    localStorage.setItem("arduinoDreamLab.archive.v1", JSON.stringify([
-      { id: 1, ts: 1, idea: "saksı", guide: { title: "Akıllı Saksı", code: "a", difficulty: "Orta", summary: "Toprağı ölçen saksı.", materials: [], steps: [{ title: "Sensörü tak" }, { title: "Pompayı bağla" }, { title: "Eşiği ayarla" }, { title: "Kodu yükle" }], tips: ["Fazla su kök çürütür."] } }
-    ]));
-  });
+/* ── 12) Arşiv mini önizleme ── */
+await scenario("12", async (page) => {
+  await seedArchive(page, [
+    {
+      id: 1, ts: 1, idea: "saksı",
+      guide: {
+        title: "Akıllı Saksı", code: "a", difficulty: "Orta", summary: "Toprağı ölçen saksı.", materials: [],
+        steps: [{ title: "Sensörü tak" }, { title: "Pompayı bağla" }, { title: "Eşiği ayarla" }, { title: "Kodu yükle" }],
+        tips: ["Fazla su kök çürütür."],
+      },
+    },
+  ]);
   await page.click("#archiveBtn");
-  await page.waitForSelector("#archSearch");
-  await page.fill("#archSearch", ""); // senaryo 8'den kalma arama filtresi modül durumunda korunur
-  await page.waitForTimeout(300);
   await page.waitForSelector("#archGrid [data-prev]");
   const prevHidden0 = !(await page.$("#archGrid .arch-preview"));
   await page.click("#archGrid [data-prev]");
@@ -250,37 +329,25 @@ try {
   await page.waitForTimeout(250);
   const pvGone = !(await page.$("#archGrid .arch-preview"));
   ok("12b. tekrar tıklayınca kapanır", prevHidden0 && pvGone);
-  await page.keyboard.press("Escape");
-  await page.waitForTimeout(200);
-  await page.evaluate(() => localStorage.removeItem("arduinoDreamLab.archive.v1"));
+});
 
-  /* ── 13) v3.0.0: rapor sınıf turları + satır rozeti + çizelge bölümü ── */
-  await page.evaluate(() => {
-    const d = 86400000;
-    const subs = {};
-    subs["Ali|P1"] = { student: "Ali", project: "P1", total: 3, steps: { 0: Date.now() - 2 * d, 1: Date.now() - d }, ts: Date.now() - d, classCode: "7A", materials: [] };
-    subs["Veli|P2"] = { student: "Veli", project: "P2", total: 3, steps: { 0: Date.now() - 5 * d }, ts: Date.now() - 4 * d, classCode: "8B", materials: [] };
-    localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({ code: "7A", submissions: subs }));
-    localStorage.setItem("arduinoDreamLab.activeClass.v1", "");
-    window.__repHtml = "";
-    window.open = () => ({ document: { write: (h) => { window.__repHtml = h; }, close: () => {} } });
-  });
-  await page.click("#classBtn");
-  await page.waitForSelector("#classReportBtn:not([disabled])");
+/* ── 13) Rapor sınıf turları + satır rozeti + çizelge bölümü ── */
+await scenario("13", async (page) => {
+  const subs = [
+    sub("Ali", "P1", { total: 3, steps: { 0: Date.now() - 2 * DAY, 1: Date.now() - DAY }, classCode: "7A", ts: Date.now() - DAY }),
+    sub("Veli", "P2", { total: 3, steps: { 0: Date.now() - 5 * DAY }, classCode: "8B", ts: Date.now() - 4 * DAY }),
+  ];
+  await seedClassroom(page, subs, { code: "7A", activeClass: "" });
+  await stubWindowOpen(page);
+  await openClassroom(page, "#classReportBtn:not([disabled])");
   await page.click("#classReportBtn");
   await page.waitForTimeout(400);
   const rep = await page.evaluate(() => window.__repHtml || "");
   ok("13a. rapor: tur başlıkları (7A + 8B) + satır rozeti", rep.includes("cls-tour") && rep.includes("🎓 7A") && rep.includes("🎓 8B") && rep.includes("cls-tag"), rep ? rep.length + " kr" : "boş");
   ok("13b. rapor: öğrenci zaman çizelgesi bölümü", rep.includes("Öğrenci zaman çizelgeleri") && rep.includes("gönderim"), "");
-  await page.click("#classCloseBtn");
-  await page.waitForTimeout(300);
-  await page.evaluate(() => { localStorage.removeItem("arduinoDreamLab.classroom.v1"); localStorage.removeItem("arduinoDreamLab.activeClass.v1"); });
+});
 
-} catch (e) {
-  ok("AKIŞ", false, e.message);
-} finally {
-  await browser.close();
-}
+await browser.close();
 
 const failed = results.filter((r) => !r.pass);
 console.log(`\n── E2E özeti: ${results.length - failed.length}/${results.length} geçti ──`);

@@ -2155,6 +2155,13 @@ function loadCertName() {
 function saveCertName(name) {
   try { localStorage.setItem(CERT_NAME_KEY, name); } catch {}
 }
+/* v3.0.0: Sertifika adı yazılırken saklanır. Rehber, canlı maliyet ipucu gibi
+   bir nedenle yeniden render olduğunda input değerini loadCertName()'den
+   doldurur; kaydedilmemiş bir ad böylece kullanıcının yazdığı gibi silinirdi. */
+document.addEventListener("input", (e) => {
+  const el = e.target;
+  if (el && el.id === "certNameInput") saveCertName(el.value);
+});
 
 /* ══════════════════ ÖĞRENCİ BAŞARILARI ══════════════════
    Kazanılan sertifikalar + okunan öğretmen geri bildirimleri + tamamlanan
