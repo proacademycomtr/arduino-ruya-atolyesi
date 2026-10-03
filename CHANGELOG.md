@@ -2,6 +2,15 @@
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
 
+## [3.0.0] - 2026-10-03
+
+- Yeni: ⚖️ **Sınıf karşılaştırma** — panelde iki sınıf seçici (A vs B); öğrenci sayısı, ortalama ilerleme, tamamlanan adım, tahmini bütçe ve en aktif hafta yan yana tabloda, daha iyi değer vurgulu; ≥2 sınıf kodu varsa görünür
+- Yeni: ⏱️ **Öğrenci zaman çizelgesi** — panelde öğrenci kartında ⏱️ düğmesiyle açılır: adım zaman damgaları + gönderim günü kronolojik (gün/saat); PDF raporda her öğrenci için gün bazlı özet satırı ("01 Eki (2 adım) · 03 Eki (gönderim)")
+- Yeni: 📄 **Arşiv mini önizleme** — kartta Önizleme düğmesi kartı açar: rehber özeti + ilk 3 adım + ilk ipucu; tekrar tıklayınca kapanır, arama/sıralama odak kaybettirmez
+- Yeni: 🎓 **Rapor sınıf turları** — "Tüm sınıflar" görünümünde PDF raporu her sınıfı kendi 🎓 bölüm başlığıyla ayrı tabloda dizer; tablo satırlarına sınıf kodu rozeti (cls-tag) eklenir
+- Düzeltme: sınıf seçiliyken PDF raporu açmak `esc2` tanımlanmadan erişim (TDZ) nedeniyle hataya düşüyordu — tanım başa alındı
+- Test: 86 birim (7 yeni: compareClasses, compareTableHTML, studentTimeline, timelineSummary, groupSubsByClass, rapor turu, archivePreviewData), E2E 21→31 kontrol (10 yeni: 10a-10c, 11a-11c, 12a-12b, 13a-13b)
+
 ## [2.22.0] - 2026-10-02
 
 - Yeni: 🏫 **Çoklu sınıf desteği** — panelde sınıf seçici (gönderi dosyalarındaki classCode'lardan otomatik); CSV indirmesi ve PDF raporu seçili sınıfa göre süzülür, seçim korunur; "Tüm sınıflar" görünümü de var. Rapor başlığında aktif sınıf etiketi (🎓) yazar
