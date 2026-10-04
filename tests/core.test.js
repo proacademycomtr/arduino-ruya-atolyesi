@@ -1576,3 +1576,90 @@ test("v3.0.0 archivePreviewData: özet + ilk 3 adım + ilk ipucu, eksik alan day
   assert.equal(nul.summary, "");
   assert.equal(nul.steps.length, 0, "null güvenli");
 });
+
+/* ───── v3.1.0: Karşılaştırma grafiği ───── */
+
+test("v3.1.0 compareBarsHTML: 5 metrik, normalize çubuklar, kazanan vurgusu", () => {
+  const subs = [
+    { student: "A", project: "P", total: 4, steps: { 0: 1, 1: 1 }, ts: Date.now(), classCode: "7A", materials: [] },
+    { student: "B", project: "P", total: 4, steps: { 0: 1 }, ts: Date.now(), classCode: "7A", materials: [] },
+    { student: "C", project: "P", total: 4, steps: { 0: 1, 1: 1, 2: 1 }, ts: Date.now(), classCode: "8B", materials: [] }
+  ];
+  const cmp = core.compareClasses(subs, "7A", "8B");
+  const svg = core.compareBarsHTML(cmp, false);
+  assert.match(svg, /^<svg /, "SVG ile başlamalı");
+  assert.match(svg, /<\/svg>$/, "SVG ile bitmeli");
+  assert.ok(svg.includes("aria-label"), "erişilebilir etiket yok");
+  assert.ok(svg.includes("7A") && svg.includes("8B"), "efsane iki sınıf kodu");
+  // 5 metrik satırı → 5 çift çubuk = 10 rect (+ 2 legend)
+  const rows = (svg.match(/class="cmp-bar-row"/g) || []).length;
+  assert.equal(rows, 5, "5 metrik satırı");
+  assert.equal((svg.match(/class="cmp-bar /g) || []).length, 12, "10 çubuk + 2 legend");
+  // En büyüğü tam genişlik alır (normalize)
+  const widths = [...svg.matchAll(/<rect class="cmp-bar[^"]*" x="\d+" y="\d+" width="(\d+)"/g)].map((m) => Number(m[1]));
+  assert.ok(Math.max(...widths) > 300, "en büyük metrik dolu genişlikte");
+  assert.ok(Math.min(...widths) >= 2, "sıfır değer bile görünür çubuk");
+  assert.ok(svg.includes("cmp-bar-win"), "kazanan vurgusu yok");
+  // Boş sınıf çökmez
+  const empty = core.compareBarsHTML(core.compareClasses([], "5A", "5B"), true);
+  assert.match(empty, /^<svg /, "boş sınıf çökmez");
+  assert.equal((empty.match(/class="cmp-bar-row"/g) || []).length, 5, "boşta da 5 satır");
+});
+
+test("v3.1.0 karşılaştırma grafiği: bütçede az harcamak kazandırır", () => {
+  const mk = (code, cost) => [{ student: "A", project: "P", total: 1, steps: { 0: 1 }, ts: Date.now(), classCode: code,
+    materials: [{ name: "X", quantity: "1" }] }];
+  // 7A pahalı, 8B ucuz → 8B kazanmalı (lowIsGood)
+  sandbox.localStorage.setItem("arduinoDreamLab.customPrices.v1", JSON.stringify({ X: 20 }));
+  const costly = core.compareClasses(mk("7A"), "7A", "8B");
+  sandbox.localStorage.setItem("arduinoDreamLab.customPrices.v1", JSON.stringify({ X: 20 }));
+  const cmpCost = { a: { students: 1, avgPct: 100, done: 1, steps: 1, cost: 40, activeWeek: null },
+                    b: { students: 1, avgPct: 100, done: 1, steps: 1, cost: 10, activeWeek: null } };
+  const svg = core.compareBarsHTML(cmpCost, false);
+  const budgetRow = svg.split("cmp-bar-row").find((s) => s.includes("Tahmini bütçe"));
+  assert.ok(budgetRow, "bütçe satırı yok");
+  const winIdx = budgetRow.indexOf("cmp-bar-win");
+  const bValIdx = budgetRow.indexOf("$10.00");
+  const aValIdx = budgetRow.indexOf("$40.00");
+  assert.ok(winIdx > -1, "bütçede kazanan vurgulanmalı");
+  // $10.00 (B, ucuz) çubuğu vurgulanmalı, $40.00 (A) değil
+  assert.ok(bValIdx > winIdx || winIdx < aValIdx, "daha az bütçeli taraf kazanır");
+  sandbox.localStorage.removeItem("arduinoDreamLab.customPrices.v1");
+});
+
+test("v3.1.0 classMetricValue: weekSteps aktif haftadan okur, yoksa 0", () => {
+  assert.equal(core.classMetricValue({ students: 5 }, "students"), 5);
+  assert.equal(core.classMetricValue({ activeWeek: { steps: 12 } }, "weekSteps"), 12);
+  assert.equal(core.classMetricValue({ activeWeek: null }, "weekSteps"), 0);
+  assert.equal(core.classMetricValue({}, "weekSteps"), 0, "eksik alan 0");
+  assert.equal(core.classMetricValue(null, "cost"), 0, "null güvenli");
+});
+
+test("v3.1.0 rapor: çok sınıflı raporda karşılaştırma grafiği basılır", () => {
+  let html = "";
+  sandbox.window.open = () => ({ document: { write: (h) => { html = h; }, close: () => {} } });
+  const day = 86400000;
+  sandbox.localStorage.setItem("arduinoDreamLab.classroom.v1", JSON.stringify({
+    code: "7A",
+    submissions: {
+      "Ali|P1": { student: "Ali", project: "P1", total: 4, steps: { 0: 1, 1: 1 }, ts: Date.now() - day, classCode: "7A", materials: [] },
+      "Veli|P2": { student: "Veli", project: "P2", total: 4, steps: { 0: 1 }, ts: Date.now() - 2 * day, classCode: "8B", materials: [] }
+    }
+  }));
+  sandbox.localStorage.removeItem("arduinoDreamLab.activeClass.v1");
+  sandbox.downloadClassReport();
+  assert.ok(html.includes("Sınıf Karşılaştırması"), "karşılaştırma başlığı yok");
+  assert.ok(html.includes('class="cmp-bars-print"'), "yazdırma grafiği kutusu yok");
+  assert.ok(html.includes('<svg class="cmp-bars"'), "SVG yok");
+  assert.ok(html.includes("🎓 7A / 🎓 8B"), "karşılaştırılan sınıflar yazmıyor");
+  assert.ok(html.includes("Her metrik iki sınıfın büyüğüne göre ölçeklenir"), "ölçek notu yok");
+  // Tek sınıf seçili → grafik basılmaz (anlamsız)
+  sandbox.localStorage.setItem("arduinoDreamLab.activeClass.v1", "8B");
+  html = "";
+  sandbox.downloadClassReport();
+  // Not: raporun <style> bloğunda .cmp-bars-print kuralı her zaman var; bu yüzden
+  // varlık değil GERÇEK eleman (class="...") aranır.
+  assert.ok(!html.includes('class="cmp-bars-print"'), "tek sınıfta grafik basılmamalı");
+  sandbox.localStorage.removeItem("arduinoDreamLab.activeClass.v1");
+  sandbox.localStorage.removeItem("arduinoDreamLab.classroom.v1");
+});

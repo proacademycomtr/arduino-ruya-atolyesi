@@ -60,6 +60,13 @@ Tüm fiyatlar **₺ ana, $ ikincil** gösterilir (kur ≈ 34, bilgi amaçlı).
 - **Sınıf bütçe planlayıcısı:** Ayarlar'a sınıf mevcudu girilir; rapor mevcut × ortalama proje maliyetiyle tüm sınıfın bütçe ihtiyacını hesaplar ve öğretmen sınırıyla karşılaştırır.
 - **README görseli + CI E2E:** canlı uygulama ekran görüntüsü repoda; GitHub Actions artık Playwright E2E'yi de koşar.
 
+## 📊 v3.1.0 — Görsel Karşılaştırma ve Telefon Desteği
+
+- **Sınıf karşılaştırma grafiği:** paneldeki ⚖️ kartın altında beş metrik için çift çubuklu grafik; her metrik iki sınıfın büyüğüne göre ölçeklenir, kazanan taraf vurgulanır, bütçede az harcamak iyi sayılır
+- **Raporda karşılaştırma:** PDF raporuna ⚖️ bölümü ve aynı grafik eklenir (≥2 sınıf kodu varsa)
+- **Telefon desteği:** header dar ekranda taşıyordu (375px'te 824px) — artık sarıyor; düğme hedefleri büyütüldü. 375/390/768px'te yatay kaydırma yok
+- **Test:** 105 test tek komutta — `node --test tests/` (90 birim + 15 tarayıcı); CI tek job'a indirildi
+
 ## 🧭 v3.0.0 — Karşılaştırmalı Sınıf Takibi
 
 - **Sınıf karşılaştırma:** panelde ⚖️ kart — iki sınıfı seç (A vs B), öğrenci sayısı / ortalama ilerleme / tamamlanan adım / tahmini bütçe / en aktif hafta yan yanda; daha iyi değer teal vurgulu. ≥2 sınıf kodunda görünür.

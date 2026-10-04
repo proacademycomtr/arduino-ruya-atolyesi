@@ -2,6 +2,20 @@
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
 
+## [3.1.0] - 2026-10-04
+
+- Yeni: 📊 **Sınıf karşılaştırma grafiği** — paneldeki ⚖️ kartın altında çift çubuklu SVG: 5 metrik (öğrenci, ort. ilerleme, tamamlanan adım, tahmini bütçe, en aktif hafta) iki sınıf için yan yana çubuk; her metrik iki sınıfın büyüğüne göre ölçeklenir, kazanan taraf teal vurgulu. Bütçede az harcamak iyi sayılır
+- Yeni: 🖨️ **Raporda karşılaştırma** — PDF sınıf raporuna "⚖️ Sınıf Karşılaştırması" bölümü ve aynı grafik basılır (yalnız ≥2 sınıf kodu varsa; tek sınıf seçiliyken anlamsız olurdu)
+- Yeni: 📱 **Mobil uyumluluk** — header 375px'te 824px genişlikte taşıyordu (logo + 6 düğme tek satıra sığmıyor, sayfa yatay kayıyordu). Header artık 640px ve 900px eşiklerinde sarıyor; dokunma hedefleri 34-40px'e büyütüldü. 375/390/768px'te yatay taşma sıfır
+- Test: 86→90 birim (4 yeni: compareBarsHTML, bütçede kazanan yönü, classMetricValue, raporda grafik), E2E 31→34 kontrol (10d, 10e, 13c)
+- Test altyapısı: E2E senaryoları `tests/e2e.test.mjs` ile `node --test` içine alındı — birim + tarayıcı testleri tek komut (`node --test tests/`). Senaryo tanımları `scripts/e2e.mjs` modülünde kaldı; CLI (`--only`, `--list`) aynen çalışıyor
+- CI: iki ayrı job yerine tek job — bağımlılıkları kurar, chromium indirir, derler ve `node --test tests/` koşar
+- Düzeltme: `node --test` altında tarayıcı süreci kapatılmadığı için koşu hiç sonlanmıyordu; `after()` kancası eklendi
+
+## [3.1.0] - 2026-10-04
+
+- Sürüm 3.1.0 olarak derlendi.
+
 ## [3.0.0] - 2026-10-03
 
 - Yeni: ⚖️ **Sınıf karşılaştırma** — panelde iki sınıf seçici (A vs B); öğrenci sayısı, ortalama ilerleme, tamamlanan adım, tahmini bütçe ve en aktif hafta yan yana tabloda, daha iyi değer vurgulu; ≥2 sınıf kodu varsa görünür

@@ -139,7 +139,7 @@ function loadCore() {
     "loadCsvRange", "saveCsvRange", "filterSubsByRange", "archiveMeta", "setArchiveMeta", "loadArchive", "writeArchive",
     "filterArchiveItems", "weeklyParticipationDetail",
     "weeklyBarsData", "panelWeeklySVG", "activeClassCode", "setActiveClassCode", "classSubs", "sortArchiveItems",
-    "compareClasses", "classMetrics", "compareTableHTML", "studentTimeline", "timelineSummary", "groupSubsByClass", "archivePreviewData",
+    "compareClasses", "classMetrics", "compareTableHTML", "compareBarsHTML", "classMetricValue", "studentTimeline", "timelineSummary", "groupSubsByClass", "archivePreviewData",
     "buildAmbientPlan", "nextAmbientStep", "markAmbientStep", "orderPortfolioCerts"
   ];
   // Sanal ortamda app.js tümüyle çalıştı; örneklemesi gerekenler const/let ise

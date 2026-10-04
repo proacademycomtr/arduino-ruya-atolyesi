@@ -12,10 +12,13 @@
      sertifika akışı, adet override kalıcılığı, canlı ipucu, panel arama +
      sayfalama, CSV tarih filtresi, arşiv arama, çoklu sınıf seçici + grafik,
      sınıf karşılaştırma, öğrenci zaman çizelgesi, arşiv mini önizleme,
-     rapor sınıf turları. */
+     rapor sınıf turları.
+
+   v3.1.0: Bu dosya bir modül olarak da dışa açılır; tests/e2e.test.js
+   senaryoları node --test içinde koşturur (birim + tarayıcı tek komut). */
 
 import { chromium } from "playwright";
-import { pathToFileURL } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 /* --only / --list bayraklarını ayrıştır; ilk konumsal argüman URL'dir. */
@@ -42,9 +45,11 @@ function parseOnly(spec) {
 }
 
 const results = [];
-const ok = (name, cond, extra = "") => {
+/** Kontrol kaydeder. node --test modunda `t` verilirse test içine de raporlanır. */
+const ok = (name, cond, extra = "", t) => {
   results.push({ name, pass: !!cond, extra });
   console.log((cond ? "✅" : "❌") + " " + name + (extra ? ` — ${extra}` : ""));
+  if (t) t.diagnostic((cond ? "  ✓ " : "  ✗ ") + name + (extra ? ` — ${extra}` : ""));
 };
 
 /* ── Ortak veri kurulum yardımcıları ── */
@@ -109,26 +114,33 @@ const closeClassroom = async (page) => {
   await page.waitForTimeout(300);
 };
 
-const browser = await chromium.launch();
-
-/* Senaryo kayıt defteri: aşağıdaki tanımlar sırayla buraya eklenir, sonra
+/* Senaryo kayıt defteri: aşağıdaki tanimlar sırayla buraya eklenir, sonra
    --only seçimine göre koşulur. */
+/* Tarayıcı tembel başlatılır: modül olarak import edildiğinde (node --test)
+   require()'ın top-level await'a takılmaması için import anında açılmaz. */
+let _browserPromise = null;
+const getBrowser = () => (_browserPromise ||= chromium.launch());
+export const closeBrowser = async () => {
+  if (_browserPromise) { const b = await _browserPromise; await b.close(); _browserPromise = null; }
+};
+
 const REGISTRY = [];
 
 /** Senaryo kaydeder (koşmaz). */
 function scenario(id, fn) { REGISTRY.push({ id, fn }); }
 
-const shouldRun = (id) => onlyIds === null || onlyIds.has(id);
-
 /**
  * Bir senaryoyu koşar: yepyeni context, localStorage temizliği ve sayfa
  * yenilemesi (modül durumu sıfırlanır). Hata olursa yalnızca o senaryo
  * başarısız olur, diğerleri koşmaya devam eder.
+ * `t` verilirse (node --test) o senaryonun TestContext'i olarak kullanılır.
  */
-async function runScenario({ id, fn }) {
+async function runScenario({ id, fn }, t) {
+  const browser = await getBrowser();
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   page.setDefaultTimeout(15000);
+  const before = results.length;
   try {
     await page.goto(target, { waitUntil: "domcontentloaded" });
     await page.evaluate(() => localStorage.clear());
@@ -136,9 +148,14 @@ async function runScenario({ id, fn }) {
     await page.waitForSelector("#ideaInput");
     await fn(page);
   } catch (e) {
-    ok(id + " — AKIŞ", false, e.message);
+    ok(id + " — AKIŞ", false, e.message, t);
   } finally {
     await ctx.close();
+  }
+  // Bu senaryodaki başarısız kontrolleri node --test'e de bildir
+  const failedHere = results.slice(before).filter((r) => !r.pass);
+  if (t && failedHere.length) {
+    throw new Error(`${failedHere.length} kontrol başarısız: ` + failedHere.map((r) => r.name).join("; "));
   }
 }
 
@@ -311,6 +328,11 @@ scenario("10", async (page) => {
   await page.waitForTimeout(250);
   const cmpRows = await page.$$eval("#cmpTable tbody tr th", (ths) => ths.map((t) => t.textContent.trim()));
   ok("10c. 5 metrik satırı (öğrenci…en aktif hafta)", cmpRows.length === 5, cmpRows.join(" | "));
+  const barRows = (await page.$$("#cmpBars .cmp-bar-row")).length;
+  const barRects = (await page.$$("#cmpBars rect.cmp-bar")).length;
+  const barBox = await page.$("#cmpBars svg");
+  ok("10d. karşılaştırma grafiği: 5 metrik çift çubuk", barRows === 5 && barRects === 12, barRows + " satır, " + barRects + " çubuk/legend");
+  ok("10e. grafik görünür (panel içinde taşmıyor)", !!barBox && (await barBox.boundingBox()).width > 100, barBox ? Math.round((await barBox.boundingBox()).width) + "px" : "yok");
 });
 
 /* ── 11) Öğrenci zaman çizelgesi ── */
@@ -376,35 +398,51 @@ scenario("13", async (page) => {
   const rep = await page.evaluate(() => window.__repHtml || "");
   ok("13a. rapor: tur başlıkları (7A + 8B) + satır rozeti", rep.includes("cls-tour") && rep.includes("🎓 7A") && rep.includes("🎓 8B") && rep.includes("cls-tag"), rep ? rep.length + " kr" : "boş");
   ok("13b. rapor: öğrenci zaman çizelgesi bölümü", rep.includes("Öğrenci zaman çizelgeleri") && rep.includes("gönderim"), "");
+  ok("13c. rapor: sınıf karşılaştırma grafiği basıldı", rep.includes('class="cmp-bars-print"') && rep.includes("Sınıf Karşılaştırması") && rep.includes('<svg class="cmp-bars"'), "");
 });
 
-/* ── Çalıştır ── */
+/* ── Dışa açıklanan arayüz (node --test bunu kullanır) ── */
 
-const onlyIds = parseOnly(onlyArg);
+export { REGISTRY as SCENARIOS, runScenario, parseOnly };
 
-if (listOnly) {
-  console.log("Kullanılabilir senaryolar: " + REGISTRY.map((s) => s.id).join(", "));
-  console.log("Örnek: node scripts/e2e.mjs --only 12   |   --only 9-12   |   --only 6,12");
-  await browser.close();
-  process.exit(0);
+/** Seçilen senaryoları sırayla koşar; koşulan kontrol sayısını döner. */
+export async function runScenarios(ids, t) {
+  const only = ids ? parseOnly(ids) : null;
+  if (only) {
+    const bilinmeyen = [...only].filter((id) => !REGISTRY.some((s) => s.id === id));
+    if (bilinmeyen.length) {
+      throw new Error(`Bilinmeyen senaryo: ${bilinmeyen.join(", ")}. Mevcut: ${REGISTRY.map((s) => s.id).join(", ")}`);
+    }
+  }
+  const chosen = REGISTRY.filter((s) => !only || only.has(s.id));
+  console.log(`▶ ${chosen.length} senaryo koşuluyor: ${chosen.map((s) => s.id).join(", ")}\n`);
+  for (const s of chosen) await runScenario(s, t);
+  return results.length;
 }
 
-if (onlyIds) {
-  const bilinmeyen = [...onlyIds].filter((id) => !REGISTRY.some((s) => s.id === id));
-  if (bilinmeyen.length) {
-    console.error(`⚠️  Bilinmeyen senaryo: ${bilinmeyen.join(", ")}`);
-    console.error(`   Mevcut: ${REGISTRY.map((s) => s.id).join(", ")}`);
-    await browser.close();
+/* ── CLI: yalnızca doğrudan çalıştırıldığında ── */
+
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
+if (isMain) {
+  const onlyIds = parseOnly(onlyArg);
+
+  if (listOnly) {
+    console.log("Kullanılabilir senaryolar: " + REGISTRY.map((s) => s.id).join(", "));
+    console.log("Örnek: node scripts/e2e.mjs --only 12   |   --only 9-12   |   --only 6,12");
+    await closeBrowser();
+    process.exit(0);
+  }
+
+  try {
+    await runScenarios(onlyArg);
+  } catch (e) {
+    console.error(`⚠️  ${e.message}`);
+    await closeBrowser();
     process.exit(2);
   }
+
+  await closeBrowser();
+  const failed = results.filter((r) => !r.pass);
+  console.log(`\n── E2E özeti: ${results.length - failed.length}/${results.length} geçti ──`);
+  process.exit(failed.length ? 1 : 0);
 }
-
-const chosen = REGISTRY.filter((s) => shouldRun(s.id));
-console.log(`▶ ${chosen.length} senaryo koşuluyor: ${chosen.map((s) => s.id).join(", ")}\n`);
-for (const s of chosen) await runScenario(s);
-
-await browser.close();
-
-const failed = results.filter((r) => !r.pass);
-console.log(`\n── E2E özeti: ${results.length - failed.length}/${results.length} geçti ──`);
-process.exit(failed.length ? 1 : 0);

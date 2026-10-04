@@ -719,6 +719,15 @@ pre.code-block .num { color: #7dd3fc; }
 .cmp-table thead th { background: var(--teal-soft); color: var(--teal); font-size: 0.82rem; }
 .cmp-table tbody th { text-align: left; font-weight: 600; color: var(--text-dim); white-space: nowrap; }
 .cmp-table td.cmp-win { background: var(--teal-soft); color: var(--teal); font-weight: 700; }
+/* v3.1.0: Karşılaştırma grafiği (panel) */
+#cmpBars { margin-top: 0.9rem; }
+.cmp-bars { display: block; width: 100%; height: auto; overflow: visible; }
+.cmp-bar-a { fill: var(--teal); }
+.cmp-bar-b { fill: var(--accent, #f0b429); }
+.cmp-bar-win { stroke: var(--teal); stroke-width: 1.5; }
+.cmp-bar-label { font-size: 10px; fill: var(--text-dim); }
+.cmp-bar-val { font-size: 9px; fill: var(--text); font-variant-numeric: tabular-nums; }
+.cmp-legend .cmp-bar-label { fill: var(--text); font-weight: 600; }
 .tl-empty { font-size: 0.8rem; color: var(--text-dim); padding: 0.35rem 0; }
 .timeline {
   display: flex; flex-direction: column; gap: 0.18rem;
@@ -1307,4 +1316,25 @@ pre.code-block .num { color: #7dd3fc; }
   .chips-row { justify-content: flex-start; }
   .modal-actions { flex-direction: column-reverse; }
   .modal-actions .btn { justify-content: center; }
+
+  /* Dokunma hedefleri: 30px altındaki düğmeler avuç içinde zor yakalanıyor. */
+  .btn, .chips-row .btn, .chip, select, input[type="text"], input[type="number"], input[type="date"] { min-height: 34px; }
+  .modal-actions .btn, .guide-actions .btn { min-height: 40px; }
+}
+
+/* Modal kapatma düğmeleri ve paneldeki 28px'lik satır düğmeleri dokunmatik
+   cihazda hedefin altında kalıyordu (WCAG 2.5.8 önerir 24px, rahat kullanım 44px). */
+@media (pointer: coarse) {
+  .modal-close, [id^="close"] { min-width: 40px; min-height: 40px; }
+  .panel-card .row .btn, #subList .row .btn, #archGrid .row .btn { min-height: 34px; }
+  .chip { min-height: 36px; }
+}
+
+/* ────────── Tablet + dar masaüstü (v3.1.0) ──────────
+   Header 640px altında sarıyordu; 641-900px bandında (iPad yatay, küçük
+   dizüstü) logo + 6 düğme yine tek satıra sığmıyor ve sayfa yatay kayıyordu. */
+@media (max-width: 900px) {
+  .header-inner { flex-wrap: wrap; gap: 0.6rem; padding: 0.7rem 1rem; }
+  .header-actions { flex-wrap: wrap; gap: 0.45rem; width: 100%; justify-content: flex-end; }
+  .header-actions .btn { flex: 1 1 auto; min-width: 0; justify-content: center; padding: 0.5rem 0.5rem; }
 }

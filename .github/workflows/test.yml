@@ -6,23 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# v3.1.0: Birim ve tarayıcı testleri tek komutta birleşti (node --test tests/).
+# Tarayıcı testleri tests/e2e.test.js içinde aynı koşuya giriyor.
 jobs:
   test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Birim testlerini çalıştır
-        run: node --test tests/
-      - name: Derlemeyi doğrula (build.py)
-        run: |
-          python3 build.py
-          test -f dist/index.html
-          grep -q "APP_VERSION" dist/index.html
-
-  e2e:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,5 +22,10 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Derle
         run: python3 build.py
-      - name: Uçtan uca tarayıcı testleri (file:// dist)
-        run: node scripts/e2e.mjs
+      - name: Derleme çıktısını doğrula
+        run: |
+          test -f dist/index.html
+          grep -q "APP_VERSION" dist/index.html
+      # Birim testleri (tests/core.test.js) + tarayıcı senaryoları (tests/e2e.test.js)
+      - name: Testleri çalıştır (birim + E2E)
+        run: node --test tests/

@@ -23,7 +23,7 @@ import sys
 from datetime import date
 
 # ── Sürüm sabiti: yeni sürüm buradan değiştirilir ──
-VERSION = "3.0.0"
+VERSION = "3.1.0"
 
 root = pathlib.Path(__file__).parent
 changelog_path = root / "CHANGELOG.md"

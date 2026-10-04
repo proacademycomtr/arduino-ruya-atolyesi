@@ -5573,6 +5573,7 @@ function openClassModal() {
           <select id="cmpSelB" class="csv-date" style="padding:0.25rem 0.45rem" aria-label="${t("Karşılaştırma sınıfı B")}">${opt(cmpState.b)}</select>
         </div>
         <div id="cmpTable">${compareTableHTML(compareClasses(allSubs, cmpState.a, cmpState.b), en)}</div>
+        <div id="cmpBars">${compareBarsHTML(compareClasses(allSubs, cmpState.a, cmpState.b), en)}</div>
       </div>`;
     })()}
     ${(() => { const risk = atRiskStudents(subs); return risk.length ? `
@@ -5633,7 +5634,10 @@ function openClassModal() {
   const renderCmp = () => {
     const box = $("cmpTable");
     if (!box) return;
-    box.innerHTML = compareTableHTML(compareClasses(allSubs, cmpState.a, cmpState.b), en);
+    const cmp = compareClasses(allSubs, cmpState.a, cmpState.b);
+    box.innerHTML = compareTableHTML(cmp, en);
+    const bars = $("cmpBars");
+    if (bars) bars.innerHTML = compareBarsHTML(cmp, en);
   };
   const cmpA = $("cmpSelA"), cmpB = $("cmpSelB");
   if (cmpA) cmpA.addEventListener("change", () => {
@@ -5928,6 +5932,57 @@ function compareTableHTML(cmp, en) {
     <thead><tr><th></th><th>🎓 ${escT(cmp.a.code || (en ? "(no class)" : "(sınıfsız)"))}</th><th>🎓 ${escT(cmp.b.code || (en ? "(no class)" : "(sınıfsız)"))}</th></tr></thead>
     <tbody>${cells}</tbody></table>`;
 }
+/* v3.1.0: Karşılaştırma grafiği — iki sınıfın normalize edilmiş metrikleri
+   çift çubuklu SVG olarak çizilir. Her metrik kendi en büyük değerine göre
+   ölçeklenir (bütçe hariç: daha az harcamak iyi olduğu için çubuk kısa = iyi).
+   Tablo sayısal değerleri verir, bu görsel olarak "hangi sınıf önde" diye
+   bir bakışta okunur. PDF raporuna da aynı SVG basılır. */
+const CMP_BARS = [
+  { key: "students", labelTR: "Öğrenci", labelEN: "Students", lowIsGood: false },
+  { key: "avgPct", labelTR: "Ort. ilerleme", labelEN: "Avg progress", lowIsGood: false },
+  { key: "done", labelTR: "Tamamlanan adım", labelEN: "Steps done", lowIsGood: false },
+  { key: "cost", labelTR: "Tahmini bütçe", labelEN: "Est. budget", lowIsGood: true },
+  { key: "weekSteps", labelTR: "En aktif hafta", labelEN: "Most active week", lowIsGood: false },
+];
+function classMetricValue(m, key) {
+  if (key === "weekSteps") return m && m.activeWeek ? Number(m.activeWeek.steps) || 0 : 0;
+  return m ? Number(m[key]) || 0 : 0;
+}
+function compareBarsHTML(cmp, en) {
+  const escT = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const W = 460, rowH = 46, top = 34, bot = 26;
+  const H = top + CMP_BARS.length * rowH + bot;
+  const labelW = 118, barX = labelW + 8, barMax = W - barX - 14;
+  const A = String(cmp.a.code || (en ? "A" : "A")), B = String(cmp.b.code || (en ? "B" : "B"));
+  const rows = CMP_BARS.map((def, i) => {
+    const y = top + i * rowH;
+    const va = classMetricValue(cmp.a, def.key);
+    const vb = classMetricValue(cmp.b, def.key);
+    const max = Math.max(va, vb, 1);
+    const wa = Math.round((va / max) * barMax);
+    const wb = Math.round((vb / max) * barMax);
+    const winA = def.lowIsGood ? va < vb : va > vb;
+    const winB = def.lowIsGood ? vb < va : vb > va;
+    const bar = (x, w, cls, val) => {
+      const width = Math.max(2, Math.round(w));
+      return `<rect class="cmp-bar ${cls}" x="${x}" y="${y + 6}" width="${width}" height="11" rx="5"/>` +
+        `<text class="cmp-bar-val" x="${x + width + 5}" y="${y + 16}">${escT(val)}</text>`;
+    };
+    const fmt = (v, key) => key === "cost" ? "$" + v.toFixed(2) : key === "avgPct" ? "%" + v : String(v);
+    return `<g class="cmp-bar-row">
+      <text class="cmp-bar-label" x="0" y="${y + 16}">${escT(en ? def.labelEN : def.labelTR)}</text>
+      ${bar(barX, wa, winA ? "cmp-bar-win" : "cmp-bar-a", fmt(va, def.key))}
+      ${bar(barX, wb, winB ? "cmp-bar-win" : "cmp-bar-b", fmt(vb, def.key))}
+    </g>`;
+  }).join("");
+  const legend = (x, cls, label) => `<g class="cmp-legend"><rect class="cmp-bar ${cls}" x="${x}" y="6" width="14" height="11" rx="5"/><text class="cmp-bar-label" x="${x + 19}" y="16">${escT(label)}</text></g>`;
+  const title = en ? "Metric by metric" : "Metrik bazında karşılaştırma";
+  return `<svg class="cmp-bars" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${escT(title)}">
+    <title>${escT(title)}</title>
+    ${legend(0, "cmp-bar-a", "🎓 " + escT(A))}${legend(150, "cmp-bar-b", "🎓 " + escT(B))}
+    ${rows}
+  </svg>`;
+}
 /* v3.0.0: Öğrenci zaman çizelgesi — gönderimdeki adım zaman damgaları +
    gönderim günü, kronolojik olay listesi. Bayrak değeri (1 gibi gerçek
    zaman olmayan) ve bozuk ts'ler atlanır. */
@@ -6139,6 +6194,11 @@ function downloadClassReport() {
   .cls-tag{display:inline-block;font-size:9px;background:#e7f3f0;color:#0a7a68;border:1px solid #0a7a68;border-radius:8px;padding:1px 5px;margin-left:5px;vertical-align:middle;font-weight:600}
   .cls-tour{font-size:15px;color:#0a7a68;margin:16px 0 6px;border-bottom:1px solid #c9c2b0;padding-bottom:3px}
   .tl-line{font-size:11px;color:#555;margin:2px 0}
+  .cmp-bars-print{margin:10px 0 4px;page-break-inside:avoid}
+  .cmp-bars-print .cmp-bar-a{fill:#0a7a68}.cmp-bars-print .cmp-bar-b{fill:#c9a227}
+  .cmp-bars-print .cmp-bar-win{fill:#00d1b2;stroke:#065f52;stroke-width:1.2}
+  .cmp-bars-print .cmp-bar-label{font-family:Georgia,serif;font-size:10px;fill:#333}
+  .cmp-bars-print .cmp-bar-val{font-family:Georgia,serif;font-size:9px;fill:#666}
   footer{margin-top:18px;font-size:10px;color:#888}</style></head><body>
   <h1>🤖 ${en ? "Class Report — Arduino Dream Lab" : "Sınıf Raporu — Arduino Rüya Atölyesi"}</h1>
   <h2>${en ? "Class code" : "Sınıf kodu"}: ${esc2(c.code || "—")} · ${new Date().toLocaleDateString("tr-TR")} · ${subs.length} ${en ? "students" : "öğrenci"}${classTag}${rangeLabel}</h2>
@@ -6149,6 +6209,19 @@ function downloadClassReport() {
   ${(() => { const m = mostActiveWeek(subs); return m ? `<p style="font-size:12px;margin:4px 0 0;color:#666">🔥 ${en ? "Most active week" : "En aktif hafta"}: ${new Date(m.weekStart).toLocaleDateString(en ? "en-US" : "tr-TR")} — ${m.steps} ${en ? "steps" : "adım"}</p>` : ""; })()}
   ${weeklyParticipationDetail(subs)}
   ${(() => { const lines = subs.map((s) => { const tl = timelineSummary(s, en); return tl ? `<li class="tl-line"><strong>${esc2(s.student)}</strong> — ${tl}</li>` : ""; }).filter(Boolean).join(""); return lines ? `<h3 style="margin:14px 0 4px">⏱️ ${en ? "Student timelines" : "Öğrenci zaman çizelgeleri"}</h3><ul style="margin:4px 0 0;padding-left:18px">${lines}</ul>` : ""; })()}
+  ${(() => {
+    /* v3.1.0: Karşılaştırma grafiği — yalnız en az iki sınıf kodu varsa anlamlı.
+       Tek sınıf seçiliyken grafik "bütün sınıf kendine karşı" olurdu, basılmaz. */
+    const codes = [...new Set(subs.map((s) => String(s.classCode || "")).filter(Boolean))].sort((x, y) => x.localeCompare(y, "tr"));
+    if (codes.length < 2) return "";
+    const cmp = compareClasses(subs, codes[0], codes[1]);
+    const title = en ? "Class comparison" : "Sınıf Karşılaştırması";
+    return `<h3 class="cls-tour">⚖️ ${title} — 🎓 ${esc2(cmp.a.code)} / 🎓 ${esc2(cmp.b.code)}</h3>` +
+      `<div class="cmp-bars-print">${compareBarsHTML(cmp, en)}</div>` +
+      `<p style="font-size:10px;color:#666;margin:2px 0 8px">${esc2(en
+        ? "Each metric is scaled to the higher of the two values. Lower budget is better."
+        : "Her metrik iki sınıfın büyüğüne göre ölçeklenir. Bütçede az harcamak iyidir.")}</p>`;
+  })()}
   ${bodyHtml}
   <footer>${en ? "Generated with Arduino Dream Lab — progress data is collected locally, no server involved." : "Arduino Rüya Atölyesi ile üretildi — ilerleme verisi yerel toplanır, sunucu yok."}</footer>
   <scr${""}ipt>window.onload=function(){setTimeout(function(){window.print()},300)}</scr${""}ipt></body></html>`;
