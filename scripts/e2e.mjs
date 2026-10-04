@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /* ── Arduino Rüya Atölyesi — uçtan uca tarayıcı testleri (Playwright) ──
-   Çalıştırma: node scripts/e2e.mjs [url]
+   Çalıştırma: node scripts/e2e.mjs [url] [--only 12,6] [--list]
    - URL verilmezse dist/index.html file:// ile açılır.
+   - --only 12,6   yalnızca belirtilen senaryoları koşar (aralık: --only 9-12)
+   - --list        senaryo kimliklerini listeler, koşmaz
    - Her senaryo KENDİ browser context'inde, temiz localStorage ve sıfır
      modül durumuyla koşar → senaryolar birbirinden ve sıralamadan bağımsızdır.
      (Eskiden arşiv arama filtresi gibi modül seviyesi kalıntılar bir sonraki
@@ -16,8 +18,28 @@ import { chromium } from "playwright";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 
-const target = process.argv[2]
+/* --only / --list bayraklarını ayrıştır; ilk konumsal argüman URL'dir. */
+const argv = process.argv.slice(2);
+const flag = (n) => { const i = argv.indexOf(n); return i === -1 ? null : argv.splice(i, 2)[1]; };
+const listOnly = argv.includes("--list") && argv.splice(argv.indexOf("--list"), 1).length === 1;
+const onlyArg = flag("--only");
+const target = argv[0]
   || pathToFileURL(resolve(process.cwd(), "dist/index.html")).href;
+
+/** --only 12 / 6,7 / 9-12 → çalıştırılacak kimlik listesi (null = hepsi). */
+function parseOnly(spec) {
+  if (!spec) return null;
+  const ids = new Set();
+  for (const part of String(spec).split(",")) {
+    const p = part.trim();
+    if (!p) continue;
+    const range = p.match(/^(\d+)-(\d+)$/);
+    if (range) {
+      for (let n = Number(range[1]); n <= Number(range[2]); n++) ids.add(String(n));
+    } else ids.add(p);
+  }
+  return ids;
+}
 
 const results = [];
 const ok = (name, cond, extra = "") => {
@@ -89,12 +111,21 @@ const closeClassroom = async (page) => {
 
 const browser = await chromium.launch();
 
+/* Senaryo kayıt defteri: aşağıdaki tanımlar sırayla buraya eklenir, sonra
+   --only seçimine göre koşulur. */
+const REGISTRY = [];
+
+/** Senaryo kaydeder (koşmaz). */
+function scenario(id, fn) { REGISTRY.push({ id, fn }); }
+
+const shouldRun = (id) => onlyIds === null || onlyIds.has(id);
+
 /**
- * Senaryo koşucusu: her senaryo için yepyeni bir context açar, localStorage'ı
- * temizleyip sayfayı yeniden yükler (modül durumu sıfırlanır), sonra görevi
- * çalıştırır. Hata olursa yalnızca o senaryo başarısız olur, diğerleri koşar.
+ * Bir senaryoyu koşar: yepyeni context, localStorage temizliği ve sayfa
+ * yenilemesi (modül durumu sıfırlanır). Hata olursa yalnızca o senaryo
+ * başarısız olur, diğerleri koşmaya devam eder.
  */
-async function scenario(title, fn) {
+async function runScenario({ id, fn }) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   page.setDefaultTimeout(15000);
@@ -105,14 +136,14 @@ async function scenario(title, fn) {
     await page.waitForSelector("#ideaInput");
     await fn(page);
   } catch (e) {
-    ok(title + " — AKIŞ", false, e.message);
+    ok(id + " — AKIŞ", false, e.message);
   } finally {
     await ctx.close();
   }
 }
 
 /* ── 1) Rehber üretimi + fiyat tablosu + sıralama döngüsü ── */
-await scenario("1-2", async (page) => {
+scenario("1-2", async (page) => {
   await generate(page);
   const headers = await page.$$eval(".materials-table thead th", (ths) => ths.map((t) => t.textContent.trim()));
   ok("1a. fiyat tablosu 5 sütunlu", headers.join("|").includes("Birim Fiyat") && headers.join("|").includes("Tutar"), headers.join(" / "));
@@ -133,7 +164,7 @@ await scenario("1-2", async (page) => {
 });
 
 /* ── 2) Bütçe uyarısı ── */
-await scenario("3", async (page) => {
+scenario("3", async (page) => {
   await setStore(page, "arduinoDreamLab.budget.v1", "15");
   await generate(page);
   await page.waitForSelector(".cost-over", { timeout: 10000 }).catch(() => {});
@@ -143,7 +174,7 @@ await scenario("3", async (page) => {
 });
 
 /* ── 3) Sertifika akışı (rozet kaydı) ── */
-await scenario("4", async (page) => {
+scenario("4", async (page) => {
   await page.evaluate(() => { window.open = () => null; }); // popup engelle
   await generate(page);
   await page.$$eval(".step-check", (cbs) => cbs.forEach((c) => { if (!c.checked) c.click(); }));
@@ -156,7 +187,7 @@ await scenario("4", async (page) => {
 });
 
 /* ── 4) Adet override kalıcılığı ── */
-await scenario("5", async (page) => {
+scenario("5", async (page) => {
   await generate(page);
   await page.click('.qty-btn[data-qdir="1"]');
   await page.waitForTimeout(300);
@@ -170,7 +201,7 @@ await scenario("5", async (page) => {
 });
 
 /* ── 5) Canlı maliyet ipucu (senkron demo yolu) ── */
-await scenario("ipucu", async (page) => {
+scenario("ipucu", async (page) => {
   await page.fill("#ideaInput", "Odam için sıcaklığı ölçüp lamba yakan otomatik bir gece lambası istiyorum");
   await page.waitForTimeout(900);
   const hint = await page.$eval("#costHint", (e) => e.textContent);
@@ -178,7 +209,7 @@ await scenario("ipucu", async (page) => {
 });
 
 /* ── 6) Panel arama + sayfalama + alışveriş listesi düğmesi ── */
-await scenario("6", async (page) => {
+scenario("6", async (page) => {
   const subs = [];
   for (let i = 1; i <= 8; i++) {
     subs.push(sub(`Öğrenci ${i}`, `Proje ${i}`, { total: 3, ts: Date.now() - i * DAY }));
@@ -208,7 +239,7 @@ await scenario("6", async (page) => {
 });
 
 /* ── 7) CSV tarih filtresi gönderi listesini süzer ── */
-await scenario("7", async (page) => {
+scenario("7", async (page) => {
   const subs = [
     sub("Eski Öğrenci", "Proje A", { ts: Date.now() - 40 * DAY }),
     sub("Yeni Öğrenci", "Proje B", { ts: Date.now() - DAY }),
@@ -225,7 +256,7 @@ await scenario("7", async (page) => {
 });
 
 /* ── 8) Arşiv arama — başlık/etikette Türkçe duyarsız süzme ── */
-await scenario("8", async (page) => {
+scenario("8", async (page) => {
   await seedArchive(page, [
     { id: 1, ts: 1, idea: "otomatik sulama", guide: { title: "Akıllı Saksı", code: "a", difficulty: "Orta", materials: [] } },
     { id: 2, ts: 2, idea: "", guide: { title: "Gece Lambası", code: "b", difficulty: "Kolay", materials: [] }, meta: { fav: true, tags: ["veli"] } },
@@ -245,7 +276,7 @@ await scenario("8", async (page) => {
 });
 
 /* ── 9) Çoklu sınıf seçici + panel haftalık grafiği ── */
-await scenario("9", async (page) => {
+scenario("9", async (page) => {
   const subs = [
     sub("A", "P1", { classCode: "7A", ts: Date.now() - DAY }),
     sub("B", "P2", { classCode: "8B", ts: Date.now() - 2 * DAY }),
@@ -264,7 +295,7 @@ await scenario("9", async (page) => {
 });
 
 /* ── 10) Sınıf karşılaştırma kartı ── */
-await scenario("10", async (page) => {
+scenario("10", async (page) => {
   const subs = [
     sub("A", "P1", { total: 4, steps: { 0: 1, 1: 1 }, classCode: "7A", ts: Date.now() - DAY }),
     sub("B", "P2", { total: 4, steps: { 0: 1 }, classCode: "7A", ts: Date.now() - 2 * DAY }),
@@ -283,7 +314,7 @@ await scenario("10", async (page) => {
 });
 
 /* ── 11) Öğrenci zaman çizelgesi ── */
-await scenario("11", async (page) => {
+scenario("11", async (page) => {
   const subs = [sub("Elif", "Robot Kol", {
     total: 4,
     steps: { 0: Date.now() - 3 * DAY, 1: Date.now() - 2 * DAY, 2: Date.now() - DAY },
@@ -306,7 +337,7 @@ await scenario("11", async (page) => {
 });
 
 /* ── 12) Arşiv mini önizleme ── */
-await scenario("12", async (page) => {
+scenario("12", async (page) => {
   await seedArchive(page, [
     {
       id: 1, ts: 1, idea: "saksı",
@@ -332,7 +363,7 @@ await scenario("12", async (page) => {
 });
 
 /* ── 13) Rapor sınıf turları + satır rozeti + çizelge bölümü ── */
-await scenario("13", async (page) => {
+scenario("13", async (page) => {
   const subs = [
     sub("Ali", "P1", { total: 3, steps: { 0: Date.now() - 2 * DAY, 1: Date.now() - DAY }, classCode: "7A", ts: Date.now() - DAY }),
     sub("Veli", "P2", { total: 3, steps: { 0: Date.now() - 5 * DAY }, classCode: "8B", ts: Date.now() - 4 * DAY }),
@@ -346,6 +377,31 @@ await scenario("13", async (page) => {
   ok("13a. rapor: tur başlıkları (7A + 8B) + satır rozeti", rep.includes("cls-tour") && rep.includes("🎓 7A") && rep.includes("🎓 8B") && rep.includes("cls-tag"), rep ? rep.length + " kr" : "boş");
   ok("13b. rapor: öğrenci zaman çizelgesi bölümü", rep.includes("Öğrenci zaman çizelgeleri") && rep.includes("gönderim"), "");
 });
+
+/* ── Çalıştır ── */
+
+const onlyIds = parseOnly(onlyArg);
+
+if (listOnly) {
+  console.log("Kullanılabilir senaryolar: " + REGISTRY.map((s) => s.id).join(", "));
+  console.log("Örnek: node scripts/e2e.mjs --only 12   |   --only 9-12   |   --only 6,12");
+  await browser.close();
+  process.exit(0);
+}
+
+if (onlyIds) {
+  const bilinmeyen = [...onlyIds].filter((id) => !REGISTRY.some((s) => s.id === id));
+  if (bilinmeyen.length) {
+    console.error(`⚠️  Bilinmeyen senaryo: ${bilinmeyen.join(", ")}`);
+    console.error(`   Mevcut: ${REGISTRY.map((s) => s.id).join(", ")}`);
+    await browser.close();
+    process.exit(2);
+  }
+}
+
+const chosen = REGISTRY.filter((s) => shouldRun(s.id));
+console.log(`▶ ${chosen.length} senaryo koşuluyor: ${chosen.map((s) => s.id).join(", ")}\n`);
+for (const s of chosen) await runScenario(s);
 
 await browser.close();
 
