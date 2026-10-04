@@ -9,10 +9,26 @@ git clone https://github.com/proacademycomtr/arduino-ruya-atolyesi.git
 cd arduino-ruya-atolyesi
 node --test tests/          # 51+ test geçmeli
 python3 build.py            # dist/index.html üretir
+node scripts/e2e.mjs        # tarayıcı testleri (Playwright, npm install gerekli)
 # dist/index.html'i tarayıcıda aç — kurulum yok
 ```
 
-Gereksinimler: Node.js 18+, Python 3.8+. Başka bağımlılık yok.
+Gereksinimler: Node.js 18+, Python 3.8+. Başka bağımlılık yok (E2E için `npm install`).
+
+## 🌐 Tarayıcı testleri (E2E)
+
+`scripts/e2e.mjs` 13 senaryoyu Playwright ile koşar. Her senaryo **kendi browser context'inde**, temiz localStorage ve sıfır modül durumuyla çalışır — yani senaryolar birbirinden ve sıralamadan bağımsızdır, verilerini `seedClassroom()` / `seedArchive()` gibi yardımcılarla kendileri kurar.
+
+```bash
+node scripts/e2e.mjs                    # tüm senaryolar (CI'ın çalıştırdığı)
+node scripts/e2e.mjs --list             # senaryo kimliklerini listeler
+node scripts/e2e.mjs --only 12          # tek senaryo (~20 sn)
+node scripts/e2e.mjs --only 9-12        # aralık
+node scripts/e2e.mjs --only 6,12        # çoklu seçim
+node scripts/e2e.mjs <url> --only 12    # canlı siteye karşı da koşar
+```
+
+Yeni senaryo eklerken: veriyi kendi `scenario("kimlik", async (page) => {...})` bloğunda kurun, diğer senaryoların bıraktığı localStorage'a güvenmeyin.
 
 ## 🧪 Kurallar
 
@@ -26,6 +42,7 @@ Gereksinimler: Node.js 18+, Python 3.8+. Başka bağımlılık yok.
 - `index.html` + `style.css` + `app.js` → kaynak (app.js ~5.5k satır, tüm mantık)
 - `build.py` → tek dosyalık `dist/index.html` derler + sürüm/CHANGELOG yönetimi
 - `tests/` → `app.js`'ten saf fonksiyonları çıkarıp vm'de çalıştıran birim testler
+- `scripts/e2e.mjs` → Playwright ile 13 bağımsız tarayıcı senaryosu (`--only` ile tekil çalıştırılır)
 - `fiyat-katalogu.json` → depoda tutulan varsayılan öğretmen fiyat kataloğu
 - `publish.sh` → test + build + gh-pages yayını tek komut
 
