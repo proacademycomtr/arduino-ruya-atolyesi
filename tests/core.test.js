@@ -1004,11 +1004,14 @@ test("v2.17.0 weeklyProgressSVG: adımları haftaya kümelendirir, boş veride b
   assert.equal(typeof core.weeklyProgressSVG, "function");
   assert.equal(core.weeklyProgressSVG([]), "", "veri yok → boş");
   assert.equal(core.weeklyProgressSVG([{ steps: {}, ts: Date.now() }]), "", "adımsız gönderim → boş");
-  const now = Date.now();
+  // Sabit referans haftası: Pazartesi 15 Haziran 2026, öğlen.
+  // Date.now() kullanılsaydı test pazartesi sabahı "dünü aynı hafta" varsayımı
+  // yanlış olduğu için saat 00:00'den sonra kırılırdı.
+  const pzt = new Date(2026, 5, 15, 12, 0, 0).getTime();
   const svg = core.weeklyProgressSVG([
-    { steps: { 0: true, 1: true, 2: true }, ts: now },
-    { steps: { 0: true }, ts: now - 86400000 }, // dün — aynı hafta
-    { steps: { 0: true, 1: true, 2: true, 3: true, 4: true }, ts: now - 7 * 86400000 } // geçen hafta
+    { steps: { 0: true, 1: true, 2: true }, ts: pzt },
+    { steps: { 0: true }, ts: pzt + 2 * 86400000 }, // çarşamba — aynı hafta
+    { steps: { 0: true, 1: true, 2: true, 3: true, 4: true }, ts: pzt - 3 * 86400000 } // geçen hafta
   ]);
   assert.ok(svg.includes("<svg"), "SVG üretmeli");
   assert.ok(svg.includes("Haftada tamamlanan"), "başlık olmalı");
@@ -1662,4 +1665,66 @@ test("v3.1.0 rapor: çok sınıflı raporda karşılaştırma grafiği basılır
   assert.ok(!html.includes('class="cmp-bars-print"'), "tek sınıfta grafik basılmamalı");
   sandbox.localStorage.removeItem("arduinoDreamLab.activeClass.v1");
   sandbox.localStorage.removeItem("arduinoDreamLab.classroom.v1");
+});
+
+/* ─────────────────────────────────────────────────────────────
+   v4.0.0 — Üyelik ve topluluk duvarı istemcisi
+   ───────────────────────────────────────────────────────────── */
+test("v4.0.0 wallCardHTML: prompt yoksa kilitli kart basar, sızdırmaz", () => {
+  const item = {
+    title: "Yağmur Sensörü",
+    summary: "Toprak nemi düşünce pompa çalışır.",
+    images: [{ url: "https://ornek/a.jpg", width: 800, height: 600 }],
+    owner: { displayName: "Deniz Arduino", handle: "deniz-arduino" }
+    // promptBody YOK → üye olmayan görüntüleyici
+  };
+  const html = core.wallCardHTML(item);
+  assert.ok(html.includes("wall-card"), "kart basılmalı");
+  assert.ok(html.includes("Yağmur Sensörü"), "başlık görünmeli");
+  assert.ok(html.includes("deniz-arduino"), "yazar görünmeli");
+  assert.ok(html.includes("wall-locked"), "kilitli kart olmalı");
+  assert.ok(!html.includes("wall-prompt"), "prompt bloğu basılmamalı");
+});
+
+test("v4.0.0 wallCardHTML: üye prompt'u görür ve HTML kaçışı uygulanır", () => {
+  const item = {
+    title: "Sulama",
+    summary: "Özet",
+    images: [],
+    owner: { displayName: "Ayşe", handle: "ayse" },
+    promptBody: 'Arduino <script>alert("x")</script> ile sulama'
+  };
+  const html = core.wallCardHTML(item);
+  assert.ok(html.includes("wall-prompt"), "prompt bloğu olmalı");
+  assert.ok(html.includes("&lt;script&gt;"), "prompt HTML kaçışından geçmeli");
+  assert.ok(!html.includes("<script>alert"), "ham script etiketi sızmamalı");
+});
+
+test("v4.0.0 wallCardHTML: görsel yoksa <img> basılmaz", () => {
+  const html = core.wallCardHTML({
+    title: "Görselsiz",
+    summary: "",
+    images: [],
+    owner: { displayName: "X", handle: "x" }
+  });
+  assert.ok(!html.includes("wall-img"), "görsel etiketi olmamalı");
+  assert.ok(html.includes("Görselsiz"));
+});
+
+test("v4.0.0 wallCardHTML: başlık HTML kaçışından geçer (enjeksiyon koruması)", () => {
+  const html = core.wallCardHTML({
+    title: '<img src=x onerror="alert(1)">',
+    summary: "",
+    images: [],
+    owner: { displayName: "E", handle: "e" }
+  });
+  assert.ok(!html.includes("<img src=x"), "başlıktan ham etiket sızmamalı");
+  assert.ok(html.includes("&lt;img"), "kaçış uygulanmalı");
+});
+
+test("v4.0.0 fmtUsd: sentleri biçimlendirir", () => {
+  assert.equal(core.fmtUsd(100), "$1");
+  assert.equal(core.fmtUsd(0), "$0");
+  assert.equal(core.fmtUsd(300), "$3");
+  assert.match(core.fmtUsd(199), /1\.99/);
 });

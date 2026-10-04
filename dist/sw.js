@@ -4,8 +4,11 @@
    - Google Fonts: cache-first (statik, sürümlü URL'ler)
    - Diğer isteklere dokunmaz
    CACHE_NAME sürüm etiketi build.py tarafından her derlemede güncellenir. */
-const CACHE_NAME = "arduino-ruya-atolyesi-v3.1.0";
-const APP_SHELL = ["./", "./index.html", "./manifest.json", "./icon.svg"];
+const CACHE_NAME = "arduino-ruya-atolyesi-v4.0.0";
+// v4.0.0: config.js API adresini taşır; çevrimdışı kullanımda da doğru
+// adresin bilinmesi için uygulama kabuğuna dahil edildi. build.py her
+// derlemede bu dosyayı üretir, dolayısıyla addAll asla 404 ile düşmez.
+const APP_SHELL = ["./", "./index.html", "./config.js", "./manifest.json", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

@@ -17,3 +17,10 @@
 .freebuff/
 node_modules/
 package-lock.json
+
+# Sunucu ortam değişkenleri (sırlar) — asla commit edilmez
+server/.env
+server/.env.local
+
+# Sunucunun kilit dosyası CI ve Docker imajı için gerekli (sürümlenir)
+!server/package-lock.json

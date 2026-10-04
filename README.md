@@ -4,7 +4,10 @@
 
 Katkı yapmak isterseniz [CONTRIBUTING.md](CONTRIBUTING.md) ile başlayın; yayına çıkarmak için `./publish.sh` tek komut.
 
-![sürüm](https://img.shields.io/badge/s%C3%BCr%C3%BCm-v3.1.0-00d1b2) ![test](https://img.shields.io/badge/testler-105%20test-brightgreen) ![lisans](https://img.shields.io/badge/lisans-MIT-blue) [![Tests](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml/badge.svg)](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml)
+> 🗄️ **Üyelik, ödeme ve topluluk duvarı** (v4.0.0) — API: [server/](server/) (Node + Express + Prisma + PostgreSQL). Kurulum, Stripe ve VDS dağıtımı: **[SUNUCU.md](SUNUCU.md)**.
+> 👤 Başlıktaki **Giriş** ve **🌍 Duvar** düğmeleri API adresi tanımlıysa çalışır. `API_BASE` boşken (GitHub Pages) **hiçbir ağ isteği atılmaz**, uygulama eskisi gibi yalnız demo modda çalışır.
+
+![sürüm](https://img.shields.io/badge/s%C3%BCr%C3%BCm-v4.0.0-00d1b2) ![test](https://img.shields.io/badge/testler-110%20test-brightgreen) ![sunucu](https://img.shields.io/badge/sunucu-51%20test-00d1b2) ![lisans](https://img.shields.io/badge/lisans-MIT-blue) [![Tests](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml/badge.svg)](https://github.com/proacademycomtr/arduino-ruya-atolyesi/actions/workflows/test.yml)
 
 > 🎨 **Kart Oluştur** düğmesiyle her rehberden paylaşılabilir proje kartı (PNG) çıkar — README'ye eklemek istediğin kartı bize söyle, buraya koyalım.
 

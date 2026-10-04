@@ -35,6 +35,8 @@
           <span class="status-dot"></span>
           <span class="status-label">Demo Modu</span>
         </div>
+        <button class="btn btn-ghost" id="wallBtn" type="button" title="Topluluk duvarı">🌍 Duvar</button>
+        <button class="btn btn-ghost" id="authBtn" type="button" title="Giriş yap / Üye ol">👤 Giriş</button>
         <a class="btn btn-ghost" id="libraryBtn" href="#kutuphane">📚 Kütüphane</a>
         <button class="btn btn-ghost" id="archiveBtn" type="button">🗂️ Arşiv<span class="count-badge" id="archiveCount">0</span></button>
         <button class="btn btn-ghost" id="badgesBtn" type="button" title="Sertifikalar ve geri bildirimler">🏅 Başarımlar<span class="count-badge" id="badgesCount">0</span></button>
@@ -331,11 +333,70 @@
     <div class="lib-grid" id="libGrid"></div>
   </section>
 
+  <!-- ══════════════════ ÜYELİK / GİRİŞ MODALI ══════════════════ -->
+  <div class="modal-overlay" id="authModal" hidden>
+    <div class="modal modal-narrow" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <div class="modal-head">
+        <h2 id="authTitle">👤 Üyelik</h2>
+        <button class="modal-close" id="closeAuth" type="button" aria-label="Kapat">✕</button>
+      </div>
+      <div id="authBody"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ PAYWALL MODALI ══════════════════ -->
+  <div class="modal-overlay" id="paywallModal" hidden>
+    <div class="modal modal-narrow" role="dialog" aria-modal="true" aria-labelledby="paywallTitle">
+      <div class="modal-head">
+        <h2 id="paywallTitle">🎟️ Üyeliğe Geç</h2>
+        <button class="modal-close" id="closePaywall" type="button" aria-label="Kapat">✕</button>
+      </div>
+      <div id="paywallBody"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ TOPLULUK DUVARI MODALI ══════════════════ -->
+  <div class="modal-overlay" id="wallModal" hidden>
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="wallTitle">
+      <div class="modal-head">
+        <h2 id="wallTitle">🌍 Topluluk Duvarı</h2>
+        <button class="modal-close" id="closeWall" type="button" aria-label="Kapat">✕</button>
+      </div>
+      <p class="modal-desc" id="wallSub"></p>
+      <div id="wallContent"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ PROFİL MODALI ══════════════════ -->
+  <div class="modal-overlay" id="profileModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+      <div class="modal-head">
+        <h2 id="profileTitle">🧑‍🚀 Profil</h2>
+        <button class="modal-close" id="closeProfile" type="button" aria-label="Kapat">✕</button>
+      </div>
+      <div id="profileBody"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ PAYLAŞIM MODALI ══════════════════ -->
+  <div class="modal-overlay" id="shareModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+      <div class="modal-head">
+        <h2 id="shareTitle">🌍 Projeyi Paylaş</h2>
+        <button class="modal-close" id="closeShare" type="button" aria-label="Kapat">✕</button>
+      </div>
+      <div id="shareBody"></div>
+    </div>
+  </div>
+
   <footer class="site-footer">
     <p id="footerText">🤖 <strong>Arduino Rüya Atölyesi</strong> — Öğrenciler için yapay zekâ destekli proje rehberi. Kodu üreten yapay zekâdır, eğlenmek senindir!</p>
     <button class="btn btn-ghost version-badge" id="versionBadge" type="button" title="Sürüm geçmişi" data-noI18n>v2.1.0</button>
   </footer>
 
+  <!-- v4.0.0: Çalışma zamanı yapılandırması. Dosya yoksa tek dosya dağıtımı
+       bozulmaz — uygulama gömülü API_BASE_DEFAULT değerine düşer. -->
+  <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

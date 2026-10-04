@@ -1,4 +1,18 @@
-# 📋 Sürüm Notları — Fiyat Tahmini Dönemi (v2.10.0 → v3.0.0)
+# 📋 Sürüm Notları
+
+## 🗄️ v4.0.0 — Üyelik, Ödeme ve Topluluk Duvarı
+
+Daha önce tek dosya olan uygulama artık isteğe bağlı bir API ile konuşuyor.
+
+- **Sunucu:** [server/](server/) — Node 20 + Express 4 + Prisma 6 + PostgreSQL, Docker Compose ile ayağa kalkar. Kurulum, Stripe ve VDS dağıtımı: **[SUNUCU.md](SUNUCU.md)**.
+- **Kritik ayrım:** GitHub Pages dağıtımı (`dist/`) **aynen korunur**. API adresi `API_BASE` ortam değişkeni boşken uygulama hiçbir ağ isteği atmaz; 👤 ve 🌍 düğmeleri gizlenir, demo mod olduğu gibi çalışır.
+- **Üyelik kapısı:** gerçek yapay zekâ çağrısından önce `POST /api/ai/pass`. Ücretsiz hesap 1 proje üretir, sonra paywall açılır ($1 · ömür boyu). Demo şablonu ücretsiz kalır.
+- **Fiyat kuralı:** ilk 1000 kişi tek seferlik $1 ömür boyu, sonrası aylık — `config.js → PRICING`. Fiyat **yalnız sunucudan** gelir.
+- **Prompt gizliliği:** duvar herkese açık (görsel, başlık, yazar), **prompt yalnız üyelere**. Bu sunucu tarafında zorlanır; istemcide gizlemekle yetinilmez.
+
+---
+
+# 📋 Fiyat Tahmini Dönemi (v2.10.0 → v3.0.0)
 
 Arduino Rüya Atölyesi'nin malzeme fiyatı modülünün baştan sona hikâyesi.
 Tüm fiyatlar **₺ ana, $ ikincil** gösterilir (kur ≈ 34, bilgi amaçlı).

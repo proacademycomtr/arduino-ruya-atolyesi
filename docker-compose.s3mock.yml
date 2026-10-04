@@ -1,0 +1,33 @@
+# ─────────────────────────────────────────────────────────────
+# YALNIZCA YEREL GELİŞTİRME İÇİN — MinIO'nun Docker Hub imajına
+# erişimi olmayan ortamlarda (kurumsuz ağ, yetkisiz hesap) kullanılır.
+# S3 API'si birebir aynıdır; depolama kodu, presigned URL üretimi ve
+# görsel yükleme akışı değişmez.
+#
+#   docker compose -p arlo -f docker-compose.yml -f docker-compose.s3mock.yml up -d
+#
+# VDS'e ASLA bu dosyayı kullanma: orada MinIO kalır.
+# ─────────────────────────────────────────────────────────────
+services:
+  # S3Mock 9090 (http) / 9191 (https) portunu dinler; MinIO 9000.
+  api:
+    environment:
+      S3_ENDPOINT: http://storage:9090
+  test:
+    environment:
+      S3_ENDPOINT: http://storage:9090
+
+  storage:
+    image: adobe/s3mock:latest
+    command: !override []
+    environment:
+      initialBuckets: ${S3_BUCKET:-arlo-gorseller}
+      compatibility: default
+      debug: "false"
+    ports: !override []
+    volumes: !override []
+    healthcheck: !override
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

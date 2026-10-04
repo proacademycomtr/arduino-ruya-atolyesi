@@ -16,6 +16,7 @@ Sürüm yönetimi:
 Kullanım:
     python3 build.py
 """
+import os
 import pathlib
 import re
 import shutil
@@ -24,6 +25,12 @@ from datetime import date
 
 # ── Sürüm sabiti: yeni sürüm buradan değiştirilir ──
 VERSION = "3.1.0"
+
+# v4.0.0: Üyelik/duvar API'sinin adresi.
+#   API_BASE=  boş  → API kapalı; uygulama eskisi gibi yalnız demo modda çalışır
+#   API_BASE=  dolu → dist/config.js yazılır ve JS'e gömülür
+# CI/CD'de: API_BASE=https://ornek.com python3 build.py 4.0.0
+API_BASE = (os.environ.get("API_BASE") or "").strip().rstrip("/")
 
 root = pathlib.Path(__file__).parent
 changelog_path = root / "CHANGELOG.md"
@@ -110,6 +117,13 @@ def main() -> None:
     else:
         js = f'const APP_VERSION = "{VERSION}";\n' + js
 
+    # API adresini JS'e göm. dist/config.js (varsa) bunu eşsiz yazar,
+    # yani dağıtım sonrası yeniden derlemeden adres değiştirilebilir.
+    if re.search(r"const API_BASE_DEFAULT\s*=", js):
+        js = re.sub(r"const API_BASE_DEFAULT\s*=\s*\"[^\"]*\"", f'const API_BASE_DEFAULT = "{API_BASE}"', js)
+    else:
+        js = f'const API_BASE_DEFAULT = "{API_BASE}";\n' + js
+
     # Sayfa başlığına sürümü ekle (zaten yoksa)
     title_m = re.search(r"<title>(.*?)</title>", html)
     if title_m:
@@ -169,10 +183,20 @@ def main() -> None:
     if changelog_path.exists():
         shutil.copyfile(changelog_path, dist_dir / "CHANGELOG.md")
 
+    # v4.0.0: Runtime yapılandırma. Tek dosya dağıtımı bozulmaz — dosya yoksa
+    # uygulama API_BASE_DEFAULT'a düşer, o da boşsa API'ye hiç gitmez.
+    config_js = (
+        "/* Arduino Rüya Atölyesi — çalışma zamanı yapılandırması.\n"
+        "   Bu dosyayı düzenleyerek API adresini yeniden derlemeden değiştirebilirsin. */\n"
+        f'window.APP_CONFIG = Object.assign({{}}, window.APP_CONFIG, {{ apiBase: "{API_BASE}" }});\n'
+    )
+    (dist_dir / "config.js").write_text(config_js, encoding="utf-8")
+
     print(f"✅ dist/index.html yazıldı ({len(out):,} karakter)")
     print(f"   - Sürüm: v{VERSION}" + ("" if version_changed else " (CHANGELOG girdisi zaten var)"))
     print("   - CSS:", f"{len(css):,}", "karakter gömüldü")
     print("   - JS :", f"{len(js):,}", "karakter gömüldü")
+    print("   - API:", API_BASE or "(kapalı — yalnız demo mod)")
 
 
 if __name__ == "__main__":

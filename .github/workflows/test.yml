@@ -6,10 +6,9 @@ on:
   pull_request:
     branches: [main]
 
-# v3.1.0: Birim ve tarayıcı testleri tek komutta birleşti (node --test tests/).
-# Tarayıcı testleri tests/e2e.test.js içinde aynı koşuya giriyor.
 jobs:
-  test:
+  # ── İstemci: derleme + birim + tarayıcı testleri (mevcut akış) ──────────
+  client:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +25,45 @@ jobs:
         run: |
           test -f dist/index.html
           grep -q "APP_VERSION" dist/index.html
-      # Birim testleri (tests/core.test.js) + tarayıcı senaryoları (tests/e2e.test.js)
       - name: Testleri çalıştır (birim + E2E)
         run: node --test tests/
+
+  # ── Sunucu: üyelik / ödeme / duvar API testleri ─────────────────────────
+  api:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: arlo
+          POSTGRES_PASSWORD: arlo_ci_password
+          POSTGRES_DB: arlo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U arlo -d arlo_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://arlo:arlo_ci_password@localhost:5432/arlo_test
+      APP_ORIGIN: http://localhost:8000
+      # Depolama/Stripe yok: ilgili testler bunu "yapılandırılmamış" kabul eder.
+      S3_ENDPOINT: ""
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Bağımlılıklar
+        run: npm install --no-fund --no-audit
+      - name: Prisma istemcisi
+        run: npx prisma generate
+      - name: Migration'ları uygula
+        run: npx prisma migrate deploy
+      - name: Sunucu testleri
+        run: node --test --test-concurrency=1 tests/

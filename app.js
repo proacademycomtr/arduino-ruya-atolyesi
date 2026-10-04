@@ -692,6 +692,15 @@ form.addEventListener("submit", async (e) => {
   setLoading(true);
   scrollToResults();
   try {
+    // v4.0.0: Gerçek yapay zekâ çağrısı üyelik kapısından geçer. Demo şablonu
+    // (API anahtarı yokken) ücretsiz kalır; kapı hata durumunda AÇILIR.
+    if (hasApiKey()) {
+      const gate = await gateGeneration();
+      if (!gate.ok) {
+        setLoading(false);
+        return;
+      }
+    }
     const guide = hasApiKey() ? await fetchAIGuide(idea) : makeDemoGuide(idea);
     renderGuide(guide);
   } catch (err) {
@@ -2629,6 +2638,7 @@ function renderGuide(g, idea) {
       <button class="btn btn-ghost btn-small wokwi-btn" data-act="wokwi" type="button">⚡ ${t("Wokwi'de Dene")}</button>
       <button class="btn btn-ghost btn-small" data-act="wokwi-zip" type="button">📦 ${t("Wokwi Paketi (.zip)")}</button>
       <button class="btn btn-ghost btn-small" data-act="speak" type="button">${t("🔊 Bana Anlat")}</button>
+      <button class="btn btn-ghost btn-small wall-share-btn" data-act="wall-share" type="button">${t("🌍 Duvarı Paylaş")}</button>
     </div>
     <div class="cert-row" id="certRow" hidden>
       <span class="cert-title">🎉 ${t("Tüm adımları tamamladın!")}</span>
@@ -3674,6 +3684,7 @@ function wireGuideActions(g) {
         setTimeout(() => { btn.textContent = t("💾 Arşive Kaydet"); }, 2200);
       }
       else if (act === "wokwi") openWokwi();
+      else if (act === "wall-share") openShareModal();
       else if (act === "wokwi-zip") downloadWokwiZip();
       else if (act === "wokwi-diagram") {
         const d = wokwiDiagram(g);
@@ -5026,6 +5037,86 @@ const I18N = {
     // Header & genel
     "⚙️ Ayarlar": "⚙️ Settings", "📚 Kütüphane": "📚 Library", "🗂️ Arşiv": "🗂️ Archive",
     "Demo Modu": "Demo Mode", " Bağlı": " Connected",
+    // v4.0.0 — Üyelik, paywall, topluluk duvarı
+    "👤 Giriş": "👤 Sign in",
+    "🌍 Duvar": "🌍 Wall",
+    "🌍 Duvarı Paylaş": "🌍 Share to wall",
+    "👤 Üyelik": "👤 Membership",
+    "🎟️ Üyeliğe Geç": "🎟️ Become a member",
+    "🌍 Topluluk Duvarı": "🌍 Community Wall",
+    "🌍 Projeyi Paylaş": "🌍 Share your project",
+    "Giriş Yap": "Sign in",
+    "Ücretsiz Üye Ol": "Sign up free",
+    "Hesabımı Oluştur": "Create my account",
+    "Çıkış Yap": "Sign out",
+    "Görünen ad": "Display name",
+    "örn. Deniz Arduino": "e.g. Deniz Arduino",
+    "E-posta": "Email",
+    "Parola": "Password",
+    "Merhaba": "Hello",
+    "Üye — sınırsız kullanım": "Member — unlimited use",
+    "Ücretsiz üye": "Free member",
+    "Üyeliğe Geç — ": "Upgrade — ",
+    "Öde ve Üye Ol": "Pay and join",
+    "Şimdi Değil": "Not now",
+    "Giriş yap / Üye ol": "Sign in / join",
+    "Sunucuya ulaşılamıyor — demo modda çalışıyorsun": "Server unreachable — running in demo mode",
+    "Üyesin — sınırsız kullanım": "You're a member — unlimited use",
+    "Üye değilsin — ücretsiz hak kaldı: ": "Not a member — free projects left: ",
+    "Sunucuya ulaşılamıyor — uygulama demo modda çalışmaya devam ediyor.": "Can't reach the server — the app keeps working in demo mode.",
+    "Ücretsiz hesap aç: 1 gerçek proje üret, sonra $1 ile sınırsız devam et.": "Create a free account: build 1 real project, then continue unlimited for $1.",
+    "Üyesin — yapay zekâ sınırsız, duvara paylaşabilir, prompt'ları görebilirsin.": "You're a member — unlimited AI, share to the wall, and read other members' prompts.",
+    "Kalan ücretsiz proje hakkın: ": "Free projects left: ",
+    "Ücretsiz proje hakkın bitti.": "You've used your free project.",
+    "Parolan sunucuda argon2id ile saklanır; e-posta doğrulaması yok.": "Your password is hashed with argon2id on the server; no email verification.",
+    "Üyelik sunucusu kapalı — şu an demo moddasın.": "The membership server is off — you're in demo mode.",
+    "Üyelik sunucusu şu an erişilebilir değil.": "The membership server is not reachable right now.",
+    "· ömür boyu": "· lifetime",
+    "/ ay": "/ month",
+    "Giriş yapılamadı.": "Could not sign in.",
+    "Hoş geldin, ": "Welcome, ",
+    "Çıkış yapıldı.": "Signed out.",
+    "Üretmek için önce giriş yap ya da ücretsiz üye ol.": "Sign in (free) before generating a project.",
+    "Paylaşmak için giriş yap.": "Sign in to share.",
+    "Ücretsiz proje hakkın kullanıldı. Üyeliğe geç, sınırsız üretmeye devam et.": "You've used your free project. Join to keep generating without limits.",
+    "Sınırsız gerçek yapay zekâ projesi": "Unlimited real AI projects",
+    "Duvar: tamamladığın projelerini fotoğrafınla paylaş": "Wall: share your finished projects with photos",
+    "Diğer üyelerin prompt'larını gör": "Read other members' prompts",
+    "Kişileri takip et, akışını izle": "Follow people and see their feed",
+    "Tamamladığın projeyi duvara ekle. Fotoğraf herkese açık; prompt yalnızca üyeler görür.": "Add your finished project to the wall. The photo is public; the prompt is members-only.",
+    "Başlık": "Title",
+    "Kısa açıklama (herkese açık)": "Short description (public)",
+    "Prompt'un (yalnız üyeler görür)": "Your prompt (members only)",
+    "Proje fotoğrafı (isteğe bağlı)": "Project photo (optional)",
+    "Duvarı Yayınla": "Publish to wall",
+    "Vazgeç": "Cancel",
+    "Yükleniyor…": "Uploading…",
+    "Fotoğraf yükleniyor…": "Uploading photo…",
+    "Fotoğraf yüklenemedi.": "Photo upload failed.",
+    "Proje oluşturulamadı.": "Could not create the project.",
+    "Paylaşılamadı.": "Could not share.",
+    "🌍 Duvarı yayınlandı!": "🌍 Published to the wall!",
+    "Arduino projem": "My Arduino project",
+    "Prompt'u görmek için üye ol": "Join to see the prompt",
+    "Üyesin — tüm prompt'lar görünür.": "You're a member — all prompts are visible.",
+    "Prompt'ları yalnızca üyeler görebilir. Üye olmak $1.": "Prompts are visible to members only. Joining is $1.",
+    "Daha fazla göster": "Show more",
+    "Henüz paylaşılmış proje yok — ilk sen ol!": "No shared projects yet — be the first!",
+    // v4.0.0 — Profil ve takip
+    "🧑‍🚀 Profil": "🧑‍🚀 Profile",
+    "🧑‍🚀 Profilim": "🧑‍🚀 My profile",
+    "Profil yükleniyor…": "Loading profile…",
+    "Profil bulunamadı.": "Profile not found.",
+    "Bu senin profilin": "This is you",
+    "+ Takip Et": "+ Follow",
+    "✓ Takip Ediliyor": "✓ Following",
+    "Takip etmek için giriş yap.": "Sign in to follow.",
+    "Takip durumu değiştirilemedi.": "Could not change follow state.",
+    "proje": "projects",
+    "takipçi": "followers",
+    "takip": "following",
+    "Projeler": "Projects",
+    "Henüz paylaşılmış proje yok.": "No shared projects yet.",
     // Hero
     "🤖 YAPAY ZEKÂ DESTEKLİ ÖĞRENME ATÖLYESİ": "🤖 AI-POWERED LEARNING WORKSHOP",
     "🤖 Yapay Zekâ Destekli Öğrenme Atölyesi": "🤖 AI-Powered Learning Workshop",
@@ -6596,3 +6687,657 @@ function downloadPortfolio() {
   files.push({ name: en ? "PORTFOLIO.txt" : "PORTFOLYO.txt", content: lines.join("\n") + "\n" });
   downloadFileBlob(makeZip(files), "portfolyo.zip");
 }
+/* ══════════════════════════════════════════════════════════════════
+   v4.0.0 — Üyelik, ödeme ve topluluk duvarı istemcisi
+
+   Sözleşme: API adresi boşsa (API_BASE === "") uygulama eskisi gibi
+   yalnız demo modda çalışır — hiçbir ağ isteği atılmaz, hiçbir düğme
+   kırılmaz. API adresi doluysa üyelik akışı devreye girer.
+
+   • Gerçek yapay zekâ çağrısı (hasApiKey) üyelik kapısından geçer:
+     giriş yok → giriş penceresi, ücretsiz hak bittiyse → paywall.
+   • Demo şablonu (API anahtarı yokken) ücretsizdir; aksi hâlde GitHub
+     Pages'teki "kurulum yok, aç ve kullan" vaadi bozulurdu.
+   • Hata durumunda kapı AÇILIR: sunucu çökerse proje üretimi durmaz.
+   ══════════════════════════════════════════════════════════════════ */
+
+const AUTH_TOKEN_KEY = "arduinoDreamLab.authToken.v1";
+const API_BASE = String((window.APP_CONFIG && window.APP_CONFIG.apiBase) || API_BASE_DEFAULT || "").replace(/\/+$/, "");
+
+const memberState = {
+  apiAvailable: false,
+  health: null,
+  user: null,
+  membership: null,
+  freePasses: 0,
+  wallCursor: null,
+  wallLoading: false,
+  shareImages: []
+};
+
+function authToken() {
+  try { return localStorage.getItem(AUTH_TOKEN_KEY) || ""; } catch { return ""; }
+}
+function setAuthToken(token) {
+  try {
+    if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
+    else localStorage.removeItem(AUTH_TOKEN_KEY);
+  } catch {}
+}
+function isMember() {
+  return Boolean(memberState.user && memberState.user.isMember);
+}
+
+/** API'ye giden tek kapı. Hata durumunda `status` ve `data` taşır. */
+async function apiFetch(path, opts = {}) {
+  if (!API_BASE) {
+    const e = new Error("api_disabled");
+    e.code = "api_disabled";
+    throw e;
+  }
+  const headers = Object.assign({}, opts.headers || {});
+  if (opts.body && typeof opts.body !== "string") headers["Content-Type"] = "application/json";
+  const token = authToken();
+  if (token) headers.Authorization = "Bearer " + token;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), opts.timeout || 8000);
+  try {
+    const res = await fetch(API_BASE + path, {
+      method: opts.method || "GET",
+      headers,
+      body: opts.body ? (typeof opts.body === "string" ? opts.body : JSON.stringify(opts.body)) : undefined,
+      signal: ctrl.signal
+    });
+    let data = null;
+    try { data = await res.json(); } catch { /* boş gövde */ }
+    if (!res.ok) {
+      const err = new Error((data && (data.message || data.error)) || "HTTP " + res.status);
+      err.status = res.status;
+      err.data = data || {};
+      throw err;
+    }
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function fmtUsd(cents) {
+  const n = (Number(cents) || 0) / 100;
+  return "$" + n.toLocaleString(getLang() === "en" ? "en-US" : "en-US", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
+}
+
+/* ───────────────────── Header düğmesi ───────────────────── */
+function renderAuthBtn() {
+  const btn = $("authBtn");
+  if (!btn) return;
+  if (!API_BASE) { btn.hidden = true; return; }
+  btn.hidden = false;
+  if (!memberState.apiAvailable) {
+    btn.textContent = t("👤 Giriş");
+    btn.title = t("Sunucuya ulaşılamıyor — demo modda çalışıyorsun");
+    btn.dataset.state = "offline";
+    return;
+  }
+  const u = memberState.user;
+  if (!u) {
+    btn.textContent = t("👤 Giriş");
+    btn.title = t("Giriş yap / Üye ol");
+    btn.dataset.state = "out";
+  } else {
+    btn.textContent = (isMember() ? "⭐ " : "👤 ") + u.displayName;
+    btn.dataset.state = isMember() ? "member" : "user";
+    btn.title = isMember() ? t("Üyesin — sınırsız kullanım") : t("Üye değilsin — ücretsiz hak kaldı: ") + memberState.freePasses;
+  }
+}
+
+/* ───────────────────── Oturum ───────────────────── */
+async function refreshMe() {
+  if (!memberState.apiAvailable) return;
+  try {
+    const data = await apiFetch("/api/auth/me", { timeout: 5000 });
+    memberState.user = data.user || null;
+    memberState.membership = data.membership || null;
+    memberState.freePasses = Number(data.freePasses) || 0;
+  } catch {
+    setAuthToken("");
+    memberState.user = null;
+  }
+  renderAuthBtn();
+}
+
+async function bootstrapApi() {
+  if (!API_BASE) return;                    // API yok → hiçbir şey değişmez
+  try {
+    const health = await apiFetch("/api/health", { timeout: 2500 });
+    memberState.health = health;
+    memberState.apiAvailable = Boolean(health && health.ok);
+  } catch {
+    memberState.apiAvailable = false;       // sunucu yok → uygulama bozulmaz
+  }
+  renderAuthBtn();
+  const wallBtn = $("wallBtn");
+  if (wallBtn) wallBtn.hidden = !memberState.apiAvailable;
+  if (!memberState.apiAvailable) return;
+  await refreshMe();
+}
+
+/* ───────────────────── Üyelik kapısı ───────────────────── */
+/**
+ * Gerçek yapay zekâ çağrısından önce sunucudan geçiş ister.
+ * @returns {{ok:boolean, reason:string}}
+ */
+async function gateGeneration() {
+  if (!API_BASE) return { ok: true, reason: "api_disabled" };
+  if (!memberState.apiAvailable) return { ok: true, reason: "offline" };
+  if (!memberState.user) {
+    openAuthModal(t("Üretmek için önce giriş yap ya da ücretsiz üye ol."));
+    return { ok: false, reason: "login" };
+  }
+  if (isMember()) return { ok: true, reason: "member" };
+  try {
+    const r = await apiFetch("/api/ai/pass", { method: "POST" });
+    memberState.freePasses = Number(r.freePasses) || 0;
+    if (r.unlimited) memberState.user.isMember = true;
+    renderAuthBtn();
+    return { ok: true, reason: r.unlimited ? "member" : "free_pass" };
+  } catch (e) {
+    if (e.status === 402) {
+      openPaywall();
+      return { ok: false, reason: "upgrade" };
+    }
+    return { ok: true, reason: "gate_error" };   // sunucu hatasında akışı kilitleme
+  }
+}
+
+/* ───────────────────── Modal yardımcıları ───────────────────── */
+function wireModal(id, closeId, onClose) {
+  const modal = $(id);
+  if (!modal) return null;
+  const close = $(closeId);
+  if (close) close.addEventListener("click", () => { modal.hidden = true; if (onClose) onClose(); });
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) { modal.hidden = true; if (onClose) onClose(); }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !modal.hidden) { modal.hidden = true; if (onClose) onClose(); }
+  });
+  return modal;
+}
+
+function authStatusLine() {
+  if (!memberState.apiAvailable) {
+    return `<p class="field-hint">${esc(t("Sunucuya ulaşılamıyor — uygulama demo modda çalışmaya devam ediyor."))}</p>`;
+  }
+  if (!memberState.user) {
+    return `<p class="field-hint">${esc(t("Ücretsiz hesap aç: 1 gerçek proje üret, sonra $1 ile sınırsız devam et."))}</p>`;
+  }
+  if (isMember()) {
+    return `<p class="field-hint">${esc(t("Üyesin — yapay zekâ sınırsız, duvara paylaşabilir, prompt'ları görebilirsin."))}</p>`;
+  }
+  const left = memberState.freePasses;
+  return `<p class="field-hint">${esc(left > 0 ? t("Kalan ücretsiz proje hakkın: ") + left : t("Ücretsiz proje hakkın bitti."))}</p>`;
+}
+
+function priceLabel() {
+  const p = (memberState.health && memberState.health.pricing) || {};
+  const limit = Number(p.lifetimeLimit) || 0;
+  if (limit && (Number(p.lifetimeCents) || 0) > 0) {
+    return fmtUsd(p.lifetimeCents) + " " + t("· ömür boyu");
+  }
+  return fmtUsd(p.monthlyCents) + " " + t("/ ay");
+}
+
+/* ───────────────────── Üyelik modalı ───────────────────── */
+let authModalMode = "login";
+
+function openAuthModal(message) {
+  if (!memberState.apiAvailable) {
+    const body = $("authBody");
+    if (body) body.innerHTML = `<p class="field-hint">${esc(t("Üyelik sunucusu kapalı — şu an demo moddasın."))}</p>`;
+    const m = $("authModal");
+    if (m) m.hidden = false;
+    return;
+  }
+  renderAuthModal(message);
+  const m = $("authModal");
+  if (m) m.hidden = false;
+  const first = m && m.querySelector("input");
+  if (first) first.focus();
+}
+
+function renderAuthModal(message) {
+  const body = $("authBody");
+  if (!body) return;
+  const u = memberState.user;
+  const msg = message ? `<p class="field-hint warn">${esc(message)}</p>` : "";
+
+  if (!u) {
+    const isRegister = authModalMode === "register";
+    body.innerHTML = `
+      <div class="auth-tabs">
+        <button class="btn ${isRegister ? "btn-ghost" : "btn-primary"}" data-auth-tab="login" type="button">${esc(t("Giriş Yap"))}</button>
+        <button class="btn ${isRegister ? "btn-primary" : "btn-ghost"}" data-auth-tab="register" type="button">${esc(t("Ücretsiz Üye Ol"))}</button>
+      </div>
+      ${msg}
+      <form id="authForm" autocomplete="off">
+        ${isRegister ? `<label class="field-label">${esc(t("Görünen ad"))}</label>
+        <input type="text" id="authName" maxlength="40" required placeholder="${esc(t("örn. Deniz Arduino"))}" />` : ""}
+        <label class="field-label">${esc(t("E-posta"))}</label>
+        <input type="email" id="authEmail" required placeholder="ornek@posta.com" autocomplete="email" />
+        <label class="field-label">${esc(t("Parola"))}</label>
+        <input type="password" id="authPassword" required minlength="8" placeholder="••••••••" autocomplete="current-password" />
+        <button class="btn btn-primary auth-submit" type="submit">${esc(isRegister ? t("Hesabımı Oluştur") : t("Giriş Yap"))}</button>
+      </form>
+      ${authStatusLine()}
+      <p class="field-hint">${esc(t("Parolan sunucuda argon2id ile saklanır; e-posta doğrulaması yok."))}</p>
+    `;
+    const form = $("authForm");
+    if (form) form.addEventListener("submit", onAuthSubmit);
+    body.querySelectorAll("[data-auth-tab]").forEach((b) => {
+      b.addEventListener("click", () => { authModalMode = b.dataset.authTab; renderAuthModal(message); });
+    });
+    return;
+  }
+
+  body.innerHTML = `
+    <p class="auth-hello">${esc(t("Merhaba"))}, <strong>${esc(u.displayName)}</strong> 👋</p>
+    <p class="auth-handle">@${esc(u.handle)}</p>
+    ${isMember() ? `<p class="auth-badge member">⭐ ${esc(t("Üye — sınırsız kullanım"))}</p>`
+                 : `<p class="auth-badge">🎟️ ${esc(t("Ücretsiz üye"))}</p>`}
+    ${authStatusLine()}
+    <div class="auth-actions">
+      <button class="btn btn-ghost" id="authProfile" type="button">🧑‍🚀 ${esc(t("Profilim"))}</button>
+      ${isMember() ? "" : `<button class="btn btn-primary" id="authUpgrade" type="button">💳 ${esc(t("Üyeliğe Geç — ") + priceLabel())}</button>`}
+      <button class="btn btn-ghost" id="authLogout" type="button">${esc(t("Çıkış Yap"))}</button>
+    </div>
+  `;
+  const logout = $("authLogout");
+  if (logout) logout.addEventListener("click", doLogout);
+  const prof = $("authProfile");
+  if (prof) prof.addEventListener("click", () => {
+    const m = $("authModal");
+    if (m) m.hidden = true;
+    if (memberState.user) openProfile(memberState.user.handle);
+  });
+  const up = $("authUpgrade");
+  if (up) up.addEventListener("click", startCheckout);
+}
+
+async function onAuthSubmit(e) {
+  e.preventDefault();
+  const email = ($("authEmail") || {}).value || "";
+  const password = ($("authPassword") || {}).value || "";
+  const nameEl = $("authName");
+  const btn = e.target.querySelector("button[type=submit]");
+  if (btn) btn.disabled = true;
+  try {
+    const path = authModalMode === "register" ? "/api/auth/register" : "/api/auth/login";
+    const payload = authModalMode === "register"
+      ? { email, password, displayName: (nameEl || {}).value || "" }
+      : { email, password };
+    const data = await apiFetch(path, { method: "POST", body: payload });
+    setAuthToken(data.token);
+    await refreshMe();
+    const m = $("authModal");
+    if (m) m.hidden = true;
+    showToast(t("Hoş geldin, ") + (memberState.user ? memberState.user.displayName : "") + "!");
+  } catch (err) {
+    const body = $("authBody");
+    if (body) {
+      const hint = document.createElement("p");
+      hint.className = "field-hint warn";
+      hint.textContent = err.message || t("Giriş yapılamadı.");
+      body.appendChild(hint);
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function doLogout() {
+  try { await apiFetch("/api/auth/logout", { method: "POST" }); } catch {}
+  setAuthToken("");
+  memberState.user = null;
+  memberState.membership = null;
+  memberState.freePasses = 0;
+  renderAuthBtn();
+  const m = $("authModal");
+  if (m) m.hidden = true;
+  showToast(t("Çıkış yapıldı."));
+}
+
+async function startCheckout() {
+  try {
+    const r = await apiFetch("/api/billing/checkout", { method: "POST", body: { returnUrl: location.origin + location.pathname } });
+    if (r && r.url) {
+      location.href = r.url;
+      return;
+    }
+  } catch (e) {
+    openPaywall(e.message);
+  }
+}
+
+function showToast(msg) {
+  showError(msg);
+  errorBanner.classList.add("info");
+  setTimeout(() => { errorBanner.classList.remove("info"); errorBanner.hidden = true; }, 5000);
+}
+
+/* ───────────────────── Paywall ───────────────────── */
+function openPaywall(reason) {
+  const body = $("paywallBody");
+  const price = priceLabel();
+  if (body) {
+    body.innerHTML = `
+      <p>${esc(t("Ücretsiz proje hakkın kullanıldı. Üyeliğe geç, sınırsız üretmeye devam et."))}</p>
+      <ul class="paywall-list">
+        <li>✅ ${esc(t("Sınırsız gerçek yapay zekâ projesi"))}</li>
+        <li>✅ ${esc(t("Duvar: tamamladığın projelerini fotoğrafınla paylaş"))}</li>
+        <li>✅ ${esc(t("Diğer üyelerin prompt'larını gör"))}</li>
+        <li>✅ ${esc(t("Kişileri takip et, akışını izle"))}</li>
+      </ul>
+      <p class="paywall-price"><strong>${esc(price)}</strong></p>
+      ${reason ? `<p class="field-hint warn">${esc(reason)}</p>` : ""}
+      <div class="auth-actions">
+        <button class="btn btn-primary" id="payBuy" type="button">💳 ${esc(t("Öde ve Üye Ol"))}</button>
+        <button class="btn btn-ghost" id="payClose2" type="button">${esc(t("Şimdi Değil"))}</button>
+      </div>
+    `;
+    const buy = $("payBuy");
+    if (buy) buy.addEventListener("click", startCheckout);
+    const no = $("payClose2");
+    if (no) no.addEventListener("click", () => { const m = $("paywallModal"); if (m) m.hidden = true; });
+  }
+  const m = $("paywallModal");
+  if (m) m.hidden = false;
+}
+
+/* ───────────────────── Topluluk duvarı ───────────────────── */
+function wallCardHTML(item) {
+  const img = item.images && item.images[0];
+  const locked = typeof item.promptBody !== "string";
+  return `
+    <article class="wall-card">
+      ${img && img.url ? `<img class="wall-img" src="${esc(img.url)}" alt="${esc(item.title)}" loading="lazy" />` : ""}
+      <div class="wall-card-body">
+        <h3 class="wall-title">${esc(item.title)}</h3>
+        <p class="wall-by">👤 <button class="wall-author" data-profile-handle="${esc(item.owner.handle)}" type="button">${esc(item.owner.displayName)}</button> · ${esc(item.owner.handle)}</p>
+        <p class="wall-summary">${esc(item.summary)}</p>
+        ${locked
+          ? `<div class="wall-locked">🔒 ${esc(t("Prompt'u görmek için üye ol"))}</div>`
+          : `<pre class="wall-prompt">${esc(item.promptBody)}</pre>`}
+      </div>
+    </article>
+  `;
+}
+
+async function loadWall(reset) {
+  const content = $("wallContent");
+  if (!content) return;
+  if (memberState.wallLoading) return;
+  memberState.wallLoading = true;
+  const cursor = reset ? "" : memberState.wallCursor || "";
+  try {
+    const r = await apiFetch("/api/wall?limit=12" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
+    memberState.wallCursor = r.nextCursor || null;
+    const html = (r.items || []).map(wallCardHTML).join("");
+    let grid = $("wallGrid");
+    if (reset) {
+      content.innerHTML = `<div class="wall-grid" id="wallGrid">${html}</div>`;
+    } else {
+      if (!grid) {
+        content.insertAdjacentHTML("afterbegin", `<div class="wall-grid" id="wallGrid"></div>`);
+        grid = $("wallGrid");
+      }
+      if (grid) grid.insertAdjacentHTML("beforeend", html);
+    }
+    let more = $("wallMore");
+    if (r.nextCursor) {
+      if (!more) {
+        more = document.createElement("button");
+        more.id = "wallMore";
+        more.className = "btn btn-ghost wall-more";
+        more.type = "button";
+        more.textContent = t("Daha fazla göster");
+        more.addEventListener("click", () => loadWall(false));
+        content.appendChild(more);
+      }
+      more.hidden = false;
+    } else if (more) {
+      more.remove();
+    }
+    const sub = $("wallSub");
+    if (sub) {
+      sub.textContent = (r.viewer && r.viewer.isMember)
+        ? t("Üyesin — tüm prompt'lar görünür.")
+        : t("Prompt'ları yalnızca üyeler görebilir. Üye olmak $1.");
+    }
+    if (!(r.items || []).length && reset) {
+      content.innerHTML = `<p class="field-hint">${esc(t("Henüz paylaşılmış proje yok — ilk sen ol!"))}</p>`;
+      return;
+    }
+  } catch (e) {
+    content.innerHTML = `<p class="field-hint warn">${esc(e.message || t("Duvar yüklenemedi."))}</p>`;
+  } finally {
+    memberState.wallLoading = false;
+  }
+}
+
+function openWall() {
+  const m = $("wallModal");
+  if (!m) return;
+  m.hidden = false;
+  memberState.wallCursor = null;
+  loadWall(true);
+}
+
+/* ───────────────────── Paylaşım ───────────────────── */
+function sharePrefill() {
+  const g = typeof currentGuide !== "undefined" ? currentGuide : null;
+  return {
+    title: (g && g.title) || t("Arduino projem"),
+    summary: (g && g.summary) || "",
+    prompt: ideaInput.value || ""
+  };
+}
+
+function openShareModal() {
+  if (!memberState.apiAvailable) return;
+  if (!memberState.user) { openAuthModal(t("Paylaşmak için giriş yap.")); return; }
+  if (!isMember()) { openPaywall(); return; }
+  const pre = sharePrefill();
+  const body = $("shareBody");
+  memberState.shareImages = [];
+  if (body) {
+    body.innerHTML = `
+      <p class="modal-desc">${esc(t("Tamamladığın projeyi duvara ekle. Fotoğraf herkese açık; prompt yalnızca üyeler görür."))}</p>
+      <label class="field-label">${esc(t("Başlık"))}</label>
+      <input type="text" id="shareTitle" maxlength="120" value="${esc(pre.title)}" />
+      <label class="field-label">${esc(t("Kısa açıklama (herkese açık)"))}</label>
+      <textarea id="shareSummary" rows="2" maxlength="600">${esc(pre.summary)}</textarea>
+      <label class="field-label">${esc(t("Prompt'un (yalnız üyeler görür)"))}</label>
+      <textarea id="sharePrompt" rows="3" maxlength="8000">${esc(pre.prompt)}</textarea>
+      <label class="field-label">${esc(t("Proje fotoğrafı (isteğe bağlı)"))}</label>
+      <input type="file" id="shareFile" accept="image/png,image/jpeg,image/webp,image/gif" />
+      <div class="share-actions">
+        <button class="btn btn-primary" id="shareSubmit" type="button">🌍 ${esc(t("Duvarı Yayınla"))}</button>
+        <button class="btn btn-ghost" id="shareCancel" type="button">${esc(t("Vazgeç"))}</button>
+      </div>
+      <p class="field-hint" id="shareHint"></p>
+    `;
+    $("shareSubmit").addEventListener("click", submitShare);
+    $("shareCancel").addEventListener("click", () => { const mm = $("shareModal"); if (mm) mm.hidden = true; });
+  }
+  const m = $("shareModal");
+  if (m) m.hidden = false;
+}
+
+async function submitShare() {
+  const hint = $("shareHint");
+  const btn = $("shareSubmit");
+  if (btn) btn.disabled = true;
+  try {
+    // 1) Proje önce görselsiz oluşturulur.
+    const r = await apiFetch("/api/projects", {
+      method: "POST",
+      body: {
+        title: ($("shareTitle") || {}).value || "",
+        summary: ($("shareSummary") || {}).value || "",
+        promptBody: ($("sharePrompt") || {}).value || "",
+        images: []
+      }
+    });
+    const project = r && r.project;
+    if (!project) throw new Error(t("Proje oluşturulamadı."));
+
+    // 2) Fotoğraf varsa presigned URL ile doğrudan depoya yüklenir,
+    //    ardından nesne anahtarı projeye bağlanır.
+    const fileEl = $("shareFile");
+    const file = fileEl && fileEl.files && fileEl.files[0];
+    if (file) {
+      if (hint) hint.textContent = t("Fotoğraf yükleniyor…");
+      const pre = await apiFetch(`/api/projects/${project.id}/images/presign`, {
+        method: "POST",
+        body: { contentType: file.type }
+      });
+      const putRes = await putImage(pre.url, file);
+      if (!putRes.ok) throw new Error(t("Fotoğraf yüklenemedi."));
+      await apiFetch(`/api/projects/${project.id}/images`, {
+        method: "POST",
+        body: { objectKey: pre.objectKey }
+      });
+    }
+
+    const m = $("shareModal");
+    if (m) m.hidden = true;
+    showToast(t("🌍 Duvarı yayınlandı!"));
+    openWall();
+  } catch (e) {
+    if (hint) hint.textContent = e.message || t("Paylaşılamadı.");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+/** Presigned yükleme URL'sine doğrudan PUT (dosya API'den geçmez). */
+function putImage(url, file) {
+  return fetch(url, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+}
+
+/* ───────────────────── Profil ve takip ───────────────────── */
+memberState.profile = null;
+
+function profileHeaderHTML(u, isSelf, isFollowing) {
+  const follow = isSelf
+    ? `<span class="auth-badge">${esc(t("Bu senin profilin"))}</span>`
+    : `<button class="btn ${isFollowing ? "btn-ghost" : "btn-primary"}" id="followToggle" type="button"
+         data-handle="${esc(u.handle)}" data-following="${isFollowing ? "1" : "0"}">
+         ${esc(isFollowing ? "✓ Takip Ediliyor" : "+ Takip Et")}
+       </button>`;
+  return `
+    <div class="profile-head">
+      <div class="profile-avatar">${u.avatarUrl ? `<img src="${esc(u.avatarUrl)}" alt="" />` : "🧑‍🚀"}</div>
+      <div class="profile-id">
+        <h3 class="profile-name">${esc(u.displayName)}</h3>
+        <p class="profile-handle">@${esc(u.handle)}</p>
+        ${u.bio ? `<p class="profile-bio">${esc(u.bio)}</p>` : ""}
+        <p class="profile-stats">
+          <span>📁 <strong>${u.projectCount}</strong> ${esc(t("proje"))}</span>
+          <span>👥 <strong>${u.followerCount}</strong> ${esc(t("takipçi"))}</span>
+          <span>🔎 <strong>${u.followingCount}</strong> ${esc(t("takip"))}</span>
+        </p>
+      </div>
+    </div>
+    <div class="profile-actions">${follow}</div>
+  `;
+}
+
+async function openProfile(handle) {
+  const m = $("profileModal");
+  const body = $("profileBody");
+  if (!m || !body) return;
+  body.innerHTML = `<p class="field-hint">${esc(t("Profil yükleniyor…"))}</p>`;
+  m.hidden = false;
+  try {
+    const r = await apiFetch("/api/users/" + encodeURIComponent(handle));
+    memberState.profile = r;
+    renderProfile(r);
+  } catch (e) {
+    body.innerHTML = `<p class="field-hint warn">${esc(e.message || t("Profil bulunamadı."))}</p>`;
+  }
+}
+
+function renderProfile(r) {
+  const body = $("profileBody");
+  if (!body) return;
+  const u = r.user;
+  const projects = (r.projects || []).map(wallCardHTML).join("");
+  body.innerHTML =
+    profileHeaderHTML(u, r.isSelf, r.isFollowing) +
+    `<h4 class="profile-section">${esc(t("Projeler"))}</h4>` +
+    (projects ? `<div class="wall-grid">${projects}</div>`
+              : `<p class="field-hint">${esc(t("Henüz paylaşılmış proje yok."))}</p>`);
+
+  const btn = $("followToggle");
+  if (btn) btn.addEventListener("click", () => toggleFollow(btn));
+}
+
+async function toggleFollow(btn) {
+  const handle = btn.dataset.handle;
+  const following = btn.dataset.following === "1";
+  if (!memberState.user) { openAuthModal(t("Takip etmek için giriş yap.")); return; }
+  btn.disabled = true;
+  try {
+    await apiFetch(`/api/users/${encodeURIComponent(handle)}/follow`, { method: following ? "DELETE" : "POST" });
+    const now = !following;
+    btn.dataset.following = now ? "1" : "0";
+    btn.textContent = t(now ? "✓ Takip Ediliyor" : "+ Takip Et");
+    btn.classList.toggle("btn-primary", !now);
+    btn.classList.toggle("btn-ghost", now);
+    if (memberState.profile && memberState.profile.user.handle === handle) {
+      memberState.profile.isFollowing = now;
+      memberState.profile.user.followerCount += now ? 1 : -1;
+      renderProfile(memberState.profile);
+    }
+  } catch (e) {
+    showToast(e.message || t("Takip durumu değiştirilemedi."));
+  } finally {
+    if (btn.isConnected) btn.disabled = false;
+  }
+}
+
+/* ───────────────────── Başlatma ───────────────────── */
+wireModal("authModal", "closeAuth");
+wireModal("paywallModal", "closePaywall");
+wireModal("wallModal", "closeWall", () => {
+  const more = $("wallMore");
+  if (more) more.remove();
+});
+wireModal("shareModal", "closeShare");
+wireModal("profileModal", "closeProfile");
+
+// Duvar kartlarındaki yazara tıklayınca profil açılır (olay delegasyonu)
+["wallContent", "profileBody"].forEach((id) => {
+  const host = $(id);
+  if (!host) return;
+  host.addEventListener("click", (e) => {
+    const author = e.target.closest("[data-profile-handle]");
+    if (author) openProfile(author.dataset.profileHandle);
+  });
+});
+
+const wallBtnEl = $("wallBtn");
+if (wallBtnEl) wallBtnEl.addEventListener("click", openWall);
+const authBtnEl = $("authBtn");
+if (authBtnEl) {
+  authBtnEl.addEventListener("click", () => {
+    if (!API_BASE) return;
+    if (!memberState.apiAvailable) { showToast(t("Üyelik sunucusu şu an erişilebilir değil.")); return; }
+    renderAuthModal();
+    const m = $("authModal");
+    if (m) m.hidden = false;
+  });
+}
+bootstrapApi();

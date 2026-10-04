@@ -133,6 +133,8 @@ function loadCore() {
     "loadFileCatalog", "fileCatalogBudget", "budgetSuggestion", "liveCostHint",
     "loadRate", "rate", "rateAgeHours", "updateRateFromWeb",
     "liveCostHintSync", "buildCostPrompt", "askAICostMaterials", "aiCostCache",
+    // v4.0.0 — üyelik/duvar istemcisi
+    "wallCardHTML", "fmtUsd", "sharePrefill",
     "loadClassSize", "weeklyProgressSVG",
     "catalogSuggestions", "atRiskStudents", "unknownMaterials", "classSubsToCSV", "downloadClassCSV",
     "shoppingListText", "shareShoppingList", "filterSubmissions", "paginate", "mostActiveWeek", "mondayOf",
