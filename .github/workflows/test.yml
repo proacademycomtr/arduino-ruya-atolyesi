@@ -51,7 +51,9 @@ jobs:
       storage:
         image: adobe/s3mock:latest
         env:
-          initialBuckets: arlo_test
+          # S3 bucket adı: alt çizgi GİÇERSİZDİR (InvalidBucketName) ve
+          # postgres veritabanı adıyla karışmasın diye ayrı tutulur.
+          initialBuckets: arlo-ci-gorseller
           compatibility: default
         ports:
           - 9090:9090
@@ -67,7 +69,7 @@ jobs:
       S3_ENDPOINT: http://localhost:9090
       S3_ACCESS_KEY_ID: arlo
       S3_SECRET_ACCESS_KEY: arlo_ci_password
-      S3_BUCKET: arlo_test
+      S3_BUCKET: arlo-ci-gorseller
       S3_FORCE_PATH_STYLE: "true"
     defaults:
       run:
