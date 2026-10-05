@@ -36,6 +36,10 @@ model User {
   payments   Payment[]
   likes      Like[]
   comments   Comment[]
+  /// Bu kullanıcının açtığı şikayetler
+  reports        Report[]  @relation("reporter")
+  /// Şikayeti inceleyip kapatan yönetici
+  resolvedReports Report[] @relation("resolver")
 }
 
 model Membership {
@@ -88,6 +92,11 @@ model Project {
   guideJson  Json?
   isShared   Boolean  @default(false)
   sharedAt   DateTime?
+  /// Moderasyon: gizlenen proje duvardan düşer (kayıt silinmez).
+  hiddenAt   DateTime?
+  /// Türkçe harf duyarsız arama için başlık+özet küçültülmüş kopyası
+  /// (yazılırken `foldTR` ile üretilir, sorgu sırasında katlanmaz).
+  searchText String   @default("")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -146,12 +155,41 @@ model Comment {
   projectId String
   authorId  String
   body      String
+  /// Moderasyon: gizlenen yorum listeden düşer (yazarı veya proje sahibi
+  /// ya da yönetici gizleyebilir; silmekten ayrı, geri alınabilir).
+  hiddenAt  DateTime?
+  hiddenById String?
   createdAt DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   author  User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt])
+}
+
+/// Kullanıcı şikâyeti. `targetId` serbest bırakılmıştır: hedef silinse bile
+/// şikâyet kaydı (kim, neyi, ne zaman bildirdi) korunmalıdır.
+model Report {
+  id           String    @id @default(cuid())
+  reporterId   String
+  /// COMMENT | PROJECT | USER
+  targetType   String
+  targetId     String
+  /// SPAM | HARASSMENT | OFF_TOPIC | UNSAFE | OTHER
+  reason       String
+  details      String    @default("")
+  /// OPEN | RESOLVED | DISMISSED
+  status       String    @default("OPEN")
+  resolvedById String?
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+
+  reporter   User  @relation("reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  resolvedBy User? @relation("resolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  /// Aynı kullanıcı aynı hedefi iki kez bildiremez (spam koruması)
+  @@unique([reporterId, targetType, targetId])
+  @@index([status, createdAt])
 }
 
 model Session {

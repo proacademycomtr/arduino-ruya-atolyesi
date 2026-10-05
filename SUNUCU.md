@@ -240,12 +240,37 @@ gibi) — aksi hâlde CORS engeller ve düğmeler "sunucuya ulaşılamıyor" der
 
 Hazır olanlar: üyelik penceresi, üyelik kapısı + paywall, herkese açık duvar (prompt kilitli),
 paylaşım (fotoğraf + prompt), profil sayfası, takip/takipten çık, **takip akışı sekmesi**,
-**beğeni ve yorum**, runtime yapılandırma.
+**beğeni ve yorum**, **duvar/arşiv araması ve sıralaması**, **moderasyon (yorum gizleme,
+paylaşım kaldırma) ve şikâyet/raporlama**, **profil avatarı yükleme**, runtime yapılandırma.
 
 **Henüz olmayanlar:**
-- Arama, sıralama, moderasyon, raporlama yok.
-- Profil yüklemesi (avatar) sunucuda alan olarak var (`User.avatarKey`) ama yükleme arayüzü yok.
 - E-posta doğrulama ve parola sıfırlama yok.
+- Moderasyon paneli (yönetici için tek ekranda rapor listesi) yok: raporlar API ile
+  alınıp işlenebiliyor ama arayüzde yönetici ekranı henüz yok.
+
+### Yeni uçlar (v4.3.0)
+
+| Yöntem | Yol | Yetki | Not |
+|---|---|---|---|
+| GET | `/api/wall?q=&sort=` | herkese açık | `sort`: `new` (varsayılan), `top`, `discussed` |
+| GET | `/api/feed/timeline?q=&sort=` | üye | takip akışı, `/api/wall` ile aynı sözleşme |
+| PATCH | `/api/comments/:id` | yazar, proje sahibi veya yönetici | `{hidden}` |
+| DELETE | `/api/projects/:id/share` | proje sahibi veya yönetici | paylaşımı duvardan kaldırır |
+| PATCH | `/api/projects/:id/moderation` | yönetici | `{hidden}` |
+| POST | `/api/reports` | üye | `targetType`: `project`, `comment`, `user` |
+| GET | `/api/reports` | yönetici | duruma göre süzme |
+| PATCH | `/api/reports/:id` | yönetici | `{status}` |
+| POST | `/api/users/me/avatar/presign` | üye | görsel presign, `image/*` |
+| POST | `/api/users/me/avatar` | üye | `key` bağlar (`newAvatarKey` ile üretilmiş olmalı) |
+| DELETE | `/api/users/me/avatar` | üye | avatarı siler |
+
+Arama Türkçe duyarlıdır: metin kayıt anında `server/src/str.js` → `foldTR` ile
+katlanıp `Project.searchText` içine yazılır, sorgu da aynı katlamayla karşılaştırılır
+(büyük/küçük harf ve aksan farkı aramayı bozmaz). Moderasyon alanları
+`Project.hiddenAt`, `Comment.hiddenAt`/`hiddenById`; raporlar `Report` tablosunda.
+
+> Not: avatar rotaları `GET /api/users/:handle`'ten **önce** tanımlı olmalıdır, aksi
+> hâlde `me/avatar` isteği bir kullanıcı handle'ı sanılır.
 
 ### Yeni uçlar (v4.1.0)
 

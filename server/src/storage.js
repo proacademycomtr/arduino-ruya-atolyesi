@@ -42,6 +42,17 @@ export function newObjectKey(userId, projectId, contentType) {
   return `u/${userId}/${projectId}/${stamp}-${crypto.randomBytes(8).toString("hex")}.${ext}`;
 }
 
+/** Avatar anahtarı: proje içermez, kullanıcı klasörünün altında. */
+export function newAvatarKey(userId, contentType) {
+  const ext = EXT_BY_TYPE[String(contentType || "").toLowerCase()] || "bin";
+  const stamp = new Date().toISOString().slice(0, 10);
+  return `u/${userId}/avatar/${stamp}-${crypto.randomBytes(8).toString("hex")}.${ext}`;
+}
+
+/** Avatar nesne anahtarı kullanıcının kendi klasörüne ait mi? */
+export const isOwnAvatarKey = (objectKey, userId) =>
+  String(objectKey || "").startsWith(`u/${userId}/avatar/`);
+
 /** Tarayıcı görseli doğrudan MinIO'ya yükler; API dosyayı asla taşımaz. */
 export async function presignUpload(objectKey, contentType, expiresIn = 600) {
   const c = getClient();

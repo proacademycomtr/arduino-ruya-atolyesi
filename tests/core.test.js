@@ -1891,3 +1891,91 @@ test("v4.2.0 canUseApp: API adresi boşken demo açık kalır", () => {
 test("v4.2.0 fmtUsd: lansman fiyatı $1 olarak basılır", () => {
   assert.equal(core.fmtUsd(100), "$1");
 });
+
+/* ─────────────────────────────────────────────────────────────
+   v4.3.0 — Duvar arama/sıralama, raporlama, moderasyon, avatar
+   ───────────────────────────────────────────────────────────── */
+test("v4.3.0 setWallSort: yalnız new/top/discussed kabul edilir", () => {
+  const src = require("node:fs").readFileSync(
+    require("node:path").join(__dirname, "..", "app.js"), "utf8");
+  const govde = core.setWallSort.toString();
+  assert.ok(govde.includes('["new", "top", "discussed"]'),
+    "sunucunun kabul ettiği üç sıralama dışındaki değer 'new' olmalı");
+  assert.ok(govde.includes("memberState.wallCursor = null") === false,
+    "setWallSort imleci doğrudan sıfırlamaz; wallQueryChanged yapar");
+  assert.ok(src.includes("wallQueryChanged()"), "sıralama değişimi listeyi yeniden basmalı");
+});
+
+test("v4.3.0 setWallQuery: sorgu 80 karaktere kırpılır", () => {
+  const govde = core.setWallQuery.toString();
+  assert.ok(govde.includes("slice(0, 80)"),
+    "sunucu ?q= için 80 karakter sınırı koyuyor; istemci de kırpmalı");
+});
+
+test("v4.3.0 wallEmptyText: arama varken 'sonuç yok' metni, sorgu metne gömülü", () => {
+  const metin = core.wallEmptyText("all", "ışık");
+  assert.ok(metin.includes("ışık"), "kullanıcının yazdığı sorgu metinde görünmeli");
+  assert.match(metin, /sonuç yok/);
+  // Arama yoksa o metin çıkmamalı.
+  assert.ok(!core.wallEmptyText("all", "").includes("sonuç yok"));
+});
+
+test("v4.3.0 wallClearBtnHTML: sorgu yokken temizle düğmesi basılmaz", () => {
+  assert.equal(core.wallClearBtnHTML(), "", "sorgu yokken düğme olmamalı");
+});
+
+test("v4.3.0 wallCardHTML: giriş yokken yönetici/şikâyet düğmeleri basılmaz", () => {
+  const html = core.wallCardHTML({
+    id: "p9", title: "X", summary: "", images: [],
+    owner: { displayName: "A", handle: "a" }, promptBody: "p"
+  });
+  assert.ok(!html.includes('data-act="report"'), "girişsiz şikâyet düğmesi olmamalı");
+  assert.ok(!html.includes('data-act="unshare"'), "girişsiz duvardan kaldırma olmamalı");
+});
+
+test("v4.3.0 REPORT_REASONS: sunucunun kabul ettiği gerekçelerle aynı", () => {
+  const kodlar = core.REPORT_REASONS.map((r) => r[0]);
+  for (const g of ["SPAM", "HARASSMENT", "OFF_TOPIC", "UNSAFE", "OTHER"]) {
+    assert.ok(kodlar.includes(g), `${g} gerekçesi sunucuyla eşleşmeli`);
+  }
+  assert.equal(kodlar.length, 5);
+});
+
+test("v4.3.0 commentsHTML: gizleme düğmesi yalnız canHide varsa", () => {
+  const ortak = { id: "c1", body: "Merhaba", author: { handle: "a", displayName: "A" } };
+  const gizlebilir = core.commentsHTML([{ ...ortak, canHide: true, canDelete: true }], false);
+  assert.ok(gizlebilir.includes('data-act="hide-comment"'), "canHide true ise gizleme olmalı");
+  assert.ok(gizlebilir.includes('data-act="del-comment"'), "canDelete true ise silme olmalı");
+  const gizleyemez = core.commentsHTML([{ ...ortak, canHide: false, canDelete: false }], false);
+  assert.ok(!gizleyemez.includes('data-act="hide-comment"'), "canHide false ise gizleme olmamalı");
+  assert.ok(!gizleyemez.includes('data-act="del-comment"'), "canDelete false ise silme olmamalı");
+});
+
+test("v4.3.0 commentsHTML: yorum gövdesi HTML kaçışından geçer", () => {
+  const html = core.commentsHTML([
+    { id: "c2", body: '<img src=x onerror="alert(1)">', author: { handle: "a", displayName: "A" } }
+  ], false);
+  assert.ok(!html.includes("<img src=x"), "ham etiket sızmamalı");
+  assert.ok(html.includes("&lt;img"), "kaçış uygulanmalı");
+});
+
+test("v4.3.0 profileHeaderHTML: avatar değiştirme yalnız kendi profilinde", () => {
+  const u = { handle: "deniz", displayName: "Deniz", projectCount: 2, followerCount: 3, followingCount: 1 };
+  const kendi = core.profileHeaderHTML(u, true, false);
+  assert.ok(kendi.includes('id="avatarFile"'), "kendi profilinde avatar yükleyici olmalı");
+  assert.ok(!kendi.includes('id="reportUser"'), "kendini şikâyet edemezsin");
+  const yabanci = core.profileHeaderHTML(u, false, false);
+  assert.ok(!yabanci.includes('id="avatarFile"'), "yabancının avatarı değiştirilemez");
+  assert.ok(yabanci.includes('id="followToggle"'), "yabancı profilinde takip düğmesi olmalı");
+});
+
+test("v4.3.0 profileHeaderHTML: avatar varsa kaldırma düğmesi basılır", () => {
+  const html = core.profileHeaderHTML(
+    { handle: "d", displayName: "D", avatarUrl: "https://o/a.png", projectCount: 0, followerCount: 0, followingCount: 0 },
+    true, false);
+  assert.ok(html.includes('id="avatarRemove"'));
+  const avatarsiz = core.profileHeaderHTML(
+    { handle: "d", displayName: "D", projectCount: 0, followerCount: 0, followingCount: 0 },
+    true, false);
+  assert.ok(!avatarsiz.includes('id="avatarRemove"'), "avatar yoksa kaldırma düğmesi olmamalı");
+});

@@ -10,13 +10,19 @@ const PUBLIC_SELECT = {
   isShared: true,
   sharedAt: true,
   createdAt: true,
+  // Moderasyon durumu (gizli mi). İçerik değildir ve duvar sorgusu zaten
+  // `hiddenAt: null` filtreliyor; tek projeyi açan rota bunu denetlemek için
+  // gerekiyor. Gizli proje yalnız sahibine/yöneticiye yanıt verir.
+  hiddenAt: true,
   owner: { select: { handle: true, displayName: true, avatarKey: true } },
   images: {
     select: { objectKey: true, width: true, height: true, sortOrder: true },
     orderBy: { sortOrder: "asc" }
   },
   // Beğeni/yorum sayıları herkese açıktır (içerik değil, sayaç).
-  _count: { select: { likes: true, comments: true } }
+  // Moderasyonda gizlenen yorumlar sayaca girmez — aksi hâlde duvar kartı
+  // "3 yorum" derken liste boş görünürdü.
+  _count: { select: { likes: true, comments: { where: { hiddenAt: null } } } }
 };
 
 const MEMBER_SELECT = { ...PUBLIC_SELECT, promptBody: true };

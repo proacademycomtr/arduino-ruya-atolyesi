@@ -55,7 +55,7 @@ router.get("/projects/:id/comments", async (req, res, next) => {
     const project = await findProject(req.params.id);
     if (!project || !project.isShared) return res.status(404).json({ error: "not_found" });
     const rows = await prisma.comment.findMany({
-      where: { projectId: project.id },
+      where: { projectId: project.id, hiddenAt: null },
       orderBy: { createdAt: "asc" },
       take: 100,
       select: {
@@ -67,6 +67,7 @@ router.get("/projects/:id/comments", async (req, res, next) => {
       }
     });
     const viewerId = req.user ? req.user.id : null;
+    const isAdmin = req.user ? req.user.isAdmin === true : false;
     res.json({
       comments: rows.map((c) => ({
         id: c.id,
@@ -75,7 +76,9 @@ router.get("/projects/:id/comments", async (req, res, next) => {
         author: publicUser(c.author, { avatarUrl: publicUrlFor(c.author.avatarKey) }),
         // Proje sahibi de kendi yorumlarını silebilir (aşağıdaki DELETE kuralı).
         isOwn: viewerId === c.authorId,
-        canDelete: viewerId !== null && (viewerId === c.authorId || viewerId === project.ownerId)
+        canDelete: viewerId !== null && (viewerId === c.authorId || viewerId === project.ownerId),
+        // Gizleme (moderasyon) düğmesi: yazar, proje sahibi veya yönetici.
+        canHide: viewerId !== null && (isAdmin || viewerId === c.authorId || viewerId === project.ownerId)
       })),
       canComment: config.wallEnabled && isMember(req.user)
     });
@@ -160,6 +163,39 @@ router.delete("/projects/:id/like", requireMember, async (req, res, next) => {
     if (!project) return res.status(404).json({ error: "not_found" });
     await prisma.like.deleteMany({ where: { userId: req.user.id, projectId: project.id } });
     res.json({ liked: false, likeCount: await prisma.like.count({ where: { projectId: project.id } }) });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * PATCH /api/comments/:id — yorumu gizle/geri aç. Yalnız yazan, proje sahibi
+ * veya yönetici yapabilir. Silmekten ayrıdır: içerik korunur, listelerden düşer.
+ * Yönetici olmayanların gizlediği yorum yalnız kendisine gizli görünür
+ * (`canHide` false döner), böylece gizleme şikâyet kaydı gibi yorumlanmaz.
+ */
+router.patch("/comments/:id", requireAuth, async (req, res, next) => {
+  try {
+    const comment = await prisma.comment.findUnique({
+      where: { id: String(req.params.id) },
+      select: { id: true, authorId: true, projectId: true, project: { select: { id: true, ownerId: true } } }
+    });
+    if (!comment) return res.status(404).json({ error: "not_found" });
+    const isAdmin = req.user.isAdmin === true;
+    const isModerator = isAdmin || comment.authorId === req.user.id || comment.project.ownerId === req.user.id;
+    if (!isModerator) return res.status(403).json({ error: "forbidden" });
+    const hidden = Boolean(req.body?.hidden);
+    const updated = await prisma.comment.update({
+      where: { id: comment.id },
+      data: { hiddenAt: hidden ? new Date() : null, hiddenById: hidden ? req.user.id : null },
+      select: { id: true, hiddenAt: true }
+    });
+    res.json({
+      comment: updated,
+      canHide: isAdmin || comment.project.ownerId === req.user.id,
+      // Gizli yorumlar listeden düştüğü için sayaç da düşer.
+      commentCount: await prisma.comment.count({ where: { projectId: comment.projectId, hiddenAt: null } })
+    });
   } catch (e) {
     next(e);
   }

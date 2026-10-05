@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { hash } from "@node-rs/argon2";
+import { searchTextFor } from "../src/str.js";
 
 const prisma = new PrismaClient();
 
@@ -91,6 +92,7 @@ for (const p of projects) {
       title: p.title,
       summary: p.summary,
       promptBody: p.promptBody,
+      searchText: searchTextFor(p.title, p.summary),
       isShared: true,
       sharedAt: new Date(),
       images: {

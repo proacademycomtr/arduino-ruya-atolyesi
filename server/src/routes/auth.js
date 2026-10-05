@@ -43,7 +43,10 @@ export function mePayload(user) {
       id: user.id,
       email: user.email,
       freePasses: user.freePasses,
-      isMember: isMember(user)
+      isMember: isMember(user),
+      // Yönetici düğmeleri (duvardan kaldırma, yorum gizleme) yalnız
+      // sunucudan gelen bu bayrakla görünür; istemci yetki uydurmaz.
+      isAdmin: user.isAdmin === true
     }),
     membership: user.membership
       ? {

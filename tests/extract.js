@@ -62,6 +62,12 @@ function loadApp({ storage } = {}) {
     TextEncoder: require("node:util").TextEncoder,
     TextDecoder: require("node:util").TextDecoder,
     requestAnimationFrame: noop,
+    // app.js'in sonunda kullandığı gözlemci. Stub olmazsa script burada
+    // ReferenceError ile kesilir ve SONRAKİ tüm tanımlar (const) TDZ'ye
+    // düşer — testler "Cannot access 'X' before initialization" ile kırılır,
+    // gerçek nedeni ise hiç görünmez.
+    MutationObserver: class { observe() {} disconnect() {} takeRecords() { return []; } },
+    IntersectionObserver: class { observe() {} disconnect() {} unobserve() {} },
     setTimeout: (fn) => 0,
     clearTimeout: noop,
     alert: noop,
@@ -71,6 +77,13 @@ function loadApp({ storage } = {}) {
     Math, Date, JSON, Set, Map, Array, Object, String, Number, Boolean, RegExp, Error, TypeError,
     parseInt, parseFloat, isNaN, encodeURIComponent, decodeURIComponent
   };
+  // `window === sandbox` olduğu için window'a yazılan stub'lar sandbox'a
+  // yazılmalıdır. app.js son bölümde window.addEventListener/scrollTo ve
+  // history.replaceState kullanıyor; eksikleri script'i orada kesiyor.
+  sandbox.addEventListener = noop;
+  sandbox.removeEventListener = noop;
+  sandbox.scrollTo = noop;
+  sandbox.history = { replaceState: noop, pushState: noop };
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
   sandbox.self = sandbox;
@@ -136,6 +149,8 @@ function loadCore() {
     // v4.0.0 — üyelik/duvar istemcisi
     "wallCardHTML", "fmtUsd", "sharePrefill", "wallTabsHTML", "wallEmptyText", "wallTabsCount",
     "commentsHTML", "renderComments", "updateWallLikeBtn", "likeBtnFace",
+    // v4.3.0 — arama/sıralama, raporlama, avatar
+    "setWallQuery", "setWallSort", "wallClearBtnHTML", "REPORT_REASONS", "profileHeaderHTML",
     "canUseApp", "GATED_MENU_IDS",
     "loadClassSize", "weeklyProgressSVG",
     "catalogSuggestions", "atRiskStudents", "unknownMaterials", "classSubsToCSV", "downloadClassCSV",

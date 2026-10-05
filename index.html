@@ -452,6 +452,16 @@
         <button class="modal-close" id="closeWall" type="button" aria-label="Kapat">✕</button>
       </div>
       <p class="modal-desc" id="wallSub"></p>
+      <!-- Arama ve sıralama: sunucudan gelen ?q= ve ?sort= -->
+      <div class="wall-tools" id="wallTools">
+        <input type="search" id="wallSearch" class="wall-search" maxlength="80"
+          placeholder="Proje, malzeme ya da konu ara…" aria-label="Ara" />
+        <select id="wallSort" class="wall-sort" aria-label="Sırala">
+          <option value="new">🕒 En yeni</option>
+          <option value="top">❤️ En çok beğenilen</option>
+          <option value="discussed">💬 En çok konuşulan</option>
+        </select>
+      </div>
       <div id="wallContent"></div>
     </div>
   </div>
@@ -464,6 +474,17 @@
         <button class="modal-close" id="closeProfile" type="button" aria-label="Kapat">✕</button>
       </div>
       <div id="profileBody"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ ŞİKÂYET MODALI ══════════════════ -->
+  <div class="modal-overlay" id="reportModal" hidden>
+    <div class="modal modal-narrow" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+      <div class="modal-head">
+        <h2 id="reportTitle">🚩 Şikâyet Et</h2>
+        <button class="modal-close" id="closeReport" type="button" aria-label="Kapat">✕</button>
+      </div>
+      <div id="reportBody"></div>
     </div>
   </div>
 

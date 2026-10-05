@@ -1,11 +1,13 @@
 import { prisma } from "../src/db.js";
 import { hashPassword } from "../src/auth.js";
+import { searchTextFor } from "../src/str.js";
 
 let counter = 0;
 
 /** Testler arlo_test veritabanını kullanır; sırayla çalışır, tabloları temizler. */
 export async function resetDb() {
   await prisma.project.deleteMany();
+  await prisma.report.deleteMany();
   await prisma.payment.deleteMany();
   await prisma.membership.deleteMany();
   await prisma.follow.deleteMany();
@@ -25,7 +27,8 @@ export async function makeUser(opts = {}) {
     displayName = "Test Kullanıcı",
     member = false,
     plan = "LIFETIME",
-    freePasses = 1
+    freePasses = 1,
+    admin = false
   } = opts;
   counter += 1;
   const user = await prisma.user.create({
@@ -34,7 +37,8 @@ export async function makeUser(opts = {}) {
       passwordHash: await hashPassword(password),
       displayName,
       handle: `test-${Date.now().toString(36)}-${counter}`,
-      freePasses
+      freePasses,
+      isAdmin: admin
     }
   });
   if (member) {
@@ -65,6 +69,7 @@ export async function makeProject(ownerId, opts = {}) {
       title,
       summary,
       promptBody,
+      searchText: searchTextFor(title, summary),
       isShared: shared,
       sharedAt: shared ? new Date() : null
     }

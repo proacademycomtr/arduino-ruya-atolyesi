@@ -15,6 +15,8 @@
 import { chromium } from "playwright";
 
 const SITE = process.env.SITE || "http://127.0.0.1:8000/index.html";
+// dist/config.js içindeki adresle aynı olmalı; sayfa içinden API'ye sormak için.
+const API_BASE = process.env.API_BASE || "http://127.0.0.1:4021";
 const email = `demo${Date.now().toString(36)}@example.com`;
 const password = "deneme12345";
 // Beğeni/yorum yazmak üyeye açıktır; üye bir hesapla giriş yapılır (bkz. prisma/seed.js).
@@ -29,6 +31,17 @@ const results = [];
 function check(name, ok, detail = "") {
   results.push({ name, ok, detail });
   console.log(`${ok ? "  ok " : "FAIL"} ${name}${detail ? " — " + detail : ""}`);
+}
+
+// Sunucudaki foldTR ile aynı eşleme (bkz. server/src/str.js): Türkçe
+// harfleri ASCII karşılıklarına katlar, aksanları atar.
+const TR_MAP = { ç: "c", Ç: "C", ğ: "g", Ğ: "G", ı: "i", İ: "I", ö: "o", Ö: "O", ş: "s", Ş: "S", ü: "u", Ü: "U" };
+function foldTR(s) {
+  return String(s)
+    .replace(/[çÇğĞıİöÖşŞüÜ]/g, (c) => TR_MAP[c])
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 try {
@@ -75,7 +88,16 @@ try {
   });
   check("Demo Modu rozeti pointer-events: none", rozetTikanabilir === "none", rozetTikanabilir);
 
-  // 1c) Kilitli menüler: görünür ama kilitli işaretli
+  // 1c) Kilitli menüler: görünür ama kilitli işaretli.
+  // Kilitler `renderMenuLocks` ile çiziliyor, o da API'ye ulaşıldıktan SONRA
+  // (bootstrapApi) çalışıyor. Daha önce kontrol sayfa yüklenir yüklenmez
+  // soruyordu ve ağ yavaşsa kilitler henüz çizilmemiş olduğu için yanlış
+  // alarm veriyordu — aslında bir zamanlama yarışıydı, ürün hatası değil.
+  await page.waitForFunction(
+    () => ["libraryBtn", "archiveBtn", "badgesBtn", "classBtn"]
+      .every((id) => document.getElementById(id)?.classList.contains("is-locked")),
+    { timeout: 10000 },
+  ).catch(() => {});
   const kilitli = await page.evaluate(() =>
     Array.from(document.querySelectorAll(".header-actions .is-locked")).map((e) => e.id));
   check("Kilitli menüler işaretlendi",
@@ -87,7 +109,7 @@ try {
   // yüzden gerçek tıklamayı `force` ile gönderiyoruz — kullanıcının
   // gördüğü davranışın ta kendisi bu.
   await page.locator("#archiveBtn").click({ force: true });
-  await page.waitForTimeout(700);
+  await page.locator("#authModal:not([hidden])").waitFor({ timeout: 10000 }).catch(() => {});
   check("Kilitli menü giriş penceresini açtı",
     await page.locator("#authModal:not([hidden])").isVisible());
   check("Kilitli menü içeriği AÇILMADI",
@@ -95,7 +117,7 @@ try {
   const adresKaymadi = await page.evaluate(() =>
     !location.hash.includes("kutuphane") && !location.hash.includes("arsiv"));
   check("Kilitli menü sayfayı kaydırmadı", adresKaymadi, await page.evaluate(() => location.hash));
-  await page.locator("#closeAuth").click();
+  await page.locator("#closeAuth").click({ timeout: 10000 }).catch(() => {});
   await page.waitForTimeout(400);
 
   // API'ye ulaşıldı mı? (health yoklaması)
@@ -312,6 +334,112 @@ try {
     const panelMetni = (await page.locator(".wall-comments:not([hidden])").first().textContent()) || "";
     check("Yorum gönderildi ve listede göründü", panelMetni.includes(yorumMetni));
     check("Kendı yorumunda sil düğmesi var", (await page.locator(".cmt-del").count()) > 0);
+  }
+
+  /* ── v4.3.0: duvar arama, sıralama, raporlama, avatar ─────── */
+
+  // Arama kutusu yalnız "Tümü" sekmesinde görünür olmalı.
+  check("Duvar arama kutusu görünür", await page.locator("#wallSearch").isVisible());
+  check("Sıralama açılır listesi görünür", await page.locator("#wallSort").isVisible());
+
+  // Arama: gerçek bir kelime yaz, kart sayısı değişmeli.
+  // ÖNEMLİ: Sayaç DUVAR KABINA sınırlı. `.wall-card` sınıfını profil
+  // penceresi de kullanıyor; genel sayım profil kartlarını da katıyor ve
+  // "arama boş döndü" kontrolü yanlışlıkla başarısız oluyor.
+  const kartSayisi = async () => page.locator("#wallContent .wall-card").count();
+  const aramaOnce = await kartSayisi();
+  // Arama kelimesini DUVARDAKİ GERÇEK BİR BAŞLIĞIN parçasından seçiyoruz.
+  // Düz "irmak" yazmak yanıltıcıydı: sorgu metni kendisi sonuç metninde
+  // geçtiği için kontrol, hiç eşleşme olmasa da yeşil kalıyordu.
+  const ilkBaslik = ((await page.locator("#wallContent .wall-title").first().textContent()) || "").trim();
+  const kelime = (ilkBaslik.split(/\s+/).find((w) => w.length >= 4) || ilkBaslik).slice(0, 8);
+  check("Arama için gerçek bir kelime seçildi", kelime.length >= 3, `"${kelime}" (başlık: ${ilkBaslik})`);
+  await page.locator("#wallSearch").fill(kelime);
+  await page.waitForTimeout(1300);
+  const aramaSonra = await kartSayisi();
+  check("Arama sonuçları daralttı", aramaSonra < aramaOnce, `${aramaOnce} → ${aramaSonra} kart`);
+  check("Arama eşleşen kartı getirdi", aramaSonra > 0, `${aramaSonra} kart, sorgu "${kelime}"`);
+  // Karşılaştırmayı sunucunun katlama mantığıyla yap. Türkçe harfleri
+  // SİLMEK yanlıştı: "kişilik" -> "kilik" oluyor ve bu, "kişilik" içinde
+  // literal geçmiyor; eşleşme varken kontrol düşüyordu. foldTR ile ikisi de
+  // ASCII'ye katlanır, sonra alt dize karşılaştırılır.
+  const ilkSonucBasligi = ((await page.locator("#wallContent .wall-title").first().textContent()) || "");
+  check("Dönen kart gerçekten eşleşti",
+    foldTR(ilkSonucBasligi).includes(foldTR(kelime)),
+    `sorgu "${kelime}" (katlanmış "${foldTR(kelime)}") / sonuç: "${ilkSonucBasligi}"`);
+
+  // Sonuç yoksa anlaşılır bir metin, hata değil.
+  await page.locator("#wallSearch").fill("bulunamayacak-bir-konu-zzz");
+  await page.waitForTimeout(1200);
+  const bosMetin = (await page.locator("#wallContent").textContent()) || "";
+  check("Bulunmayan arama 'sonuç yok' der, hata değil", /sonuç yok/.test(bosMetin), bosMetin.trim().slice(0, 60));
+  const bosKart = await kartSayisi();
+  check("Arama sırasında kart kalmadı", bosKart === 0, `${bosKart} kart kaldı`);
+
+  // Temizle düğmesi arama varken belirir ve listeyi geri getirir.
+  check("Temizle düğmesi arama varken var", await page.locator("#wallClear").isVisible());
+  await page.locator("#wallClear").click();
+  await page.waitForTimeout(1200);
+  check("Temizle tıklaması listeyi geri getirdi", (await kartSayisi()) === aramaOnce, `${await kartSayisi()} kart`);
+  check("Arama kutusu temizlendi", (await page.locator("#wallSearch").inputValue()) === "");
+
+  // Sıralama: en çok beğenilen seçilince liste yine dolu olmalı (çökme yok).
+  await page.locator("#wallSort").selectOption("top");
+  await page.waitForTimeout(1200);
+  check("'En çok beğenilen' sıralaması çalıştı", (await kartSayisi()) > 0, `${await kartSayisi()} kart`);
+  await page.locator("#wallSort").selectOption("new");
+  await page.waitForTimeout(900);
+
+  // Şikâyet: yabancı bir kartın düğmesi açılır, gönderilir.
+  const reportBtn = page.locator('[data-act="report"]').first();
+  check("Yabancı projede şikâyet düğmesi var", (await reportBtn.count()) > 0);
+  if (await reportBtn.count()) {
+    await reportBtn.click();
+    await page.waitForTimeout(600);
+    check("Şikâyet penceresi açıldı", await page.locator("#reportModal").isVisible());
+    check("Gerekçe listesi dolu", (await page.locator("#reportReason option").count()) === 5);
+    await page.locator("#reportSubmit").click();
+    await page.waitForTimeout(1200);
+    const ipucu = (await page.locator("#reportHint").textContent()) || "";
+    check("Şikâyet gönderildi (ya da daha önce bildirilmişti)",
+      (await page.locator("#reportModal").isHidden()) || /zaten bildirmişsin/.test(ipucu),
+      ipucu.trim().slice(0, 60));
+    if (!(await page.locator("#reportModal").isHidden())) {
+      await page.locator("#reportCancel").click();
+      await page.waitForTimeout(400);
+    }
+  }
+
+  // Kendi profilinde avatar yükleyici var; başkasınıninkinde yok.
+  // ÖNEMLİ: Duvar penceresi açıkken başlıktaki düğmelere tıklanamaz (overlay);
+  // önce onu kapatıyoruz.
+  await page.locator('[data-profile-handle]').first().click();
+  await page.waitForTimeout(1200);
+  check("Profil penceresi açıldı", await page.locator("#profileModal").isVisible());
+  check("Başkasının profilinde avatar yükleyici yok", (await page.locator("#avatarFile").count()) === 0);
+  await page.locator("#closeProfile").click();
+  await page.waitForTimeout(400);
+  await page.locator("#closeWall").click();
+  await page.waitForTimeout(400);
+
+  // Kendi profilimiz: avatar alanı görünür. Handle'ı sunucudan alıyoruz
+  // (header metni güncellenmemişse yanıltırdı).
+  const kendi = await page.evaluate(async (api) => {
+    const token = localStorage.getItem("arduinoDreamLab.authToken.v1") || "";
+    const r = await fetch(api + "/api/auth/me", { headers: { Authorization: "Bearer " + token } });
+    return r.ok ? (await r.json()).user.handle : "";
+  }, API_BASE);
+  check("Oturum jetonu geçerli, handle alındı", Boolean(kendi), kendi || "handle alınamadı");
+  if (kendi) {
+    // Yazar düğmesi duvarın İÇİNDE; duvar kapalıyken tıklanamaz.
+    await wallBtn.click();
+    await page.waitForTimeout(1500);
+    await page.locator(`#wallContent [data-profile-handle="${kendi}"]`).first().click();
+    await page.waitForTimeout(1400);
+    check("Kendi profilinde avatar yükleyici var", (await page.locator("#avatarFile").count()) > 0, "@" + kendi);
+    check("Kendini şikâyet düğmesi yok", (await page.locator("#reportUser").count()) === 0);
+    await page.locator("#closeProfile").click();
+    await page.waitForTimeout(400);
   }
 
   check("Sayfada JS hatası yok", errors.length === 0, errors.slice(0, 2).join(" | "));

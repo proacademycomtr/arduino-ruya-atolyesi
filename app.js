@@ -9,6 +9,13 @@
 /* ───────────────────── Sabitler ───────────────────── */
 const STORAGE_KEY = "arduinoDreamLab.settings.v1";
 
+/* API adresinin derleme zamanı varsayılanı. build.py bu satırın değerini
+   gerçek adresle değiştirir; ham app.js doğrudan açıldığında (testler,
+   tek dosya dağıtımı) buradaki boş değer kullanılır ve uygulama ağa çıkmaz.
+   Sabiti burada tanımlamazsak alt satırdaki ifade ReferenceError verir ve
+   dosyanın GERİ KALAN KISMI (memberState dâhil) hiç çalışmaz. */
+const API_BASE_DEFAULT = "";
+
 /* Sağlayıcı kataloğu — openaiCompat olanlar /chat/completions uç noktasını kullanır */
 const PROVIDERS = [
   { id: "gemini", label: "Google Gemini", keyLabel: "API Anahtarı", keyHint: 'Gemini anahtarı almak için: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>', keyPlaceholder: "AIza... ile başlayan anahtar", defaultModel: "gemini-2.0-flash", modelPlaceholder: "gemini-2.0-flash" },
@@ -5403,6 +5410,40 @@ const I18N = {
     "👁️ Görüntüle": "👁️ View", "📤 Yedekle (JSON)": "📤 Export (JSON)", "📥 Geri Yükle": "📥 Import", "🧹 Tümünü Temizle": "🧹 Clear All", "Kapat": "Close",
     // Adım takibi
     "🛠️": "🛠️", " adım tamamlandı (%": " steps done (%",
+    // Duvar arama/sıralama
+    "Proje, malzeme ya da konu ara…": "Search projects, parts or topics…",
+    "🕒 En yeni": "🕒 Newest",
+    "❤️ En çok beğenilen": "❤️ Most liked",
+    "💬 En çok konuşulan": "💬 Most discussed",
+    "Aramayı temizle": "Clear search",
+    "için sonuç yok — başka bir kelime dene.": "— no results. Try another word.",
+    "Daha fazla göster": "Show more",
+    "Sonuç yok": "No results",
+    // Moderasyon ve raporlama
+    "🚩 Şikâyet Et": "🚩 Report",
+    "📤 Duvardan Kaldır": "📤 Unpublish",
+    "Gizle": "Hide",
+    "Sil": "Delete",
+    "Gerekçe": "Reason",
+    "Açıklama (isteğe bağlı)": "Details (optional)",
+    "Neyi neden bildirdiğini yaz…": "Tell us why…",
+    "Bildir": "Send report",
+    "Vazgeç": "Cancel",
+    "Şikâyet Etmek": "Report",
+    "🚩 Bildirimin alındı — teşekkürler!": "🚩 Thanks — we got your report!",
+    "Bunu zaten bildirmişsin — teşekkürler!": "You already reported this — thanks!",
+    "Bildirilemedi.": "Could not send the report.",
+    "📤 Duvarı yayınlandı.": "📤 Unpublished.",
+    "🙈 Yorum gizlendi.": "🙈 Comment hidden.",
+    "👁️ Yorum geri açıldı.": "👁️ Comment restored.",
+    "İşlem yapılamadı.": "Could not complete the action.",
+    // Avatar
+    "Avatarı Kaldır": "Remove avatar",
+    "Avatar yükleniyor…": "Uploading avatar…",
+    "Avatar yüklenemedi.": "Avatar could not be uploaded.",
+    "Avatar kaldırılamadı.": "Avatar could not be removed.",
+    "✓ Avatar güncellendi.": "✓ Avatar updated.",
+    "✓ Avatar kaldırıldı.": "✓ Avatar removed.",
   },
   tr: {}
 };
@@ -6750,6 +6791,10 @@ const memberState = {
   wallCursor: null,
   wallLoading: false,
   wallTab: "all",
+  wallQuery: "",
+  wallSort: "new",
+  wallSearchTimer: 0,
+  report: null,
   shareImages: []
 };
 
@@ -7255,6 +7300,13 @@ function wallCardHTML(item) {
   const locked = typeof item.promptBody !== "string";
   const face = likeBtnFace(item.likedByViewer, item.likeCount);
   const comments = Number(item.commentCount) || 0;
+  // Yönetici düğmeleri sunucunun isAdmin bilgisinden gelir; istemci kendisi
+  // yetki uydurmaz, yalnız gizleyebileceği/şikâyet edebileceği şeyi gösterir.
+  const isAdmin = memberState.user && memberState.user.isAdmin === true;
+  const isOwn = Boolean(memberState.user && item.owner && memberState.user.handle === item.owner.handle);
+  const ownerBtns = (isOwn || isAdmin)
+    ? `<button class="wall-act wall-act-quiet" data-act="unshare" type="button">📤 ${esc(t("Duvardan Kaldır"))}</button>`
+    : "";
   return `
     <article class="wall-card" data-project-id="${esc(item.id)}">
       ${img && img.url ? `<img class="wall-img" src="${esc(img.url)}" alt="${esc(item.title)}" loading="lazy" />` : ""}
@@ -7268,6 +7320,8 @@ function wallCardHTML(item) {
         <div class="wall-social">
           <button class="${face.cls}" data-act="like" type="button" aria-pressed="${face.pressed}">${face.icon} <span class="wall-count">${face.count}</span></button>
           <button class="wall-act" data-act="comments" type="button" aria-expanded="false">💬 <span class="wall-count">${comments}</span></button>
+          ${ownerBtns}
+          ${isOwn || !isMember() ? "" : `<button class="wall-act wall-act-quiet" data-act="report" data-report-type="PROJECT" type="button">🚩 ${esc(t("Şikâyet Et"))}</button>`}
         </div>
         <div class="wall-comments" hidden></div>
       </div>
@@ -7290,8 +7344,11 @@ function wallTabsHTML(active) {
     </div>`;
 }
 
-/** Sekmeye göre boş durum metni. */
-function wallEmptyText(active) {
+/** Sekmeye göre boş durum metni. Arama varsa "sonuç yok" ayrı bir metindir. */
+function wallEmptyText(active, q) {
+  // Arama metni değişken olduğu için `t()` şablonu çeviremez; iki parçayı
+  // ayrı çevirip birleştiriyoruz.
+  if (q) return `"${q}" ` + t("için sonuç yok — başka bir kelime dene.");
   return t(active === "following"
     ? "Takip ettiğin kişiler henüz proje paylaşmadı."
     : "Henüz paylaşılmış proje yok — ilk sen ol!");
@@ -7311,6 +7368,22 @@ function renderWallTabs() {
         ? "Üyesin — tüm prompt'lar görünür."
         : "Prompt'ları yalnızca üyeler görebilir. Üye olmak $1.");
   }
+  // Araç çubuğu yalnız "Tümü" sekmesinde anlamlı: takip akışı sunucuda
+  // arama/sıralama desteklemiyor, gösterirsek yanlış bir vaat olur.
+  const tools = $("wallTools");
+  if (tools) {
+    tools.hidden = active === "following";
+    const sel = $("wallSort");
+    if (sel) {
+      sel.value = memberState.wallSort;
+      sel.disabled = active === "following";
+    }
+    const clear = $("wallClear");
+    if (Boolean(memberState.wallQuery) !== Boolean(clear)) {
+      const input = $("wallSearch");
+      if (input) input.insertAdjacentHTML("afterend", wallClearBtnHTML());
+    }
+  }
   const old = $("wallTabs");
   if (old) old.outerHTML = wallTabsHTML(active);
   else if (sub) sub.insertAdjacentHTML("afterend", wallTabsHTML(active));
@@ -7327,6 +7400,12 @@ function setWallTab(tab) {
   if (memberState.wallTab === tab) return;
   memberState.wallTab = tab;
   memberState.wallCursor = null;
+  // Takip akışına geçince arama kutusu boşaltılır: arama "Tümü"e ait.
+  if (tab === "following") {
+    memberState.wallQuery = "";
+    const input = $("wallSearch");
+    if (input) input.value = "";
+  }
   renderWallTabs();
   loadWall(true);
 }
@@ -7338,8 +7417,15 @@ async function loadWall(reset) {
   memberState.wallLoading = true;
   const cursor = reset ? "" : memberState.wallCursor || "";
   const path = memberState.wallTab === "following" ? "/api/feed/timeline" : "/api/wall";
+  const q = memberState.wallQuery;
+  const params = ["limit=12"];
+  if (cursor) params.push("cursor=" + encodeURIComponent(cursor));
+  if (q) params.push("q=" + encodeURIComponent(q));
+  // Takip akışı sıralamayı desteklemiyorsa en yeniye sabitlenir; sunucu
+  // `sort=top` de gelse öğe listesi bozulmaz, yine de göndermiyoruz.
+  if (memberState.wallTab === "all" && memberState.wallSort) params.push("sort=" + memberState.wallSort);
   try {
-    const r = await apiFetch(path + "?limit=12" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
+    const r = await apiFetch(path + "?" + params.join("&"));
     memberState.wallCursor = r.nextCursor || null;
     const html = (r.items || []).map(wallCardHTML).join("");
     let grid = $("wallGrid");
@@ -7369,7 +7455,7 @@ async function loadWall(reset) {
     }
     renderWallTabs();
     if (!(r.items || []).length && reset) {
-      content.innerHTML = `<p class="field-hint">${esc(wallEmptyText(memberState.wallTab))}</p>`;
+      content.innerHTML = `<p class="field-hint" id="wallEmpty">${esc(wallEmptyText(memberState.wallTab, q))}</p>`;
       return;
     }
   } catch (e) {
@@ -7386,6 +7472,42 @@ function openWall() {
   memberState.wallCursor = null;
   renderWallTabs();
   loadWall(true);
+}
+
+/* ───────────────────── Duvar arama ve sıralama ───────────────────── */
+/** Arama/sıralama değişti: imleç sıfırlanır, liste baştan basılır. */
+function wallQueryChanged() {
+  memberState.wallCursor = null;
+  // Arama sürerken "daha fazla" düğmesi eski imleci tutuyor olabilir.
+  const more = $("wallMore");
+  if (more) more.remove();
+  loadWall(true);
+}
+
+function setWallQuery(raw) {
+  const q = String(raw || "").trim().slice(0, 80);
+  if (q === memberState.wallQuery) return;
+  memberState.wallQuery = q;
+  wallQueryChanged();
+}
+
+function setWallSort(value) {
+  const s = ["new", "top", "discussed"].includes(value) ? value : "new";
+  if (s === memberState.wallSort) return;
+  memberState.wallSort = s;
+  // Takip akışında sıralama yok; seçim "En yeni"ye döner.
+  if (memberState.wallTab === "following") {
+    const sel = $("wallSort");
+    if (sel) sel.value = "new";
+  }
+  wallQueryChanged();
+}
+
+/** Arama kutusunu temizle düğmesi — arama varken görünür. */
+function wallClearBtnHTML() {
+  return memberState.wallQuery
+    ? `<button class="wall-clear" id="wallClear" type="button" aria-label="${esc(t("Aramayı temizle"))}">✕</button>`
+    : "";
 }
 
 /* ───────────────────── Beğeni ve yorum ───────────────────── */
@@ -7456,7 +7578,11 @@ function commentsHTML(list, canComment) {
         <div class="cmt" data-comment-id="${esc(c.id)}">
           <p class="cmt-by"><button class="wall-author" data-profile-handle="${esc(c.author.handle)}" type="button">${esc(c.author.displayName)}</button></p>
           <p class="cmt-body">${esc(c.body)}</p>
-          ${c.canDelete ? `<button class="cmt-del" type="button">${esc(t("Sil"))}</button>` : ""}
+          <div class="cmt-acts">
+            ${c.canHide ? `<button class="cmt-del" data-act="hide-comment" type="button">${esc(t("Gizle"))}</button>` : ""}
+            ${isMember() && !c.isOwn ? `<button class="cmt-del" data-act="report-comment" type="button">🚩 ${esc(t("Şikâyet Et"))}</button>` : ""}
+            ${c.canDelete ? `<button class="cmt-del" data-act="del-comment" type="button">${esc(t("Sil"))}</button>` : ""}
+          </div>
         </div>`).join("")
     : `<p class="field-hint">${esc(t("Henüz yorum yok — ilk yorumu sen yaz!"))}</p>`;
   return body + (canComment
@@ -7622,6 +7748,19 @@ function profileHeaderHTML(u, isSelf, isFollowing) {
          data-handle="${esc(u.handle)}" data-following="${isFollowing ? "1" : "0"}">
          ${esc(isFollowing ? "✓ Takip Ediliyor" : "+ Takip Et")}
        </button>`;
+  // Avatarı yalnız kendi profilinde değiştirebilirsin; yabancınınki salt görünür.
+  const avatarEdit = isSelf
+    ? `<div class="avatar-edit">
+         <input type="file" id="avatarFile" accept="image/png,image/jpeg,image/webp,image/gif" />
+         ${u.avatarUrl ? `<button class="btn btn-ghost btn-small" id="avatarRemove" type="button">${esc(t("Avatarı Kaldır"))}</button>` : ""}
+         <p class="field-hint" id="avatarHint"></p>
+       </div>`
+    : "";
+  // Kendi profilini şikâyet edemezsin — sunucu da reddediyor.
+  const reportBtn = isSelf || !isMember()
+    ? ""
+    : `<button class="btn btn-ghost btn-small" id="reportUser" type="button"
+         data-handle="${esc(u.handle)}">🚩 ${esc(t("Şikâyet Et"))}</button>`;
   return `
     <div class="profile-head">
       <div class="profile-avatar">${u.avatarUrl ? `<img src="${esc(u.avatarUrl)}" alt="" />` : "🧑‍🚀"}</div>
@@ -7636,7 +7775,8 @@ function profileHeaderHTML(u, isSelf, isFollowing) {
         </p>
       </div>
     </div>
-    <div class="profile-actions">${follow}</div>
+    <div class="profile-actions">${follow}${reportBtn}</div>
+    ${avatarEdit}
   `;
 }
 
@@ -7668,6 +7808,12 @@ function renderProfile(r) {
 
   const btn = $("followToggle");
   if (btn) btn.addEventListener("click", () => toggleFollow(btn));
+  const report = $("reportUser");
+  if (report) report.addEventListener("click", () => openReportModal("USER", report.dataset.handle));
+  const avatarFile = $("avatarFile");
+  if (avatarFile) avatarFile.addEventListener("change", () => uploadAvatar(avatarFile.files && avatarFile.files[0]));
+  const avatarRemove = $("avatarRemove");
+  if (avatarRemove) avatarRemove.addEventListener("click", removeAvatar);
 }
 
 async function toggleFollow(btn) {
@@ -7694,6 +7840,169 @@ async function toggleFollow(btn) {
   }
 }
 
+/* ───────────────────── Şikâyet (raporlama) ───────────────────── */
+/** Gerekçe seçenekleri — sunucu da aynı listeyi doğrular. */
+const REPORT_REASONS = [
+  ["SPAM", "🚫 Spam / reklam"],
+  ["HARASSMENT", "😠 Taciz veya hakaret"],
+  ["OFF_TOPIC", "🎯 Konu dışı"],
+  ["UNSAFE", "⚠️ Güvenliği tehdit eden"],
+  ["OTHER", "💬 Diğer"]
+];
+
+/**
+ * Şikâyet penceresini açar. `type` PROJECT | COMMENT | USER, `id` sunucudaki
+ * gerçek kimliktir (USER hedefi handle olur).
+ */
+function openReportModal(type, id, label) {
+  if (!memberState.user) { openAuthModal(t("Şikâyet etmek için giriş yap.")); return; }
+  if (!isMember()) { openPaywall(); return; }
+  const body = $("reportBody");
+  if (!body) return;
+  memberState.report = { type, id };
+  body.innerHTML = `
+    <p class="modal-desc">${esc(label || t("Bildirimini inceleyeceğiz. Bildiren kişinin adı yöneticilerle paylaşılır."))}</p>
+    <label class="field-label" for="reportReason">${esc(t("Gerekçe"))}</label>
+    <select id="reportReason">
+      ${REPORT_REASONS.map(([v, l]) => `<option value="${esc(v)}">${esc(t(l))}</option>`).join("")}
+    </select>
+    <label class="field-label" for="reportDetails">${esc(t("Açıklama (isteğe bağlı)"))}</label>
+    <textarea id="reportDetails" rows="3" maxlength="500" placeholder="${esc(t("Neyi neden bildirdiğini yaz…"))}"></textarea>
+    <div class="share-actions">
+      <button class="btn btn-primary" id="reportSubmit" type="button">${esc(t("Bildir"))}</button>
+      <button class="btn btn-ghost" id="reportCancel" type="button">${esc(t("Vazgeç"))}</button>
+    </div>
+    <p class="field-hint" id="reportHint"></p>`;
+  $("reportSubmit").addEventListener("click", submitReport);
+  $("reportCancel").addEventListener("click", () => { const m = $("reportModal"); if (m) m.hidden = true; });
+  const m = $("reportModal");
+  if (m) m.hidden = false;
+}
+
+async function submitReport() {
+  const hint = $("reportHint");
+  const btn = $("reportSubmit");
+  const target = memberState.report;
+  if (!target || !btn) return;
+  btn.disabled = true;
+  try {
+    await apiFetch("/api/reports", {
+      method: "POST",
+      body: {
+        targetType: target.type,
+        targetId: target.id,
+        reason: ($("reportReason") || {}).value || "SPAM",
+        details: ($("reportDetails") || {}).value || ""
+      }
+    });
+    const m = $("reportModal");
+    if (m) m.hidden = true;
+    showToast(t("🚩 Bildirimin alındı — teşekkürler!"));
+  } catch (e) {
+    // 409 = aynı hedef zaten bildirilmiş; kullanıcıya yeni hata gibi göstermeyelim.
+    if (hint) hint.textContent = e.status === 409
+      ? t("Bunu zaten bildirmişsin — teşekkürler!")
+      : (e.message || t("Bildirilemedi."));
+  } finally {
+    if (btn.isConnected) btn.disabled = false;
+  }
+}
+
+/* ───────────────────── Moderasyon (istemci) ───────────────────── */
+/** Projeyi duvardan kaldırır (kayıt silinmez) ve kartı listeden düşürür. */
+async function unshareProject(btn) {
+  const card = btn.closest("[data-project-id]");
+  const id = card && card.dataset.projectId;
+  if (!id) return;
+  if (!confirm(t("Bu proje duvardan kaldırılsın mı? Proje kaydın silinmez, sonra yeniden yayınlayabilirsin."))) return;
+  btn.disabled = true;
+  try {
+    await apiFetch(`/api/projects/${encodeURIComponent(id)}/share`, { method: "DELETE" });
+    card.remove();
+    showToast(t("📤 Duvarı yayınlandı."));
+    if (!$("wallGrid") || !$("wallGrid").children.length) {
+      const content = $("wallContent");
+      if (content) content.innerHTML = `<p class="field-hint">${esc(wallEmptyText(memberState.wallTab, memberState.wallQuery))}</p>`;
+    }
+  } catch (e) {
+    showToast(e.message || t("Kaldırılamadı."));
+    if (btn.isConnected) btn.disabled = false;
+  }
+}
+
+/** Yorumu gizler/geri açar; yazar, proje sahibi ve yönetici yapabilir. */
+async function hideComment(btn) {
+  const row = btn.closest("[data-comment-id]");
+  const panel = btn.closest(".wall-comments");
+  const card = btn.closest("[data-project-id]");
+  if (!row || !panel || !card) return;
+  const id = row.dataset.commentId;
+  const hiding = row.dataset.hidden !== "1";
+  btn.disabled = true;
+  try {
+    const r = await apiFetch(`/api/comments/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: { hidden: hiding }
+    });
+    showToast(t(hiding ? "🙈 Yorum gizlendi." : "👁️ Yorum geri açıldı."));
+    panel.dataset.loaded = "0";
+    panel.hidden = true;
+    const again = card.querySelector('[data-act="comments"]');
+    if (again) {
+      again.setAttribute("aria-expanded", "false");
+      const n = again.querySelector(".wall-count");
+      if (n) n.textContent = String(Number(r.commentCount) || 0);
+    }
+  } catch (e) {
+    showToast(e.message || t("İşlem yapılamadı."));
+    if (btn.isConnected) btn.disabled = false;
+  }
+}
+
+/* ───────────────────── Avatar ───────────────────── */
+/**
+ * Avatarı doğrudan depoya yükler: presign → PUT → profile bağla.
+ * Dosya API'den geçmez, tıpkı proje fotoğrafı gibi.
+ */
+async function uploadAvatar(file) {
+  if (!file) return;
+  if (!memberState.user) { openAuthModal(t("Avatar yüklemek için giriş yap.")); return; }
+  const hint = $("avatarHint");
+  try {
+    if (hint) hint.textContent = t("Avatar yükleniyor…");
+    const pre = await apiFetch("/api/users/me/avatar/presign", {
+      method: "POST",
+      body: { contentType: file.type }
+    });
+    const put = await putImage(pre.url, file);
+    if (!put.ok) throw new Error(t("Avatar yüklenemedi."));
+    const r = await apiFetch("/api/users/me/avatar", { method: "POST", body: { objectKey: pre.objectKey } });
+    if (memberState.user) memberState.user.avatarUrl = r.user.avatarUrl;
+    if (memberState.profile && memberState.profile.user.handle === memberState.user.handle) {
+      memberState.profile.user.avatarUrl = r.user.avatarUrl;
+      renderProfile(memberState.profile);
+    }
+    if (hint) hint.textContent = t("✓ Avatar güncellendi.");
+  } catch (e) {
+    if (hint) hint.textContent = e.message || t("Avatar yüklenemedi.");
+  }
+}
+
+async function removeAvatar() {
+  const hint = $("avatarHint");
+  try {
+    await apiFetch("/api/users/me/avatar", { method: "DELETE" });
+    if (memberState.user) memberState.user.avatarUrl = null;
+    if (memberState.profile && memberState.profile.user.handle === memberState.user.handle) {
+      memberState.profile.user.avatarUrl = null;
+      renderProfile(memberState.profile);
+    }
+    if (hint) hint.textContent = t("✓ Avatar kaldırıldı.");
+  } catch (e) {
+    if (hint) hint.textContent = e.message || t("Avatar kaldırılamadı.");
+  }
+}
+
 /* ───────────────────── Başlatma ───────────────────── */
 wireModal("authModal", "closeAuth");
 wireModal("paywallModal", "closePaywall");
@@ -7703,6 +8012,7 @@ wireModal("wallModal", "closeWall", () => {
 });
 wireModal("shareModal", "closeShare");
 wireModal("profileModal", "closeProfile");
+wireModal("reportModal", "closeReport");
 watchModalStack();
 
 // Duvar kartlarındaki yazara tıklayınca profil açılır (olay delegasyonu)
@@ -7716,8 +8026,20 @@ watchModalStack();
     if (like) { toggleLike(like); return; }
     const cmt = e.target.closest('[data-act="comments"]');
     if (cmt) { toggleComments(cmt); return; }
-    const del = e.target.closest(".cmt-del");
+    const del = e.target.closest('[data-act="del-comment"]');
     if (del) { deleteComment(del); return; }
+    const hide = e.target.closest('[data-act="hide-comment"]');
+    if (hide) { hideComment(hide); return; }
+    const rc = e.target.closest('[data-act="report-comment"]');
+    if (rc) { openReportModal("COMMENT", rc.closest("[data-comment-id]").dataset.commentId); return; }
+    const un = e.target.closest('[data-act="unshare"]');
+    if (un) { unshareProject(un); return; }
+    const rp = e.target.closest('[data-act="report"]');
+    if (rp) {
+      const card = rp.closest("[data-project-id]");
+      if (card) openReportModal(rp.dataset.reportType || "PROJECT", card.dataset.projectId);
+      return;
+    }
     const send = e.target.closest(".cmt-send");
     if (send) submitComment(send.closest(".wall-comments"));
   });
@@ -7728,9 +8050,34 @@ const wallModalEl = $("wallModal");
 if (wallModalEl) {
   wallModalEl.addEventListener("click", (e) => {
     const tab = e.target.closest("[data-wall-tab]");
-    if (tab) setWallTab(tab.dataset.wallTab);
+    if (tab) { setWallTab(tab.dataset.wallTab); return; }
+    if (e.target.closest("#wallClear")) {
+      const input = $("wallSearch");
+      if (input) input.value = "";
+      setWallQuery("");
+    }
   });
 }
+
+// Arama: her tuşta istek atılırsa yazarken yazarken 12 kart gelir. 300 ms
+// bekletiyoruz ve eski yanıtın yeni sorguyu ezmesini engelliyoruz.
+const wallSearchEl = $("wallSearch");
+if (wallSearchEl) {
+  wallSearchEl.addEventListener("input", () => {
+    clearTimeout(memberState.wallSearchTimer);
+    const value = wallSearchEl.value;
+    memberState.wallSearchTimer = setTimeout(() => setWallQuery(value), 300);
+  });
+  // Enter'da beklemeden ara: mobil klavye için önemli.
+  wallSearchEl.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    clearTimeout(memberState.wallSearchTimer);
+    setWallQuery(wallSearchEl.value);
+  });
+}
+const wallSortEl = $("wallSort");
+if (wallSortEl) wallSortEl.addEventListener("change", () => setWallSort(wallSortEl.value));
 
 const wallBtnEl = $("wallBtn");
 if (wallBtnEl) wallBtnEl.addEventListener("click", openWall);

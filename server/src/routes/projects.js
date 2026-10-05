@@ -4,6 +4,7 @@ import { requireMember } from "../auth.js";
 import { imageContentTypeOk, newObjectKey, presignUpload, storageConfigured } from "../storage.js";
 import { projectSelect, shapeProject } from "../projectSelect.js";
 import { publicUrlFor } from "../storage.js";
+import { searchTextFor } from "../str.js";
 
 const router = express.Router();
 
@@ -39,6 +40,8 @@ router.post("/", requireMember, async (req, res, next) => {
         title,
         summary,
         promptBody,
+        // Arama metni yazılırken katlanır; sorgu sırasında çalışma yok.
+        searchText: searchTextFor(title, summary),
         guideJson,
         isShared: true,
         sharedAt: new Date(),
@@ -112,6 +115,50 @@ router.post("/:id/images", requireMember, async (req, res, next) => {
     });
     const updated = await prisma.project.findUnique({ where: { id: project.id }, select: projectSelect(true) });
     res.status(201).json({ project: shapeProject(updated, { publicUrlFor }) });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * DELETE /api/projects/:id/share — duvardan kaldır (yalnız sahibi).
+ * Proje SİLİNMEZ; yalnız paylaşım kapanır, sahibi rehberine erişmeye devam eder.
+ */
+router.delete("/:id/share", requireMember, async (req, res, next) => {
+  try {
+    const project = await prisma.project.findUnique({
+      where: { id: String(req.params.id) },
+      select: { id: true, ownerId: true, isShared: true }
+    });
+    if (!project || project.ownerId !== req.user.id) return res.status(404).json({ error: "not_found" });
+    if (!project.isShared) return res.json({ isShared: false, already: true });
+    await prisma.project.update({
+      where: { id: project.id },
+      data: { isShared: false, sharedAt: null }
+    });
+    res.json({ isShared: false });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * PATCH /api/projects/:id/moderation — yalnız yönetici. Projeyi gizler
+ * (duvardan düşer, kayıt kalır) ya da geri açar.
+ */
+router.patch("/:id/moderation", requireMember, async (req, res, next) => {
+  try {
+    if (req.user.isAdmin !== true) return res.status(403).json({ error: "forbidden" });
+    const id = String(req.params.id);
+    const exists = await prisma.project.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) return res.status(404).json({ error: "not_found" });
+    const hidden = Boolean(req.body?.hidden);
+    const project = await prisma.project.update({
+      where: { id },
+      data: { hiddenAt: hidden ? new Date() : null },
+      select: { id: true, isShared: true, hiddenAt: true }
+    });
+    res.json({ project });
   } catch (e) {
     next(e);
   }
