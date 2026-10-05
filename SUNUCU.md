@@ -93,6 +93,36 @@ docker compose -p arlo --profile dev run --rm test
 Webhook ulaşmazsa istemci `POST /api/billing/verify` çağırır; sunucu oturumu
 gerçekten ödenmiş mi diye kontrol eder.
 
+### Test anahtarıyla uçtan uca deneme
+
+`.env` dolduktan ve `docker compose ... up -d --build api` çalıştıktan sonra:
+
+```bash
+node scripts/checkout-smoke.mjs
+```
+
+Script: yapılandırmanın yüklü olup olmadığını, fiyatın sunucudan geldiğini, gerçek
+bir Checkout oturumunun açılıp açılmadığını, ödeme öncesi üyeliğin **oluşmadığını**
+ve üye hesabın ikinci kez ödeme açamadığını kontrol eder. Kart bilgisi
+girmeni istemez; açılan Checkout adresini **sen** tarayıcıda açıp Stripe'ın test
+kartıyla (`4242 4242 4242 4242`, herhangi bir son kullanma tarihi ve CVC) ödersin.
+
+Ödeme sonrası iki yol vardır ve ikisi de çalışmalıdır:
+
+- **Webhook:** `stripe listen --forward-to localhost:4021/api/webhooks/stripe`
+  çalışırken ödeme yap → `checkout.session.completed` otomatik işlenir.
+- **Doğrulama uçtan uca (webhook yoksa):** dönüş adresindeki `session_id` ile
+  ```bash
+  curl -X POST http://127.0.0.1:4021/api/billing/verify \
+    -H 'Content-Type: application/json' \
+    -H 'Authorization: Bearer <token>' \
+    -d '{"sessionId":"cs_test_..."}'
+  ```
+
+Her iki yoldan sonra `GET /api/auth/me` çalıştırınca `isMember: true` ve
+üyelik planı `LIFETIME` görünmelidir. Aynı `verify` isteğini ikinci kez
+göndermek **ikinci ödeme kaydı oluşturmamalıdır** (`Payment.providerRef` tekil).
+
 ### Fiyat kuralı
 
 `config.js` → `PRICING_LIFETIME_LIMIT=1000`. Aktif ömür boyu üye sayısı 1000'den

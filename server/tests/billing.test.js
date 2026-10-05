@@ -5,7 +5,8 @@ import request from "supertest";
 import { createApp } from "../src/index.js";
 import { prisma } from "../src/db.js";
 import { planFor } from "../src/stripe.js";
-import { grantMembershipFromCheckout } from "../src/routes/billing.js";
+import { grantMembershipFromCheckout, safeReturnUrl } from "../src/routes/billing.js";
+import { config } from "../src/config.js";
 import { makeUser, resetDb } from "./setup.js";
 
 const app = createApp();
@@ -140,4 +141,34 @@ test("ödemeyle üye olan kullanıcı /api/ai/pass sınırsız hak alır", async
   const acik = await request(app).post("/api/ai/pass").set("Authorization", `Bearer ${token}`);
   assert.equal(acik.status, 200);
   assert.equal(acik.body.unlimited, true);
+});
+/* ── dönüş adresi güvenliği (v4.1.0) ─────────────────────────────────
+   Ödeme sonrası kullanıcı Stripe'dan geri yönlendirilir. Bu adres
+   istemciden gelir; beyaz listedeki origin'ler dışındaki her şey
+   varsayılan siteye çevrilmeli (açık yönlendirme / phishing riski). */
+test("dönüş adresi beyaz listedeki origin'e sabitlenir", () => {
+  const izinli = config.appOrigins[0];
+
+  // Beyaz listedeki adres aynen korunur.
+  assert.equal(safeReturnUrl(izinli + "/?pay=ok"), izinli + "/?pay=ok");
+  assert.equal(safeReturnUrl(""), izinli, "adres yoksa varsayılan site");
+  assert.equal(safeReturnUrl(null), izinli);
+  assert.equal(safeReturnUrl(undefined), izinli);
+
+  // Farklı site: kullanıcının gönderdiği adres değil, varsayılan kullanılır.
+  for (const kotu of [
+    "https://kotu.example.com/ele-gecir",
+    "https://kotu.example.com",
+    "http://localhost:8000.evil.com/",
+    "javascript:alert(1)",
+    "not-a-url"
+  ]) {
+    assert.equal(safeReturnUrl(kotu), izinli, `reddedilmeliydi: ${kotu}`);
+  }
+
+  // Aynı origin, farklı yol: yol korunur (pay=ok sorgusu döner).
+  assert.equal(safeReturnUrl(izinli + "/?pay=cancel"), izinli + "/?pay=cancel");
+
+  // Alt origin kabul edilmez (tam eşleşme gerekir).
+  assert.equal(safeReturnUrl(izinli + ".evil.com/"), izinli);
 });

@@ -7,7 +7,7 @@ import { config, pricing } from "../config.js";
 const router = express.Router();
 
 /** İstemciden gelen dönüş adresi yalnız beyaz listedeki origin'lerden kabul edilir. */
-function safeReturnUrl(raw) {
+export function safeReturnUrl(raw) {
   const fallback = config.appOrigins[0] || "";
   if (!raw) return fallback;
   try {
