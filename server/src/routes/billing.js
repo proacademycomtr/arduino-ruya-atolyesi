@@ -92,6 +92,13 @@ router.post("/checkout", requireAuth, async (req, res, next) => {
       return res.status(503).json({ error: "stripe_not_configured", message: "Ödeme altyapısı henüz yapılandırılmamış." });
     }
     const decision = planFor(await countLifetimeMembers());
+    if (decision.soldOut) {
+      // Kampanya kapandı: yanıltıcı bir “aylık” vaadi yerine açıkça kapatıyoruz.
+      return res.status(409).json({
+        error: "launch_sold_out",
+        message: "İlk 1000 kişilik lansman fiyatı doldu. Üyelik şu an kapalı."
+      });
+    }
     if (!decision.priceId) {
       return res.status(503).json({
         error: "stripe_price_missing",

@@ -1,6 +1,23 @@
 # Changelog
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
+## [4.2.0] - 2026-10-05
+
+- Sürüm 4.2.0 olarak derlendi.
+
+## [4.2.0] - 2026-10-05
+
+- Yeni: 🔒 **Giriş kapısı** — Kütüphane, Arşiv, Başarımlar, Sınıf Modu ve Ayarlar menüleri giriş yapana kadar **kilitlidir**: görünür ama 🔒 işaretlidir, tıklanınca içeri açılmaz ve giriş penceresi açılır. Kilit kararı TEK yerde toplanır (`GATED_MENU_IDS` + `requireLogin`); topluluk duvarı herkese açık kalmaya devam eder
+- Yeni: 💎 **Lansman sayfası (ziyaretçi)** — giriş yapmamış kullanıcıya ekranı saran tek sayfalık tanıtım: **8 özellik kartı** (yapay zekâ rehberi, Wokwi + .zip, Göz Serbest sesli rehber, gerçek malzeme fiyatı, alışveriş listesi, başarı sertifikaları, sınıf modu, portfolyo arşivi) ve güçlü **$1 ömür boyu** CTA'sı. Giriş yapılınca landing gizlenir ve uygulama açılır
+- Yeni: 🎟️ **Header'da ayrı “💎 Üye Ol — $1” ve “👤 Giriş Yap” düğmeleri** (ziyaretçide görünür, giriş yapınca yerini profil düğmesine bırakır). Üye Ol düğmesi doğrudan kayıt penceresini kampanya metniyle açar
+- Yeni: 💵 **Tek fiyat** — ilk 1000 kişi için $1 ömür boyu. Sınır dolunca üyelik **satışı kapanır** (`launch_sold_out`); daha önce aylık aboneliğe geçiliyordu. Kullanıcıya sonradan geri çekilecek bir abonelik vaadi yerine kapı açıkça kapatılıyor
+- Değişti: **“Demo Modu” rozeti artık tıklanamaz.** Daha önce Ayarlar'ı (API anahtarı) açıyordu; artık `aria-disabled` + `pointer-events: none` ile yalnız bilgi veriyor. Üyelik akışı üyelik düğmelerinden yürür
+- Düzeltme: `renderAuthBtn` içindeki erken dönüşlerde menü kilitleri hiç güncellenmiyordu (sunucu yokken ve kullanıcı yokken). `renderMenuLocks` artık HER yolda çalışıyor
+- Düzeltme: `bootstrapApi` API adresi boşken hiçbir şey çağırmadan dönüyordu; bu yüzden demo modunda landing CTA'sı hiç gösterilmiyor, “Üye Ol” düğmeleri başlıksız kalıyordu. Demo durumu da artık arayüzü hazırlıyor (kilitler açık — demo bozulmaz, üyelik düğmeleri pasif)
+- Test: `node --test tests/` 122→125, sunucu testleri 70→72 (tek fiyat kuralı: `soldOut`, `remaining`, her durumda LIFETIME). `scripts/verify-member.mjs` 34→54 kontrol: ziyaretçi CTA'ları, $1 metni, demo rozeti tıklanamazlığı, kilitli menünün **içeri açılmaması**, giriş/çıkış sonrası kilit durumunun değişmesi
+- Test altyapısı: `tests/extract.js` ikinci turda `LIB_DATA`/`ALL_LIB`'i yeniden tanımlayıp "Identifier has already been declared" hatası veriyordu. Bu hata yeni bir isim `missing` düştüğünde ortaya çıkıyordu; artık yalnız gerçekten tanımsız olanlar ekleniyor
+- Sürüm 4.2.0 olarak derlendi.
+
 ## [4.1.0] - 2026-10-05
 
 - Yeni: 👥 **Takip akışı sekmesi** — duvarın üstünde "🌍 Tümü / 👥 Takip Ettiklerim" sekmeleri. Takip sekmesi yalnız takip edilenlerin paylaşımlarını gösterir (`GET /api/feed/timeline`), üyeye açıktır; giriş yoksa giriş penceresi, üyelik yoksa paywall açılır. `/api/feed/timeline` artık `/api/wall` ile **aynı sözleşmeyi** dönerdi (cursor sayfalaması, `viewer`, `followingCount`); "Daha fazla göster" her iki sekmede de çalışır

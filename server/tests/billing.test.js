@@ -29,11 +29,25 @@ test("fiyat kuralı: 1000 kişiden önce ömür boyu tek seferlik ödeme", () =>
   assert.equal(a.currency, "usd");
 });
 
-test("fiyat kuralı: tam 1000. üye artık aylığa geçer", () => {
+test("fiyat kuralı: TEK FİYAT — sınır dolunca aylık plan yok, satış kapanır", () => {
   const b = planFor(1000, opts);
-  assert.equal(b.plan, "MONTHLY");
-  assert.equal(b.mode, "subscription");
-  assert.equal(b.amountCents, 300);
+  assert.equal(b.mode, "payment", "abonelik moduna geçilmemeli");
+  assert.equal(b.amountCents, opts.lifetimeCents, "fiyat aynı kalır");
+  assert.equal(b.soldOut, true, "sınır dolunca kapı kapanmalı");
+  assert.equal(b.remaining, 0);
+});
+
+test("fiyat kuralı: kalan kontenjan doğru hesaplanır", () => {
+  assert.equal(planFor(0, opts).remaining, opts.lifetimeLimit);
+  assert.equal(planFor(999, opts).remaining, 1, "son kişiye 1 kalmalı");
+  assert.equal(planFor(999, opts).soldOut, false);
+});
+
+test("fiyat kuralı: her durumda LIFETIME döner (tek plan)", () => {
+  for (const n of [0, 1, 500, 999, 1000, 5000]) {
+    assert.equal(planFor(n, opts).plan, "LIFETIME");
+    assert.equal(planFor(n, opts).mode, "payment");
+  }
 });
 
 test("fiyat kuralı: sınır altındaki son üye ömür boyu kalır", () => {

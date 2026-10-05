@@ -117,7 +117,9 @@ function updateStatusPill() {
   } else {
     aiStatus.dataset.state = "demo";
     aiStatus.querySelector(".status-label").textContent = t("Demo Modu");
-    aiStatus.title = getLang() === "en" ? "Add an API key in Settings to enable live AI" : "Ayarlar'dan API anahtarı ekleyerek gerçek AI'ı etkinleştir";
+    aiStatus.title = getLang() === "en"
+      ? "Demo mode — sample guides. Members get real AI guides."
+      : "Demo Modu — örnek rehberler. Üyeler gerçek yapay zekâ rehberi alır.";
   }
 }
 
@@ -161,7 +163,9 @@ function updateKeyHint() {
 openSettingsBtn.addEventListener("click", openModal);
 closeSettingsBtn.addEventListener("click", closeModal);
 providerSelect.addEventListener("change", updateKeyHint);
-aiStatus.addEventListener("click", openModal);
+// Demo Modu rozeti YALNIZCA bilgi verir (tıklanamaz). API anahtarı ekleme
+// artık Ayarlar'dan yapılır: “Üye Ol” / “Giriş Yap” akışının parçası değil.
+aiStatus.setAttribute("aria-disabled", "true");
 settingsModal.addEventListener("click", (e) => {
   if (e.target === settingsModal) closeModal();
 });
@@ -5121,6 +5125,20 @@ const I18N = {
     "Yorum gönderilemedi.": "Could not send the comment.",
     "Yorum silinemedi.": "Could not delete the comment.",
     "Sil": "Delete",
+    // v4.2.0 — giriş kapısı ve $1 lansman sayfası
+    "💎 Üye Ol — $1": "💎 Join — $1",
+    "👤 Giriş Yap": "👤 Sign in",
+    "💎 Hemen $1 ile Ömür Boyu Üye Ol": "💎 Join for life — $1",
+    "💎 $1 ile Üye Ol": "💎 Join for $1",
+    "Bu bölüm için giriş yap ya da ücretsiz üye ol.": "Sign in or join free to use this section.",
+    "İlk 1000 kişiye ömür boyu erişim $1.": "Lifetime access for $1 — first 1000 people.",
+    "Üyelik sunucusu henüz açılmadı — şu an demo moddasın.": "The membership server isn't open yet — you're in demo mode.",
+    "Giriş sunucusu henüz açılmadı — şu an demo moddasın.": "The sign-in server isn't open yet — you're in demo mode.",
+    "Demo Modu — örnek rehberler. Üyeler gerçek yapay zekâ rehberi alır.": "Demo mode — sample guides. Members get real AI guides.",
+    "Demo mode — sample guides. Members get real AI guides.": "Demo Modu — örnek rehberler. Üyeler gerçek yapay zekâ rehberi alır.",
+    "İlk 1000 kişiye özel": "FIRST 1000 PEOPLE ONLY",
+    "ömür boyu": "lifetime",
+    "Demo Modu": "Demo Mode",
     // v4.0.0 — Profil ve takip
     "🧑‍🚀 Profil": "🧑‍🚀 Profile",
     "🧑‍🚀 Profilim": "🧑‍🚀 My profile",
@@ -6748,6 +6766,96 @@ function isMember() {
   return Boolean(memberState.user && memberState.user.isMember);
 }
 
+/* ───────────────────── Giriş kapısı (menü kilitleri) ───────────────────── */
+/**
+ * Giriş yapmadan kullanıcının açamayacağı bölümler. Karar TEK yerde toplanır:
+ * hem menü düğmeleri hem iç bağlantılar hem de doğrudan çağrılar buradan geçer.
+ * `wallBtn` ve `authBtn` listede yok — topluluk duvarı herkese açıktır.
+ */
+const GATED_MENU_IDS = ["libraryBtn", "archiveBtn", "badgesBtn", "classBtn", "openSettings"];
+
+/** Kullanıcı giriş yapmış mı? (Sunucu yoksa hiç giriş yapılamaz → false.) */
+function isSignedIn() {
+  return Boolean(API_BASE && memberState.user);
+}
+
+/**
+ * Uygulamayı kullanabilir mi? Sunucu yoksa DEMO çalışır ve menüler açıktır
+ * (yoksa GitHub Pages dağıtımı kullanılamaz hale gelirdi). Sunucu varsa
+ * yalnız giriş yapan kullanabilir.
+ */
+function canUseApp() {
+  if (!API_BASE) return true;
+  return Boolean(memberState.user);
+}
+
+/**
+ * Kilitli bir menüye erişim isteği. Giriş varsa `false` (çağıran devam eder),
+ * yoksa giriş penceresini açar ve `true` döner — çağıran akışı kesmelidir.
+ */
+function requireLogin(action) {
+  if (canUseApp()) return false;
+  openAuthModal(t("Bu bölüm için giriş yap ya da ücretsiz üye ol."));
+  return true;
+}
+
+/** Üye menü düğmelerini kilitli/açık görünüme çevirir. */
+function renderMenuLocks() {
+  const acik = canUseApp();
+  for (const id of GATED_MENU_IDS) {
+    const el = $(id);
+    if (!el) continue;
+    el.classList.toggle("is-locked", !acik);
+    // NOT: `disabled` özelliği KULLANILMAZ — o zaman düğmeye hiç
+    // tıklanamaz ve kullanıcı giriş penceresini göremez. `aria-disabled`
+    // yalnız ekran okuyuculara bildirir; tıklamayı biz yakalarız.
+    el.setAttribute("aria-disabled", acik ? "false" : "true");
+  }
+  // Landing ve “Üye Ol / Giriş Yap” düğmeleri ZİYARETÇİYE aittir:
+  // sunucu olmasa da (demo) gösterilir, çünkü sunucu kapandığında
+  // üyelik alınamaz ama tanıtım sayfası her zaman değerlidir.
+  const girisYok = !isSignedIn();
+  for (const id of ["landingCta", "landingFeatures", "joinBtn", "loginBtn"]) {
+    const el = $(id);
+    if (el) el.hidden = !girisYok;
+  }
+  for (const id of ["joinBtnHero", "joinBtnFinal", "loginBtnHero"]) {
+    const el = $(id);
+    if (el) el.hidden = acik;   // hero içindekiler yalnız landing ile birlikte
+  }
+  // authBtn: giriş yapınca kullanıcı adı → profil/çıkış düğmesidir ve
+  // görünür KALMALIDIR; ziyaretçide yerini Üye Ol / Giriş Yap alır.
+  const authEl = $("authBtn");
+  if (authEl && API_BASE) authEl.hidden = girisYok;
+  // Ziyaretçiye "üye ol" görünür ama sunucu yoksa işe yaramaz — belli et.
+  for (const id of ["joinBtn", "joinBtnHero", "joinBtnFinal", "loginBtn", "loginBtnHero"]) {
+    const el = $(id);
+    if (!el) continue;
+    el.disabled = !API_BASE || !memberState.apiAvailable;
+  }
+  renderLaunchPrice();
+}
+
+/** Fiyatı sunucudan okur; sunucu yoksa sabit varsayılanı kullanır. */
+function renderLaunchPrice() {
+  const el = $("launchAmount");
+  if (!el) return;
+  const p = memberState.health && memberState.health.pricing;
+  el.textContent = p && p.lifetimeCents ? fmtUsd(p.lifetimeCents) : "$1";
+}
+
+/** "Üye Ol" → doğrudan üyelik penceresi (kampanyalı). */
+function openJoinModal() {
+  if (!API_BASE || !memberState.apiAvailable) {
+    openAuthModal(t("Üyelik sunucusu henüz açılmadı — şu an demo moddasın."));
+    return;
+  }
+  authModalMode = "register";
+  renderAuthModal(t("İlk 1000 kişiye ömür boyu erişim $1."));
+  const m = $("authModal");
+  if (m) m.hidden = false;
+}
+
 /** API'ye giden tek kapı. Hata durumunda `status` ve `data` taşır. */
 async function apiFetch(path, opts = {}) {
   if (!API_BASE) {
@@ -6790,25 +6898,29 @@ function fmtUsd(cents) {
 /* ───────────────────── Header düğmesi ───────────────────── */
 function renderAuthBtn() {
   const btn = $("authBtn");
-  if (!btn) return;
-  if (!API_BASE) { btn.hidden = true; return; }
-  btn.hidden = false;
-  if (!memberState.apiAvailable) {
-    btn.textContent = t("👤 Giriş");
-    btn.title = t("Sunucuya ulaşılamıyor — demo modda çalışıyorsun");
-    btn.dataset.state = "offline";
-    return;
+  if (btn && !API_BASE) { btn.hidden = true; renderMenuLocks(); return; }
+  if (btn) {
+    btn.hidden = false;
+    if (!memberState.apiAvailable) {
+      btn.textContent = t("👤 Giriş");
+      btn.title = t("Sunucuya ulaşılamıyor — demo modda çalışıyorsun");
+      btn.dataset.state = "offline";
+    } else {
+      const u = memberState.user;
+      if (!u) {
+        btn.textContent = t("👤 Giriş");
+        btn.title = t("Giriş yap / Üye ol");
+        btn.dataset.state = "out";
+      } else {
+        btn.textContent = (isMember() ? "⭐ " : "👤 ") + u.displayName;
+        btn.dataset.state = isMember() ? "member" : "user";
+        btn.title = isMember() ? t("Üyesin — sınırsız kullanım") : t("Üye değilsin — ücretsiz hak kaldı: ") + memberState.freePasses;
+      }
+    }
   }
-  const u = memberState.user;
-  if (!u) {
-    btn.textContent = t("👤 Giriş");
-    btn.title = t("Giriş yap / Üye ol");
-    btn.dataset.state = "out";
-  } else {
-    btn.textContent = (isMember() ? "⭐ " : "👤 ") + u.displayName;
-    btn.dataset.state = isMember() ? "member" : "user";
-    btn.title = isMember() ? t("Üyesin — sınırsız kullanım") : t("Üye değilsin — ücretsiz hak kaldı: ") + memberState.freePasses;
-  }
+  // Menü kilitleri HER yolda güncellenmeli: aşağıdaki erken dönüşler
+  // (sunucu yok, üye değil) atlansa bile landing/kilit durumu tutarlı kalmalı.
+  renderMenuLocks();
 }
 
 /* ───────────────────── Oturum ───────────────────── */
@@ -6827,7 +6939,13 @@ async function refreshMe() {
 }
 
 async function bootstrapApi() {
-  if (!API_BASE) return;                    // API yok → hiçbir şey değişmez
+  if (!API_BASE) {
+    // Sunucu yok: demo modu. Hiçbir ağ isteği atılmaz ama ARAYÜZ yine
+    // hazırlanır — aksi hâlde landing CTA'sı görünmez, “Üye Ol” düğmeleri
+    // başlıksız kalır ve menü kilitleri tutarsız olurdu.
+    renderAuthBtn();      // bu yol içinde renderMenuLocks() çalıştırır
+    return;
+  }
   try {
     const health = await apiFetch("/api/health", { timeout: 2500 });
     memberState.health = health;
@@ -6838,7 +6956,7 @@ async function bootstrapApi() {
   renderAuthBtn();
   const wallBtn = $("wallBtn");
   if (wallBtn) wallBtn.hidden = !memberState.apiAvailable;
-  if (!memberState.apiAvailable) return;
+  if (!memberState.apiAvailable) { renderMenuLocks(); return; }
   await refreshMe();
 }
 
@@ -7611,6 +7729,42 @@ if (wallModalEl) {
 
 const wallBtnEl = $("wallBtn");
 if (wallBtnEl) wallBtnEl.addEventListener("click", openWall);
+
+// ── Kilitli menüler: tıklanınca içeriye GİRMEZ, giriş penceresini açar.
+// ÖNEMLİ: Bu dinleyici `capture` fazında bağlanır ve `stopImmediatePropagation`
+// çağırır. Aksi hâlde düğmenin kendi dinleyicisi (ör. openArchiveModal) kilitten
+// sonra çalışır ve modal yine açılır — yani kilit gerçekten engellemezdi.
+for (const id of GATED_MENU_IDS) {
+  const el = $(id);
+  if (!el) continue;
+  el.addEventListener("click", (e) => {
+    if (canUseApp()) return;
+    e.preventDefault();                     // <a href="#..."> sayfayı kaydırmasın
+    e.stopImmediatePropagation();          // düğmenin kendi açma dinleyicisi çalışmasın
+    requireLogin();
+  }, true);
+}
+
+// ── Üye Ol / Giriş Yap düğmeleri (header + hero + kapanış CTA)
+for (const id of ["joinBtn", "joinBtnHero", "joinBtnFinal"]) {
+  const el = $(id);
+  if (el) el.addEventListener("click", openJoinModal);
+}
+for (const id of ["loginBtn", "loginBtnHero"]) {
+  const el = $(id);
+  if (el) {
+    el.addEventListener("click", () => {
+      if (!API_BASE || !memberState.apiAvailable) {
+        openAuthModal(t("Giriş sunucusu henüz açılmadı — şu an demo moddasın."));
+        return;
+      }
+      authModalMode = "login";
+      renderAuthModal();
+      const m = $("authModal");
+      if (m) m.hidden = false;
+    });
+  }
+}
 const authBtnEl = $("authBtn");
 if (authBtnEl) {
   authBtnEl.addEventListener("click", () => {

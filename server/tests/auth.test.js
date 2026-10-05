@@ -17,7 +17,7 @@ test("sağlık kontrolü veritabanı ve yapılandırmayı raporlar", async () =>
   assert.equal(res.status, 200);
   assert.equal(res.body.ok, true);
   assert.equal(res.body.db, true);
-  assert.equal(res.body.version, "4.1.0");
+  assert.equal(res.body.version, "4.2.0");
   assert.equal(res.body.pricing.lifetimeCents, 100);
   assert.equal(res.body.pricing.lifetimeLimit, 1000);
 });

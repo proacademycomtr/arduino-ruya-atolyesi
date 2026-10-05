@@ -136,6 +136,7 @@ function loadCore() {
     // v4.0.0 — üyelik/duvar istemcisi
     "wallCardHTML", "fmtUsd", "sharePrefill", "wallTabsHTML", "wallEmptyText", "wallTabsCount",
     "commentsHTML", "renderComments", "updateWallLikeBtn", "likeBtnFace",
+    "canUseApp", "GATED_MENU_IDS",
     "loadClassSize", "weeklyProgressSVG",
     "catalogSuggestions", "atRiskStudents", "unknownMaterials", "classSubsToCSV", "downloadClassCSV",
     "shoppingListText", "shareShoppingList", "filterSubmissions", "paginate", "mostActiveWeek", "mondayOf",
@@ -161,11 +162,28 @@ function loadCore() {
   if (missing.length) {
     const needed = [];
     // LIB_DATA (dizi sabiti) + LIB_CATS + kategori sabitleri
-    const libDataM = src.match(/const LIB_DATA = \[[\s\S]*?\n\];/);
-    if (libDataM) needed.push(libDataM[0]);
-    const libCatsM = src.match(/const LIB_CATS = \[[^\]]*\];/);
-    if (libCatsM) needed.push(libCatsM[0]);
+    // app.js sandbox'ta TAMAMEN çalıştığı için LIB_DATA / LIB_CATS / API_BASE
+    // zaten tanımlıdır. Bunları ikinci kez tanımlamak "Identifier has already
+    // been declared" hatası verir ve ikinci turun tamamını düşürür; yalnızca
+    // gerçekten tanımsızsa ekliyoruz.
+    const defineIfAbsent = (name, text) => {
+      if (!text) return;
+      let tanimli = false;
+      try {
+        tanimli = vm.runInContext("typeof " + name + " !== 'undefined'", sandbox) === true;
+      } catch { tanimli = false; }
+      if (!tanimli) needed.push(text);
+    };
+    defineIfAbsent("LIB_DATA", (src.match(/const LIB_DATA = \[[\s\S]*?\n\];/) || [])[0]);
+    defineIfAbsent("LIB_CATS", (src.match(/const LIB_CATS = \[[^\]]*\];/) || [])[0]);
     for (const n of ["foldTR", "ALL_LIB"]) {
+      // Zaten tanımlıysa ikinci kez eklemek "Identifier has already been
+      // declared" hatası üretiyor ve turun geri kalanını düşürüyor.
+      let tanimli = false;
+      try {
+        tanimli = vm.runInContext("typeof " + n + " !== 'undefined'", sandbox) === true;
+      } catch { tanimli = false; }
+      if (tanimli) continue;
       const f = sliceFunction(src, n);
       // const foldTR = ... biçimindeyse kaynak metnini al
       if (!f) {

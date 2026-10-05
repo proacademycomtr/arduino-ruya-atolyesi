@@ -42,9 +42,61 @@ try {
   // 1) Header düğmeleri
   const authBtn = page.locator("#authBtn");
   const wallBtn = page.locator("#wallBtn");
-  await authBtn.waitFor({ state: "visible", timeout: 10000 });
-  check("Başlıkta 👤 düğmesi görünür", await authBtn.isVisible());
+  await page.waitForFunction(() => {
+    const b = document.getElementById("authBtn");
+    return b && b.dataset.state;
+  }, { timeout: 10000 }).catch(() => {});
   check("Başlıkta 🌍 Duvar düğmesi görünür", await wallBtn.isVisible());
+
+  // 1a) v4.2.0 — ziyaretçi (giriş yokken) durumu
+  const joinBtn = page.locator("#joinBtn");
+  const loginBtn = page.locator("#loginBtn");
+  check("Ziyaretçiye 💎 Üye Ol düğmesi görünür", await joinBtn.isVisible());
+  check("Ziyaretçiye 👤 Giriş Yap düğmesi görünür", await loginBtn.isVisible());
+  check("Üye Ol düğmesinde $1 yazıyor",
+    ((await joinBtn.textContent()) || "").includes("$1"),
+    (await joinBtn.textContent() || "").trim());
+  check("Lansman fiyatı $1 gösteriliyor",
+    ((await page.locator("#launchAmount").textContent()) || "").trim() === "$1",
+    (await page.locator("#launchAmount").textContent() || "").trim());
+  check("Lansman CTA bölümü görünür", await page.locator("#landingCta").isVisible());
+  check("Özellik anlatımı görünür", await page.locator("#landingFeatures").isVisible());
+  const ozellikSayisi = await page.locator(".feat-card").count();
+  check("Özellik kartları basılı (8)", ozellikSayisi === 8, `${ozellikSayisi} kart`);
+
+  // 1b) Demo Modu rozeti: tıklanamaz, yalnız bilgi
+  const aiStatus = page.locator("#aiStatus");
+  check("Demo Modu rozeti görünür", await aiStatus.isVisible());
+  check("Demo Modu rozeti tıklanamaz (aria-disabled)",
+    (await aiStatus.getAttribute("aria-disabled")) === "true");
+  const rozetTikanabilir = await page.evaluate(() => {
+    const el = document.getElementById("aiStatus");
+    return getComputedStyle(el).pointerEvents;
+  });
+  check("Demo Modu rozeti pointer-events: none", rozetTikanabilir === "none", rozetTikanabilir);
+
+  // 1c) Kilitli menüler: görünür ama kilitli işaretli
+  const kilitli = await page.evaluate(() =>
+    Array.from(document.querySelectorAll(".header-actions .is-locked")).map((e) => e.id));
+  check("Kilitli menüler işaretlendi",
+    ["libraryBtn", "archiveBtn", "badgesBtn", "classBtn"].every((id) => kilitli.includes(id)),
+    kilitli.join(",") || "yok");
+
+  // 1d) Kilitli menüye tıklayınca içeriye GİRİLMEMELİ.
+  // Düğme `disabled` DEĞİL (aksi hâlde giriş penceresi hiç açılamaz), bu
+  // yüzden gerçek tıklamayı `force` ile gönderiyoruz — kullanıcının
+  // gördüğü davranışın ta kendisi bu.
+  await page.locator("#archiveBtn").click({ force: true });
+  await page.waitForTimeout(700);
+  check("Kilitli menü giriş penceresini açtı",
+    await page.locator("#authModal:not([hidden])").isVisible());
+  check("Kilitli menü içeriği AÇILMADI",
+    await page.locator("#archiveModal").isHidden());
+  const adresKaymadi = await page.evaluate(() =>
+    !location.hash.includes("kutuphane") && !location.hash.includes("arsiv"));
+  check("Kilitli menü sayfayı kaydırmadı", adresKaymadi, await page.evaluate(() => location.hash));
+  await page.locator("#closeAuth").click();
+  await page.waitForTimeout(400);
 
   // API'ye ulaşıldı mı? (health yoklaması)
   await page.waitForFunction(() => {
@@ -54,8 +106,8 @@ try {
   const state = await authBtn.getAttribute("data-state");
   check("API'ye ulaşıldı (health)", state !== "offline", `data-state=${state}`);
 
-  // 2) Kayıt
-  await authBtn.click();
+  // 2) Kayıt — ziyaretçi CTA'sından değil, giriş düğmesinden
+  await loginBtn.click();
   await page.locator("#authModal:not([hidden])").waitFor({ timeout: 5000 });
   check("Giriş penceresi açıldı", true);
   await page.locator('[data-auth-tab="register"]').click();
@@ -71,6 +123,14 @@ try {
   check("Düğme kullanıcı adını gösteriyor", label.includes("Tarayıcı Denemesi"), label);
   const title = await authBtn.getAttribute("title");
   check("Kalan ücretsiz hak gösteriliyor", /1/.test(title || ""), title);
+
+  // 3b) Giriş sonrası: landing gizlenmeli, menü kilitleri açılmalı
+  const landingGizli = await page.locator("#landingCta").isHidden();
+  check("Giriş sonrası lansman CTA gizlendi", landingGizli);
+  const uzereKalan = await page.evaluate(() =>
+    document.querySelectorAll(".header-actions .is-locked").length);
+  check("Giriş sonrası menü kilitleri açıldı", uzereKalan === 0, `${uzereKalan} kilitli`);
+  check("Giriş sonrası Üye Ol düğmesi gizlendi", await page.locator("#joinBtn").isHidden());
 
   // 4) Duvar — üye DEĞİL, prompt'lar kilitli olmalı
   await wallBtn.click();
@@ -131,10 +191,18 @@ try {
   await authBtn.click();
   await page.locator("#authLogout").click();
   await page.waitForTimeout(800);
-  check("Çıkış yapıldı", ((await authBtn.textContent()) || "").includes("Giriş"));
+  // Çıkışla ziyaretçi durumuna dönüldü: authBtn gizlenir, yerine
+  // Üye Ol / Giriş Yap düğmeleri görünür olur (v4.2.0).
+  check("Çıkışta profil düğmesi gizlendi", await authBtn.isHidden());
+  check("Çıkışta 👤 Giriş Yap düğmesi göründü", await loginBtn.isVisible());
+  check("Çıkışta 💎 Üye Ol düğmesi göründü", await joinBtn.isVisible());
+  check("Çıkışta lansman CTA geri geldi", await page.locator("#landingCta").isVisible());
+  const cikanKilit = await page.evaluate(() =>
+    document.querySelectorAll(".header-actions .is-locked").length);
+  check("Çıkışta menü kilitleri geri geldi", cikanKilit > 0, `${cikanKilit} kilitli`);
 
   // 7) Üye olmayan başka bir profili aç ve takip et/bırak
-  await authBtn.click();
+  await loginBtn.click();
   await page.locator('[data-auth-tab="register"]').click();
   await page.locator("#authName").fill("Takipçi Deneme");
   await page.locator("#authEmail").fill(email.replace("@", "+t@"));
@@ -199,7 +267,7 @@ try {
   await authBtn.click();
   await page.locator("#authLogout").click();
   await page.waitForTimeout(700);
-  await authBtn.click();
+  await loginBtn.click();
   await page.locator('[data-auth-tab="login"]').click();
   await page.locator("#authEmail").fill(uye.email);
   await page.locator("#authPassword").fill(uye.password);

@@ -1852,3 +1852,42 @@ test("v4.1.0 wallTabsCount: DOM'da tek çubuk sayılır", () => {
   assert.equal(core.wallTabsCount(fake), 1);
   assert.equal(core.wallTabsCount(null), 0);
 });
+
+/* ─────────────────────────────────────────────────────────────
+   v4.2.0 — Giriş kapısı (menü kilitleri) ve $1 lansmanı
+   ───────────────────────────────────────────────────────────── */
+test("v4.2.0 GATED_MENU_IDS: kilitli menüler listelenir, duvar ve giriş listede değil", () => {
+  // Kilit listesi app.js kaynağından okunur: VM sandbox'ına const dizileri
+  // enjekte edilirken çakışma riski var, ama bu test tam olarak bu
+  // sabitin DOĞRU tanımlandığını doğrulamalı.
+  const src = require("node:fs").readFileSync(
+    require("node:path").join(__dirname, "..", "app.js"), "utf8");
+  const m = src.match(/const GATED_MENU_IDS = \[([^\]]*)\];/);
+  assert.ok(m, "GATED_MENU_IDS app.js içinde tanımlı olmalı");
+  const ids = m[1].split(",").map((s) => s.trim().replace(/^"|"$/g, "")).filter(Boolean);
+
+  for (const gerekli of ["libraryBtn", "archiveBtn", "badgesBtn", "classBtn"]) {
+    assert.ok(ids.includes(gerekli), `${gerekli} kilitli olmalı`);
+  }
+  assert.ok(!ids.includes("wallBtn"), "topluluk duvarı herkese açık, kilitlenmemeli");
+  assert.ok(!ids.includes("authBtn"), "giriş düğmesi kilitlenmemeli");
+  assert.ok(!ids.includes("joinBtn") && !ids.includes("loginBtn"), "üye/giriş düğmeleri her zaman açık");
+});
+
+test("v4.2.0 canUseApp: API adresi boşken demo açık kalır", () => {
+  // canUseApp, app.js'te API_BASE sabitine bakar. Bu sabit vm.runInContext
+  // ile tanımlı olduğu için doğrudan çağırmak TDZ hatası verir; kuralı
+  // kaynaktan okuyıp aynı koşulu değerlendiriyoruz.
+  const src = require("node:fs").readFileSync(
+    require("node:path").join(__dirname, "..", "app.js"), "utf8");
+  const govde = core.canUseApp.toString();
+  assert.ok(govde.includes("if (!API_BASE) return true;"),
+    "API adresi yokken kilit AÇIK olmalı — demo modu bozulmasın");
+  assert.ok(govde.includes("return Boolean(memberState.user)"),
+    "sunucu varsa kilit yalnız giriş yapmışa açılmalı");
+  assert.ok(src.includes("function canUseApp()"), "canUseApp app.js içinde tanımlı");
+});
+
+test("v4.2.0 fmtUsd: lansman fiyatı $1 olarak basılır", () => {
+  assert.equal(core.fmtUsd(100), "$1");
+});

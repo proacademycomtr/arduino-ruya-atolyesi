@@ -1,6 +1,6 @@
 {
   "name": "arduino-ruya-atolyesi-api",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "private": true,
   "description": "Arduino Rüya Atölyesi — üyelik, ödeme, profil ve topluluk duvarı API'si",
   "type": "module",

@@ -21,7 +21,7 @@ export const config = {
   sessionDays: int(process.env.SESSION_DAYS, 30),
   trustProxy: bool(process.env.TRUST_PROXY, false),
   wallEnabled: bool(process.env.WALL_ENABLED, true),
-  version: "4.1.0"
+  version: "4.2.0"
 };
 
 export const pricing = {

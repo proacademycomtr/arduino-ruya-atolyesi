@@ -15,8 +15,11 @@ export function getStripe() {
 
 /**
  * Fiyat ve plan YALNIZCA sunucuda belirlenir; istemciden gelen fiyat yok sayılır.
- * İlk `lifetimeLimit` kişi ömür boyu tek seferlik ödeme yapar,
- * limit dolunca aylık abonelik devreye girer.
+ *
+ * TEK FİYAT: ilk `lifetimeLimit` (1000) kişi için ömür boyu tek seferlik ödeme.
+ * Sınır dolduğunda üyelik SATIŞI KAPANIR — aylık plana geçilmez: kullanıcıya
+ * yanlış beklenti verip sonra geri çekmektense, kapıyı açıkça kapatıyoruz.
+ * Kampanya bitince `SOLDOUT` döner ve rota 409 döner.
  */
 export function planFor(lifetimeMemberCount, opts = pricing) {
   if (lifetimeMemberCount < opts.lifetimeLimit) {
@@ -25,15 +28,19 @@ export function planFor(lifetimeMemberCount, opts = pricing) {
       mode: "payment",
       amountCents: opts.lifetimeCents,
       priceId: stripeConfig.priceLifetime,
-      currency: opts.currency
+      currency: opts.currency,
+      soldOut: false,
+      remaining: opts.lifetimeLimit - lifetimeMemberCount
     };
   }
   return {
-    plan: "MONTHLY",
-    mode: "subscription",
-    amountCents: opts.monthlyCents,
-    priceId: stripeConfig.priceMonthly,
-    currency: opts.currency
+    plan: "LIFETIME",
+    mode: "payment",
+    amountCents: opts.lifetimeCents,
+    priceId: stripeConfig.priceLifetime,
+    currency: opts.currency,
+    soldOut: true,
+    remaining: 0
   };
 }
 

@@ -1381,6 +1381,107 @@ pre.code-block .num { color: #7dd3fc; }
   background: var(--bg-soft); color: var(--text-dim); text-align: center;
 }
 .wall-more { display: block; margin: 1rem auto 0; }
+
+/* ────────── v4.2.0: Demo Modu rozeti (yalnız bilgi) ────────── */
+/* Tıklanabilir DEĞİL: kullanıcı yanlışlıkla ayarlara atlamasın. */
+.ai-status[aria-disabled="true"] {
+  cursor: default;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ────────── v4.2.0: Kilitli menüler ────────── */
+.header-actions .btn.is-locked {
+  opacity: 0.45;
+  filter: saturate(0.4);
+}
+.header-actions .btn.is-locked::after {
+  content: "🔒";
+  font-size: 0.72em;
+  margin-left: 0.25rem;
+}
+.header-actions .btn.is-locked:hover { opacity: 0.7; }
+
+/* ────────── v4.2.0: Lansman / $1 CTA ────────── */
+.landing-cta {
+  margin: 1.6rem auto 0;
+  max-width: 46rem;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid var(--teal, #14b8a6);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.10), rgba(99, 102, 241, 0.08));
+  text-align: center;
+}
+.launch-badge {
+  display: inline-block;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  background: var(--teal, #14b8a6);
+  color: #04211f;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.launch-price-line {
+  margin: 0.5rem 0 0.2rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.launch-amount {
+  font-size: 3.2rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--teal, #14b8a6);
+  font-variant-numeric: tabular-nums;
+}
+.launch-suffix { font-size: 1.1rem; color: var(--text-dim); font-weight: 600; }
+.launch-note { margin: 0.2rem 0 0.8rem; font-size: 0.9rem; color: var(--text-dim); }
+.launch-actions { display: flex; gap: 0.6rem; justify-content: center; flex-wrap: wrap; }
+.launch-fine { margin: 0.7rem 0 0; font-size: 0.76rem; color: var(--text-dim); opacity: 0.85; }
+
+/* ────────── v4.2.0: Özellik anlatımı ────────── */
+.landing-features {
+  max-width: 72rem;
+  margin: 2.2rem auto 0;
+  padding: 1.6rem 1.2rem 2rem;
+  border-top: 1px solid var(--border);
+}
+.landing-h2 {
+  margin: 0 0 0.4rem;
+  text-align: center;
+  font-size: clamp(1.25rem, 3.2vw, 1.75rem);
+}
+.landing-lead {
+  margin: 0 auto 1.4rem;
+  max-width: 44rem;
+  text-align: center;
+  color: var(--text-dim);
+}
+.feat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.8rem;
+}
+.feat-card {
+  padding: 0.9rem 0.95rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.feat-ico { font-size: 1.5rem; line-height: 1; }
+.feat-card h3 { margin: 0.35rem 0 0.25rem; font-size: 1rem; }
+.feat-card p { margin: 0; font-size: 0.88rem; color: var(--text-dim); }
+.landing-final { margin-top: 1.6rem; text-align: center; }
+.landing-final-text { margin: 0 0 0.7rem; font-size: 1.02rem; }
+
+@media (max-width: 640px) {
+  .landing-cta { padding: 0.9rem 0.8rem; }
+  .launch-amount { font-size: 2.6rem; }
+  .launch-actions .btn { width: 100%; }
+  .feat-grid { grid-template-columns: 1fr; }
+}
 .wall-social { display: flex; gap: 0.4rem; margin-top: 0.55rem; flex-wrap: wrap; }
 .wall-act {
   border: 1px solid var(--border); background: transparent; color: var(--text-dim);
@@ -1429,7 +1530,8 @@ pre.code-block .num { color: #7dd3fc; }
   .wall-tab { flex: 1 1 0; text-align: center; }
 }
 @media (pointer: coarse) {
-  .auth-tabs .btn, .auth-actions .btn, .wall-more, .wall-tab, .wall-act { min-height: 40px; }
+  .auth-tabs .btn, .auth-actions .btn, .wall-more, .wall-tab, .wall-act,
+.launch-actions .btn, .landing-final .btn { min-height: 40px; }
 }
 
 /* v4.0.0 — Profil ve takip */

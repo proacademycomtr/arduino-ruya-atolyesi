@@ -31,11 +31,14 @@
       <div class="header-actions">
         <button class="btn btn-ghost theme-toggle" id="themeToggle" type="button" aria-label="Tema değiştir" title="Tema değiştir">🌙</button>
         <button class="btn btn-ghost theme-toggle lang-toggle" id="langToggle" type="button" aria-label="Dil değiştir" title="Switch language">EN</button>
-        <div class="ai-status" id="aiStatus" data-state="demo" title="">
+        <div class="ai-status" id="aiStatus" data-state="demo" title=""
+             role="status" aria-live="polite">
           <span class="status-dot"></span>
           <span class="status-label">Demo Modu</span>
         </div>
         <button class="btn btn-ghost" id="wallBtn" type="button" title="Topluluk duvarı">🌍 Duvar</button>
+        <button class="btn btn-primary" id="joinBtn" type="button" title="İlk 1000 kişiye ömür boyu $1">💎 Üye Ol — $1</button>
+        <button class="btn btn-ghost" id="loginBtn" type="button" title="Giriş yap">👤 Giriş Yap</button>
         <button class="btn btn-ghost" id="authBtn" type="button" title="Giriş yap / Üye ol">👤 Giriş</button>
         <a class="btn btn-ghost" id="libraryBtn" href="#kutuphane">📚 Kütüphane</a>
         <button class="btn btn-ghost" id="archiveBtn" type="button">🗂️ Arşiv<span class="count-badge" id="archiveCount">0</span></button>
@@ -78,7 +81,93 @@
           Sana <strong>malzeme listesi</strong>, <strong>devre bağlantıları</strong>, <strong>adım adım yapım rehberi</strong>
           ve <strong>çalışan kod</strong> hazırlayalım.
         </p>
+
+        <!-- ────────── LANSMAN: $1 ÖMÜR BOYU (sadece ziyaretçi) ──────────
+             Giriş yapılmadığında görünür; giriş yapılınca gizlenir ve uygulama
+             açılır. Fiyat sunucudan okunur, burada varsayılan metindir. -->
+        <div class="landing-cta" id="landingCta" hidden>
+          <div class="launch-price">
+            <span class="launch-badge">🚀 İLK 1000 KİŞİYE ÖZEL</span>
+            <p class="launch-price-line">
+              <span class="launch-amount" id="launchAmount">$1</span>
+              <span class="launch-suffix">ömür boyu</span>
+            </p>
+            <p class="launch-note" id="launchNote">
+              Tek seferlik ödeme. Abonelik yok, sürpriz fatura yok.
+              1000 kişi dolunca fiyat değişir.
+            </p>
+          </div>
+          <div class="launch-actions">
+            <button class="btn btn-primary btn-join-hero" id="joinBtnHero" type="button">
+              💎 Hemen $1 ile Ömür Boyu Üye Ol
+            </button>
+            <button class="btn btn-ghost" id="loginBtnHero" type="button">👤 Giriş Yap</button>
+          </div>
+          <p class="launch-fine" id="launchFine">Kredi kartı bilgisi uygulamada tutulmaz — ödeme Stripe üzerinden güvenli alınır.</p>
+        </div>
       </div>
+
+      <!-- ────────── ÖZELLİK ANLATIMI (sadece ziyaretçi) ────────── -->
+      <section class="landing-features" id="landingFeatures" hidden aria-label="Özellikler">
+        <h2 class="landing-h2">Bir cümle yaz, elinde bitmiş proje olsun</h2>
+        <p class="landing-lead">
+          Arduino Rüya Atölyesi, aklındaki projeyi çalışan bir düzenekme dönüştürür:
+          malzeme listesinden başlayıp Wokwi'de test edebileceğin .zip dosyasına kadar.
+        </p>
+
+        <div class="feat-grid">
+          <article class="feat-card">
+            <span class="feat-ico" aria-hidden="true">🤖</span>
+            <h3>Yapay zekâ ile rehber</h3>
+            <p>Projeni Türkçe bir cümleyle anlat; malzeme listesi, devre bağlantıları, adım adım yapım ve çalışan kod hazır gelsin.</p>
+          </article>
+          <article class="feat-card">
+            <span class="feat-ico" aria-hidden="true">🧩</span>
+            <h3>Wokwi devre taslağı ve .zip</h3>
+            <p>Devre şeması ve simülasyon dosyaları tek tıkla indirilir; Wokwi'de açıp çalıştırabilirsin.</p>
+          </article>
+          <article class="feat-card">
+            <span class="feat-ico" aria-hidden="true">🎙️</span>
+            <h3>Göz serbest sesli rehber</h3>
+            <p>"Bana anlat" ile adımları sana okur, ilerlemeni otomatik işaretler. Ellerin doluyken bile ilerleyebilirsin.</p>
+          </article>
+          <article class="feat-card">
+            <span class="feat-ico" aria-hidden="true">💰</span>
+            <h3>Gerçek malzeme fiyatı</h3>
+            <p>Türkiye perakende fiyatlarıyla parça bazında tahmin; hangi parçayı değiştirsen bütçe nasıl değişir, görünür.</p>
+          </article>
+          <article class="feat-card">
+            <span class="feat-ico" aria-hidden="true">🛒</span>
+            <h3>Alışveriş listesi</h3>
+            <p>Toplu malzemeyi "parça × adet — tutar" biçiminde hazırlar; WhatsApp'tan tek dokunuşla markete gönderirsin.</p>
+          </article>
+          <article class="feat-card">
+            <span class="feat-ico" aria-hidden="true">🏅</span>
+            <h3>Başarı sertifikaları</h3>
+            <p>Bitirdiğin her proje için PDF/Portfolyo sertifikası; bronz, gümüş ve altın rozetlerle ilerlemeni görünür kıl.</p>
+          </article>
+          <article class="feat-card">
+            <span class="feat-ico" aria-hidden="true">🏫</span>
+            <h3>Sınıf modu</h3>
+            <p>Öğretmen sınıf kodu üretir, öğrenciler ilerlemelerini dosyadan gönderir; panel, CSV ve PDF rapor tek yerde.</p>
+          </article>
+          <article class="feat-card">
+            <span class="feat-ico" aria-hidden="true">📦</span>
+            <h3>Portfolyo arşivi</h3>
+            <p>Tüm projelerin, sertifikaların ve raporların tek .zip dosyasında — okul teslimi ya da portfolyo için hazır.</p>
+          </article>
+        </div>
+
+        <div class="landing-final">
+          <p class="landing-final-text">
+            İlk 1000 kişi için <strong>$1</strong>, sonrasında aylık. Bugün katıl, fiyat değişmeden yerini al.
+          </p>
+          <button class="btn btn-primary btn-join-final" id="joinBtnFinal" type="button">
+            💎 $1 ile Üye Ol
+          </button>
+          <p class="launch-fine">Ödeme Stripe üzerinden alınır. Kart bilgisi uygulamada saklanmaz.</p>
+        </div>
+      </section>
 
       <!-- ────────── GİRDİ FORMU ────────── -->
       <div class="idea-panel" id="ideaPanel">
