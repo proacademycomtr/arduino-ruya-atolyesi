@@ -1,6 +1,20 @@
 # Changelog
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
+## [4.3.0] - 2026-10-05
+
+- Yeni: 🔎 **Duvar ve arşiv araması** — başlık, açıklama ve etiketlerde arama kutusu; Türkçe duyarlı (büyük/küçük harf, `ç ğ ı ö ş ü` ve aksan farkı sonucu değiştirmiyor). Metin kayıt anında katlanıp `Project.searchText` içine yazılıyor, sorgu da aynı katlamayla karşılaştırılıyor
+- Yeni: ↕️ **Duvar sıralaması** — "En yeni / En çok beğenilen / En çok konuşulan". `new` imleç (id) sayfalıyor, sayısal sıralamalar offset sayfalıyor. `GET /api/wall?q=&sort=` ve `GET /api/feed/timeline` aynı sözleşmeyi kullanıyor
+- Yeni: 🚩 **Şikâyet/raporlama** — duvar kartından, yorumdan ve profilinden gerekçeli şikâyet gönderimi (`POST /api/reports`); aynı kişi aynı hedefi iki kez şikâyet edemiyor, kullanıcıya anlaşılır bir mesaj dönüyor
+- Yeni: 🙈 **Yorum gizleme** ve 🗑️ **paylaşım kaldırma** — yazar/proje sahibi (yorum gizleme) ve proje sahibi (paylaşım kaldırma) kendi içeriğini geri alabiliyor; gizli içerik herkese açık sayaçlardan düşülüyor
+- Yeni: 👤 **Profil avatarı** — kendi profilinden görsel yükleme/silme. Yükleme iki adımlı: `POST /api/users/me/avatar/presign` → `POST /api/users/me/avatar`
+- Yeni: `isAdmin` istemciye de gönderiliyor; yönetici olan için yorum gizleme ve şikâyet yönetimi açılıyor
+- Düzeltme: `.modal` yükseklik sınırı yoktu — duvar penceresi 955px'e çıkıp 800px ekranda "yorum gönder" düğmesi erişilemez oluyordu. Artık `max-height: calc(100vh - 2.5rem)` + kendi kaydırma
+- Düzeltme: **Test ortamı `app.js`'i satır 6776'da öldürüyordu** ama testler yeşil görünüyordu. `build.py` `const API_BASE_DEFAULT = "";` satırını enjekte ediyor, kaynakta yoktu; sandbox'ta TDZ hatası veriyordu. Sabit artık kaynakta tanımlı. Ayrıca sandbox'a `MutationObserver`, `IntersectionObserver`, `window.addEventListener/scrollTo`, `history.replaceState` stub'ları eklendi
+- Düzeltme: `scripts/verify-member.mjs` arama kontrolü **her zaman yeşildi** — düz `/irmak/i` kontrolü sorgu metnini kendisi arıyordu. Artık duvardaki gerçek bir başlıktan kelime seçiliyor ve dönen kart gerçekten eşleşiyor mu diye bakılıyor (Türkçe katlama ile karşılaştırılıyor; Türkçe harfleri silmek "kişilik"→"kilik" yapıp eşleşme varken kontrolü düşürüyordu)
+- Test: `node --test tests/` 125→135. Sunucu testleri 72→109: yeni `search.test.js`, `moderation.test.js`, `avatar.test.js`. `scripts/verify-member.mjs` 74→76 kontrol (arama gerçekten eşleşiyor mu)
+- Sürüm 4.3.0 olarak derlendi.
+
 ## [4.2.1] - 2026-10-05
 
 - Düzeltme: **Menü kilidi bölümü gizlemiyordu.** Kütüphane, Arşiv, Başarımlar, Sınıf Modu ve Ayarlar kilitli görünüyordu ama sayfadaki gerçek bölüm (ör. Bileşen Kütüphanesi `<section id="kutuphane">`) **sayfayı aşağı kaydırarak erişilebilir** durumdaydı. Artık kilitle birlikte bölümün içeriği de gizleniyor

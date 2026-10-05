@@ -822,6 +822,12 @@ pre.code-block .num { color: #7dd3fc; }
   border-radius: var(--radius-lg);
   padding: 1.75rem;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  /* Uzun içerikli pencereler (duvar, paylaşım, profil) ekrandan taşıp alttaki
+     düğmeleri erişilemez hâle getiriyordu. max-height + kendi kaydırma
+     hem pencereyi hem de başlıkla birlikte kaydırılabilir kılar. */
+  max-height: calc(100vh - 2.5rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
 .modal-head h2 { margin: 0; font-family: var(--font-display); font-size: 1.3rem; }
@@ -1566,6 +1572,24 @@ pre.code-block .num { color: #7dd3fc; }
   #followToggle, .wall-author { min-height: 34px; }
 }
 
+/* v4.3.0 — Duvar arama/sıralama, moderasyon, raporlama, avatar */
+.wall-tools { display: flex; gap: 0.5rem; margin: 0 0 0.8rem; flex-wrap: wrap; }
+.wall-search { flex: 1 1 12rem; min-width: 0; }
+.wall-sort { flex: 0 0 auto; max-width: 100%; }
+.wall-tools[hidden] { display: none; }
+.wall-clear {
+  flex: 0 0 auto; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--card); color: var(--text-dim); cursor: pointer;
+  padding: 0 0.6rem; font-size: 0.85rem; line-height: 1;
+}
+.wall-clear:hover { color: var(--text); }
+.wall-act-quiet { font-size: 0.78rem; padding: 0.2rem 0.55rem; }
+.cmt-acts { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.25rem; }
+.cmt-acts:empty { display: none; }
+.avatar-edit { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin: 0 0 1rem; }
+.avatar-edit .field-hint { margin: 0; flex: 1 1 100%; }
+.profile-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+
   </style>
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#0a0f1c" />
@@ -2010,6 +2034,16 @@ pre.code-block .num { color: #7dd3fc; }
         <button class="modal-close" id="closeWall" type="button" aria-label="Kapat">✕</button>
       </div>
       <p class="modal-desc" id="wallSub"></p>
+      <!-- Arama ve sıralama: sunucudan gelen ?q= ve ?sort= -->
+      <div class="wall-tools" id="wallTools">
+        <input type="search" id="wallSearch" class="wall-search" maxlength="80"
+          placeholder="Proje, malzeme ya da konu ara…" aria-label="Ara" />
+        <select id="wallSort" class="wall-sort" aria-label="Sırala">
+          <option value="new">🕒 En yeni</option>
+          <option value="top">❤️ En çok beğenilen</option>
+          <option value="discussed">💬 En çok konuşulan</option>
+        </select>
+      </div>
       <div id="wallContent"></div>
     </div>
   </div>
@@ -2022,6 +2056,17 @@ pre.code-block .num { color: #7dd3fc; }
         <button class="modal-close" id="closeProfile" type="button" aria-label="Kapat">✕</button>
       </div>
       <div id="profileBody"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ ŞİKÂYET MODALI ══════════════════ -->
+  <div class="modal-overlay" id="reportModal" hidden>
+    <div class="modal modal-narrow" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+      <div class="modal-head">
+        <h2 id="reportTitle">🚩 Şikâyet Et</h2>
+        <button class="modal-close" id="closeReport" type="button" aria-label="Kapat">✕</button>
+      </div>
+      <div id="reportBody"></div>
     </div>
   </div>
 
@@ -2045,7 +2090,6 @@ pre.code-block .num { color: #7dd3fc; }
        bozulmaz — uygulama gömülü API_BASE_DEFAULT değerine düşer. -->
   <script src="config.js"></script>
   <script>
-const API_BASE_DEFAULT = "";
 const APP_VERSION = "4.2.1";
 const FILE_CATALOG = JSON.parse(`{
   "app": "arduino-ruya-atolyesi",
@@ -2071,6 +2115,13 @@ const FILE_CATALOG = JSON.parse(`{
 
 /* ───────────────────── Sabitler ───────────────────── */
 const STORAGE_KEY = "arduinoDreamLab.settings.v1";
+
+/* API adresinin derleme zamanı varsayılanı. build.py bu satırın değerini
+   gerçek adresle değiştirir; ham app.js doğrudan açıldığında (testler,
+   tek dosya dağıtımı) buradaki boş değer kullanılır ve uygulama ağa çıkmaz.
+   Sabiti burada tanımlamazsak alt satırdaki ifade ReferenceError verir ve
+   dosyanın GERİ KALAN KISMI (memberState dâhil) hiç çalışmaz. */
+const API_BASE_DEFAULT = "";
 
 /* Sağlayıcı kataloğu — openaiCompat olanlar /chat/completions uç noktasını kullanır */
 const PROVIDERS = [
@@ -7466,6 +7517,40 @@ const I18N = {
     "👁️ Görüntüle": "👁️ View", "📤 Yedekle (JSON)": "📤 Export (JSON)", "📥 Geri Yükle": "📥 Import", "🧹 Tümünü Temizle": "🧹 Clear All", "Kapat": "Close",
     // Adım takibi
     "🛠️": "🛠️", " adım tamamlandı (%": " steps done (%",
+    // Duvar arama/sıralama
+    "Proje, malzeme ya da konu ara…": "Search projects, parts or topics…",
+    "🕒 En yeni": "🕒 Newest",
+    "❤️ En çok beğenilen": "❤️ Most liked",
+    "💬 En çok konuşulan": "💬 Most discussed",
+    "Aramayı temizle": "Clear search",
+    "için sonuç yok — başka bir kelime dene.": "— no results. Try another word.",
+    "Daha fazla göster": "Show more",
+    "Sonuç yok": "No results",
+    // Moderasyon ve raporlama
+    "🚩 Şikâyet Et": "🚩 Report",
+    "📤 Duvardan Kaldır": "📤 Unpublish",
+    "Gizle": "Hide",
+    "Sil": "Delete",
+    "Gerekçe": "Reason",
+    "Açıklama (isteğe bağlı)": "Details (optional)",
+    "Neyi neden bildirdiğini yaz…": "Tell us why…",
+    "Bildir": "Send report",
+    "Vazgeç": "Cancel",
+    "Şikâyet Etmek": "Report",
+    "🚩 Bildirimin alındı — teşekkürler!": "🚩 Thanks — we got your report!",
+    "Bunu zaten bildirmişsin — teşekkürler!": "You already reported this — thanks!",
+    "Bildirilemedi.": "Could not send the report.",
+    "📤 Duvarı yayınlandı.": "📤 Unpublished.",
+    "🙈 Yorum gizlendi.": "🙈 Comment hidden.",
+    "👁️ Yorum geri açıldı.": "👁️ Comment restored.",
+    "İşlem yapılamadı.": "Could not complete the action.",
+    // Avatar
+    "Avatarı Kaldır": "Remove avatar",
+    "Avatar yükleniyor…": "Uploading avatar…",
+    "Avatar yüklenemedi.": "Avatar could not be uploaded.",
+    "Avatar kaldırılamadı.": "Avatar could not be removed.",
+    "✓ Avatar güncellendi.": "✓ Avatar updated.",
+    "✓ Avatar kaldırıldı.": "✓ Avatar removed.",
   },
   tr: {}
 };
@@ -8813,6 +8898,10 @@ const memberState = {
   wallCursor: null,
   wallLoading: false,
   wallTab: "all",
+  wallQuery: "",
+  wallSort: "new",
+  wallSearchTimer: 0,
+  report: null,
   shareImages: []
 };
 
@@ -9318,6 +9407,13 @@ function wallCardHTML(item) {
   const locked = typeof item.promptBody !== "string";
   const face = likeBtnFace(item.likedByViewer, item.likeCount);
   const comments = Number(item.commentCount) || 0;
+  // Yönetici düğmeleri sunucunun isAdmin bilgisinden gelir; istemci kendisi
+  // yetki uydurmaz, yalnız gizleyebileceği/şikâyet edebileceği şeyi gösterir.
+  const isAdmin = memberState.user && memberState.user.isAdmin === true;
+  const isOwn = Boolean(memberState.user && item.owner && memberState.user.handle === item.owner.handle);
+  const ownerBtns = (isOwn || isAdmin)
+    ? `<button class="wall-act wall-act-quiet" data-act="unshare" type="button">📤 ${esc(t("Duvardan Kaldır"))}</button>`
+    : "";
   return `
     <article class="wall-card" data-project-id="${esc(item.id)}">
       ${img && img.url ? `<img class="wall-img" src="${esc(img.url)}" alt="${esc(item.title)}" loading="lazy" />` : ""}
@@ -9331,6 +9427,8 @@ function wallCardHTML(item) {
         <div class="wall-social">
           <button class="${face.cls}" data-act="like" type="button" aria-pressed="${face.pressed}">${face.icon} <span class="wall-count">${face.count}</span></button>
           <button class="wall-act" data-act="comments" type="button" aria-expanded="false">💬 <span class="wall-count">${comments}</span></button>
+          ${ownerBtns}
+          ${isOwn || !isMember() ? "" : `<button class="wall-act wall-act-quiet" data-act="report" data-report-type="PROJECT" type="button">🚩 ${esc(t("Şikâyet Et"))}</button>`}
         </div>
         <div class="wall-comments" hidden></div>
       </div>
@@ -9353,8 +9451,11 @@ function wallTabsHTML(active) {
     </div>`;
 }
 
-/** Sekmeye göre boş durum metni. */
-function wallEmptyText(active) {
+/** Sekmeye göre boş durum metni. Arama varsa "sonuç yok" ayrı bir metindir. */
+function wallEmptyText(active, q) {
+  // Arama metni değişken olduğu için `t()` şablonu çeviremez; iki parçayı
+  // ayrı çevirip birleştiriyoruz.
+  if (q) return `"${q}" ` + t("için sonuç yok — başka bir kelime dene.");
   return t(active === "following"
     ? "Takip ettiğin kişiler henüz proje paylaşmadı."
     : "Henüz paylaşılmış proje yok — ilk sen ol!");
@@ -9374,6 +9475,22 @@ function renderWallTabs() {
         ? "Üyesin — tüm prompt'lar görünür."
         : "Prompt'ları yalnızca üyeler görebilir. Üye olmak $1.");
   }
+  // Araç çubuğu yalnız "Tümü" sekmesinde anlamlı: takip akışı sunucuda
+  // arama/sıralama desteklemiyor, gösterirsek yanlış bir vaat olur.
+  const tools = $("wallTools");
+  if (tools) {
+    tools.hidden = active === "following";
+    const sel = $("wallSort");
+    if (sel) {
+      sel.value = memberState.wallSort;
+      sel.disabled = active === "following";
+    }
+    const clear = $("wallClear");
+    if (Boolean(memberState.wallQuery) !== Boolean(clear)) {
+      const input = $("wallSearch");
+      if (input) input.insertAdjacentHTML("afterend", wallClearBtnHTML());
+    }
+  }
   const old = $("wallTabs");
   if (old) old.outerHTML = wallTabsHTML(active);
   else if (sub) sub.insertAdjacentHTML("afterend", wallTabsHTML(active));
@@ -9390,6 +9507,12 @@ function setWallTab(tab) {
   if (memberState.wallTab === tab) return;
   memberState.wallTab = tab;
   memberState.wallCursor = null;
+  // Takip akışına geçince arama kutusu boşaltılır: arama "Tümü"e ait.
+  if (tab === "following") {
+    memberState.wallQuery = "";
+    const input = $("wallSearch");
+    if (input) input.value = "";
+  }
   renderWallTabs();
   loadWall(true);
 }
@@ -9401,8 +9524,15 @@ async function loadWall(reset) {
   memberState.wallLoading = true;
   const cursor = reset ? "" : memberState.wallCursor || "";
   const path = memberState.wallTab === "following" ? "/api/feed/timeline" : "/api/wall";
+  const q = memberState.wallQuery;
+  const params = ["limit=12"];
+  if (cursor) params.push("cursor=" + encodeURIComponent(cursor));
+  if (q) params.push("q=" + encodeURIComponent(q));
+  // Takip akışı sıralamayı desteklemiyorsa en yeniye sabitlenir; sunucu
+  // `sort=top` de gelse öğe listesi bozulmaz, yine de göndermiyoruz.
+  if (memberState.wallTab === "all" && memberState.wallSort) params.push("sort=" + memberState.wallSort);
   try {
-    const r = await apiFetch(path + "?limit=12" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
+    const r = await apiFetch(path + "?" + params.join("&"));
     memberState.wallCursor = r.nextCursor || null;
     const html = (r.items || []).map(wallCardHTML).join("");
     let grid = $("wallGrid");
@@ -9432,7 +9562,7 @@ async function loadWall(reset) {
     }
     renderWallTabs();
     if (!(r.items || []).length && reset) {
-      content.innerHTML = `<p class="field-hint">${esc(wallEmptyText(memberState.wallTab))}</p>`;
+      content.innerHTML = `<p class="field-hint" id="wallEmpty">${esc(wallEmptyText(memberState.wallTab, q))}</p>`;
       return;
     }
   } catch (e) {
@@ -9449,6 +9579,42 @@ function openWall() {
   memberState.wallCursor = null;
   renderWallTabs();
   loadWall(true);
+}
+
+/* ───────────────────── Duvar arama ve sıralama ───────────────────── */
+/** Arama/sıralama değişti: imleç sıfırlanır, liste baştan basılır. */
+function wallQueryChanged() {
+  memberState.wallCursor = null;
+  // Arama sürerken "daha fazla" düğmesi eski imleci tutuyor olabilir.
+  const more = $("wallMore");
+  if (more) more.remove();
+  loadWall(true);
+}
+
+function setWallQuery(raw) {
+  const q = String(raw || "").trim().slice(0, 80);
+  if (q === memberState.wallQuery) return;
+  memberState.wallQuery = q;
+  wallQueryChanged();
+}
+
+function setWallSort(value) {
+  const s = ["new", "top", "discussed"].includes(value) ? value : "new";
+  if (s === memberState.wallSort) return;
+  memberState.wallSort = s;
+  // Takip akışında sıralama yok; seçim "En yeni"ye döner.
+  if (memberState.wallTab === "following") {
+    const sel = $("wallSort");
+    if (sel) sel.value = "new";
+  }
+  wallQueryChanged();
+}
+
+/** Arama kutusunu temizle düğmesi — arama varken görünür. */
+function wallClearBtnHTML() {
+  return memberState.wallQuery
+    ? `<button class="wall-clear" id="wallClear" type="button" aria-label="${esc(t("Aramayı temizle"))}">✕</button>`
+    : "";
 }
 
 /* ───────────────────── Beğeni ve yorum ───────────────────── */
@@ -9519,7 +9685,11 @@ function commentsHTML(list, canComment) {
         <div class="cmt" data-comment-id="${esc(c.id)}">
           <p class="cmt-by"><button class="wall-author" data-profile-handle="${esc(c.author.handle)}" type="button">${esc(c.author.displayName)}</button></p>
           <p class="cmt-body">${esc(c.body)}</p>
-          ${c.canDelete ? `<button class="cmt-del" type="button">${esc(t("Sil"))}</button>` : ""}
+          <div class="cmt-acts">
+            ${c.canHide ? `<button class="cmt-del" data-act="hide-comment" type="button">${esc(t("Gizle"))}</button>` : ""}
+            ${isMember() && !c.isOwn ? `<button class="cmt-del" data-act="report-comment" type="button">🚩 ${esc(t("Şikâyet Et"))}</button>` : ""}
+            ${c.canDelete ? `<button class="cmt-del" data-act="del-comment" type="button">${esc(t("Sil"))}</button>` : ""}
+          </div>
         </div>`).join("")
     : `<p class="field-hint">${esc(t("Henüz yorum yok — ilk yorumu sen yaz!"))}</p>`;
   return body + (canComment
@@ -9685,6 +9855,19 @@ function profileHeaderHTML(u, isSelf, isFollowing) {
          data-handle="${esc(u.handle)}" data-following="${isFollowing ? "1" : "0"}">
          ${esc(isFollowing ? "✓ Takip Ediliyor" : "+ Takip Et")}
        </button>`;
+  // Avatarı yalnız kendi profilinde değiştirebilirsin; yabancınınki salt görünür.
+  const avatarEdit = isSelf
+    ? `<div class="avatar-edit">
+         <input type="file" id="avatarFile" accept="image/png,image/jpeg,image/webp,image/gif" />
+         ${u.avatarUrl ? `<button class="btn btn-ghost btn-small" id="avatarRemove" type="button">${esc(t("Avatarı Kaldır"))}</button>` : ""}
+         <p class="field-hint" id="avatarHint"></p>
+       </div>`
+    : "";
+  // Kendi profilini şikâyet edemezsin — sunucu da reddediyor.
+  const reportBtn = isSelf || !isMember()
+    ? ""
+    : `<button class="btn btn-ghost btn-small" id="reportUser" type="button"
+         data-handle="${esc(u.handle)}">🚩 ${esc(t("Şikâyet Et"))}</button>`;
   return `
     <div class="profile-head">
       <div class="profile-avatar">${u.avatarUrl ? `<img src="${esc(u.avatarUrl)}" alt="" />` : "🧑‍🚀"}</div>
@@ -9699,7 +9882,8 @@ function profileHeaderHTML(u, isSelf, isFollowing) {
         </p>
       </div>
     </div>
-    <div class="profile-actions">${follow}</div>
+    <div class="profile-actions">${follow}${reportBtn}</div>
+    ${avatarEdit}
   `;
 }
 
@@ -9731,6 +9915,12 @@ function renderProfile(r) {
 
   const btn = $("followToggle");
   if (btn) btn.addEventListener("click", () => toggleFollow(btn));
+  const report = $("reportUser");
+  if (report) report.addEventListener("click", () => openReportModal("USER", report.dataset.handle));
+  const avatarFile = $("avatarFile");
+  if (avatarFile) avatarFile.addEventListener("change", () => uploadAvatar(avatarFile.files && avatarFile.files[0]));
+  const avatarRemove = $("avatarRemove");
+  if (avatarRemove) avatarRemove.addEventListener("click", removeAvatar);
 }
 
 async function toggleFollow(btn) {
@@ -9757,6 +9947,169 @@ async function toggleFollow(btn) {
   }
 }
 
+/* ───────────────────── Şikâyet (raporlama) ───────────────────── */
+/** Gerekçe seçenekleri — sunucu da aynı listeyi doğrular. */
+const REPORT_REASONS = [
+  ["SPAM", "🚫 Spam / reklam"],
+  ["HARASSMENT", "😠 Taciz veya hakaret"],
+  ["OFF_TOPIC", "🎯 Konu dışı"],
+  ["UNSAFE", "⚠️ Güvenliği tehdit eden"],
+  ["OTHER", "💬 Diğer"]
+];
+
+/**
+ * Şikâyet penceresini açar. `type` PROJECT | COMMENT | USER, `id` sunucudaki
+ * gerçek kimliktir (USER hedefi handle olur).
+ */
+function openReportModal(type, id, label) {
+  if (!memberState.user) { openAuthModal(t("Şikâyet etmek için giriş yap.")); return; }
+  if (!isMember()) { openPaywall(); return; }
+  const body = $("reportBody");
+  if (!body) return;
+  memberState.report = { type, id };
+  body.innerHTML = `
+    <p class="modal-desc">${esc(label || t("Bildirimini inceleyeceğiz. Bildiren kişinin adı yöneticilerle paylaşılır."))}</p>
+    <label class="field-label" for="reportReason">${esc(t("Gerekçe"))}</label>
+    <select id="reportReason">
+      ${REPORT_REASONS.map(([v, l]) => `<option value="${esc(v)}">${esc(t(l))}</option>`).join("")}
+    </select>
+    <label class="field-label" for="reportDetails">${esc(t("Açıklama (isteğe bağlı)"))}</label>
+    <textarea id="reportDetails" rows="3" maxlength="500" placeholder="${esc(t("Neyi neden bildirdiğini yaz…"))}"></textarea>
+    <div class="share-actions">
+      <button class="btn btn-primary" id="reportSubmit" type="button">${esc(t("Bildir"))}</button>
+      <button class="btn btn-ghost" id="reportCancel" type="button">${esc(t("Vazgeç"))}</button>
+    </div>
+    <p class="field-hint" id="reportHint"></p>`;
+  $("reportSubmit").addEventListener("click", submitReport);
+  $("reportCancel").addEventListener("click", () => { const m = $("reportModal"); if (m) m.hidden = true; });
+  const m = $("reportModal");
+  if (m) m.hidden = false;
+}
+
+async function submitReport() {
+  const hint = $("reportHint");
+  const btn = $("reportSubmit");
+  const target = memberState.report;
+  if (!target || !btn) return;
+  btn.disabled = true;
+  try {
+    await apiFetch("/api/reports", {
+      method: "POST",
+      body: {
+        targetType: target.type,
+        targetId: target.id,
+        reason: ($("reportReason") || {}).value || "SPAM",
+        details: ($("reportDetails") || {}).value || ""
+      }
+    });
+    const m = $("reportModal");
+    if (m) m.hidden = true;
+    showToast(t("🚩 Bildirimin alındı — teşekkürler!"));
+  } catch (e) {
+    // 409 = aynı hedef zaten bildirilmiş; kullanıcıya yeni hata gibi göstermeyelim.
+    if (hint) hint.textContent = e.status === 409
+      ? t("Bunu zaten bildirmişsin — teşekkürler!")
+      : (e.message || t("Bildirilemedi."));
+  } finally {
+    if (btn.isConnected) btn.disabled = false;
+  }
+}
+
+/* ───────────────────── Moderasyon (istemci) ───────────────────── */
+/** Projeyi duvardan kaldırır (kayıt silinmez) ve kartı listeden düşürür. */
+async function unshareProject(btn) {
+  const card = btn.closest("[data-project-id]");
+  const id = card && card.dataset.projectId;
+  if (!id) return;
+  if (!confirm(t("Bu proje duvardan kaldırılsın mı? Proje kaydın silinmez, sonra yeniden yayınlayabilirsin."))) return;
+  btn.disabled = true;
+  try {
+    await apiFetch(`/api/projects/${encodeURIComponent(id)}/share`, { method: "DELETE" });
+    card.remove();
+    showToast(t("📤 Duvarı yayınlandı."));
+    if (!$("wallGrid") || !$("wallGrid").children.length) {
+      const content = $("wallContent");
+      if (content) content.innerHTML = `<p class="field-hint">${esc(wallEmptyText(memberState.wallTab, memberState.wallQuery))}</p>`;
+    }
+  } catch (e) {
+    showToast(e.message || t("Kaldırılamadı."));
+    if (btn.isConnected) btn.disabled = false;
+  }
+}
+
+/** Yorumu gizler/geri açar; yazar, proje sahibi ve yönetici yapabilir. */
+async function hideComment(btn) {
+  const row = btn.closest("[data-comment-id]");
+  const panel = btn.closest(".wall-comments");
+  const card = btn.closest("[data-project-id]");
+  if (!row || !panel || !card) return;
+  const id = row.dataset.commentId;
+  const hiding = row.dataset.hidden !== "1";
+  btn.disabled = true;
+  try {
+    const r = await apiFetch(`/api/comments/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: { hidden: hiding }
+    });
+    showToast(t(hiding ? "🙈 Yorum gizlendi." : "👁️ Yorum geri açıldı."));
+    panel.dataset.loaded = "0";
+    panel.hidden = true;
+    const again = card.querySelector('[data-act="comments"]');
+    if (again) {
+      again.setAttribute("aria-expanded", "false");
+      const n = again.querySelector(".wall-count");
+      if (n) n.textContent = String(Number(r.commentCount) || 0);
+    }
+  } catch (e) {
+    showToast(e.message || t("İşlem yapılamadı."));
+    if (btn.isConnected) btn.disabled = false;
+  }
+}
+
+/* ───────────────────── Avatar ───────────────────── */
+/**
+ * Avatarı doğrudan depoya yükler: presign → PUT → profile bağla.
+ * Dosya API'den geçmez, tıpkı proje fotoğrafı gibi.
+ */
+async function uploadAvatar(file) {
+  if (!file) return;
+  if (!memberState.user) { openAuthModal(t("Avatar yüklemek için giriş yap.")); return; }
+  const hint = $("avatarHint");
+  try {
+    if (hint) hint.textContent = t("Avatar yükleniyor…");
+    const pre = await apiFetch("/api/users/me/avatar/presign", {
+      method: "POST",
+      body: { contentType: file.type }
+    });
+    const put = await putImage(pre.url, file);
+    if (!put.ok) throw new Error(t("Avatar yüklenemedi."));
+    const r = await apiFetch("/api/users/me/avatar", { method: "POST", body: { objectKey: pre.objectKey } });
+    if (memberState.user) memberState.user.avatarUrl = r.user.avatarUrl;
+    if (memberState.profile && memberState.profile.user.handle === memberState.user.handle) {
+      memberState.profile.user.avatarUrl = r.user.avatarUrl;
+      renderProfile(memberState.profile);
+    }
+    if (hint) hint.textContent = t("✓ Avatar güncellendi.");
+  } catch (e) {
+    if (hint) hint.textContent = e.message || t("Avatar yüklenemedi.");
+  }
+}
+
+async function removeAvatar() {
+  const hint = $("avatarHint");
+  try {
+    await apiFetch("/api/users/me/avatar", { method: "DELETE" });
+    if (memberState.user) memberState.user.avatarUrl = null;
+    if (memberState.profile && memberState.profile.user.handle === memberState.user.handle) {
+      memberState.profile.user.avatarUrl = null;
+      renderProfile(memberState.profile);
+    }
+    if (hint) hint.textContent = t("✓ Avatar kaldırıldı.");
+  } catch (e) {
+    if (hint) hint.textContent = e.message || t("Avatar kaldırılamadı.");
+  }
+}
+
 /* ───────────────────── Başlatma ───────────────────── */
 wireModal("authModal", "closeAuth");
 wireModal("paywallModal", "closePaywall");
@@ -9766,6 +10119,7 @@ wireModal("wallModal", "closeWall", () => {
 });
 wireModal("shareModal", "closeShare");
 wireModal("profileModal", "closeProfile");
+wireModal("reportModal", "closeReport");
 watchModalStack();
 
 // Duvar kartlarındaki yazara tıklayınca profil açılır (olay delegasyonu)
@@ -9779,8 +10133,20 @@ watchModalStack();
     if (like) { toggleLike(like); return; }
     const cmt = e.target.closest('[data-act="comments"]');
     if (cmt) { toggleComments(cmt); return; }
-    const del = e.target.closest(".cmt-del");
+    const del = e.target.closest('[data-act="del-comment"]');
     if (del) { deleteComment(del); return; }
+    const hide = e.target.closest('[data-act="hide-comment"]');
+    if (hide) { hideComment(hide); return; }
+    const rc = e.target.closest('[data-act="report-comment"]');
+    if (rc) { openReportModal("COMMENT", rc.closest("[data-comment-id]").dataset.commentId); return; }
+    const un = e.target.closest('[data-act="unshare"]');
+    if (un) { unshareProject(un); return; }
+    const rp = e.target.closest('[data-act="report"]');
+    if (rp) {
+      const card = rp.closest("[data-project-id]");
+      if (card) openReportModal(rp.dataset.reportType || "PROJECT", card.dataset.projectId);
+      return;
+    }
     const send = e.target.closest(".cmt-send");
     if (send) submitComment(send.closest(".wall-comments"));
   });
@@ -9791,9 +10157,34 @@ const wallModalEl = $("wallModal");
 if (wallModalEl) {
   wallModalEl.addEventListener("click", (e) => {
     const tab = e.target.closest("[data-wall-tab]");
-    if (tab) setWallTab(tab.dataset.wallTab);
+    if (tab) { setWallTab(tab.dataset.wallTab); return; }
+    if (e.target.closest("#wallClear")) {
+      const input = $("wallSearch");
+      if (input) input.value = "";
+      setWallQuery("");
+    }
   });
 }
+
+// Arama: her tuşta istek atılırsa yazarken yazarken 12 kart gelir. 300 ms
+// bekletiyoruz ve eski yanıtın yeni sorguyu ezmesini engelliyoruz.
+const wallSearchEl = $("wallSearch");
+if (wallSearchEl) {
+  wallSearchEl.addEventListener("input", () => {
+    clearTimeout(memberState.wallSearchTimer);
+    const value = wallSearchEl.value;
+    memberState.wallSearchTimer = setTimeout(() => setWallQuery(value), 300);
+  });
+  // Enter'da beklemeden ara: mobil klavye için önemli.
+  wallSearchEl.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    clearTimeout(memberState.wallSearchTimer);
+    setWallQuery(wallSearchEl.value);
+  });
+}
+const wallSortEl = $("wallSort");
+if (wallSortEl) wallSortEl.addEventListener("change", () => setWallSort(wallSortEl.value));
 
 const wallBtnEl = $("wallBtn");
 if (wallBtnEl) wallBtnEl.addEventListener("click", openWall);
@@ -9859,7 +10250,7 @@ if (authBtnEl) {
 }
 bootstrapApi();
 
-  window.__CHANGELOG_HTML = "<p>Bu dosya `build.py` tarafından otomatik güncellenir.</p><h2>[4.2.1] - 2026-10-05</h2><ul><li>Düzeltme: **Menü kilidi bölümü gizlemiyordu.** Kütüphane, Arşiv, Başarımlar, Sınıf Modu ve Ayarlar kilitli görünüyordu ama sayfadaki gerçek bölüm (ör. Bileşen Kütüphanesi `<section id=\"kutuphane\">`) **sayfayı aşağı kaydırarak erişilebilir** durumdaydı. Artık kilitle birlikte bölümün içeriği de gizleniyor</li><li>Düzeltme: Adres çubuğuna elle `#kutuphane` yazan ziyaretçi bölüme kaydırılabiliyordu. Artık giriş yoksa giriş penceresi açılıyor, hedef engelleniyor ve adres temizleniyor. `hashchange` yalnız sonradan değişen hash'lerde çalıştığı için ilk yüklemede de kontrol ediliyor</li><li>Düzeltme: `scripts/e2e.mjs` mevcut `dist/` derlemesini kullanıyordu, yani testler bunun `API_BASE` ile mi derlendiğine bağlıydı (kilitli menüyle kırılıyordu). Artık test **kendi derlemesini** yapıyor</li><li>Düzeltme: `scripts/verify-member.mjs` beğeni testi mutlak sayıya bakıyordu; veritabanında beğeni birikince (1 → 0) yanlış alarm veriyordu. Artık tıklamanın **yönünü** ölçüyor, durumu geri alıp testi bırakmadan önce doğruluyor</li><li>Test: `scripts/verify-member.mjs` 54→55 kontrol</li></ul><h2>[4.2.0] - 2026-10-05</h2><ul><li>Yeni: 🔒 **Giriş kapısı** — Kütüphane, Arşiv, Başarımlar, Sınıf Modu ve Ayarlar menüleri giriş yapana kadar **kilitlidir**: görünür ama 🔒 işaretlidir, tıklanınca içeri açılmaz ve giriş penceresi açılır. Kilit kararı TEK yerde toplanır (`GATED_MENU_IDS` + `requireLogin`); topluluk duvarı herkese açık kalmaya devam eder</li><li>Yeni: 💎 **Lansman sayfası (ziyaretçi)** — giriş yapmamış kullanıcıya ekranı saran tek sayfalık tanıtım: **8 özellik kartı** (yapay zekâ rehberi, Wokwi + .zip, Göz Serbest sesli rehber, gerçek malzeme fiyatı, alışveriş listesi, başarı sertifikaları, sınıf modu, portfolyo arşivi) ve güçlü **$1 ömür boyu** CTA'sı. Giriş yapılınca landing gizlenir ve uygulama açılır</li><li>Yeni: 🎟️ **Header'da ayrı “💎 Üye Ol — $1” ve “👤 Giriş Yap” düğmeleri** (ziyaretçide görünür, giriş yapınca yerini profil düğmesine bırakır). Üye Ol düğmesi doğrudan kayıt penceresini kampanya metniyle açar</li><li>Yeni: 💵 **Tek fiyat** — ilk 1000 kişi için $1 ömür boyu. Sınır dolunca üyelik **satışı kapanır** (`launch_sold_out`); daha önce aylık aboneliğe geçiliyordu. Kullanıcıya sonradan geri çekilecek bir abonelik vaadi yerine kapı açıkça kapatılıyor</li><li>Değişti: **“Demo Modu” rozeti artık tıklanamaz.** Daha önce Ayarlar'ı (API anahtarı) açıyordu; artık `aria-disabled` + `pointer-events: none` ile yalnız bilgi veriyor. Üyelik akışı üyelik düğmelerinden yürür</li><li>Düzeltme: `renderAuthBtn` içindeki erken dönüşlerde menü kilitleri hiç güncellenmiyordu (sunucu yokken ve kullanıcı yokken). `renderMenuLocks` artık HER yolda çalışıyor</li><li>Düzeltme: `bootstrapApi` API adresi boşken hiçbir şey çağırmadan dönüyordu; bu yüzden demo modunda landing CTA'sı hiç gösterilmiyor, “Üye Ol” düğmeleri başlıksız kalıyordu. Demo durumu da artık arayüzü hazırlıyor (kilitler açık — demo bozulmaz, üyelik düğmeleri pasif)</li><li>Test: `node --test tests/` 122→125, sunucu testleri 70→72 (tek fiyat kuralı: `soldOut`, `remaining`, her durumda LIFETIME). `scripts/verify-member.mjs` 34→54 kontrol: ziyaretçi CTA'ları, $1 metni, demo rozeti tıklanamazlığı, kilitli menünün **içeri açılmaması**, giriş/çıkış sonrası kilit durumunun değişmesi</li><li>Test altyapısı: `tests/extract.js` ikinci turda `LIB_DATA`/`ALL_LIB`'i yeniden tanımlayıp \"Identifier has already been declared\" hatası veriyordu. Bu hata yeni bir isim `missing` düştüğünde ortaya çıkıyordu; artık yalnız gerçekten tanımsız olanlar ekleniyor</li><li>Sürüm 4.2.0 olarak derlendi.</li></ul><h2>[4.1.0] - 2026-10-05</h2><ul><li>Yeni: 👥 **Takip akışı sekmesi** — duvarın üstünde \"🌍 Tümü / 👥 Takip Ettiklerim\" sekmeleri. Takip sekmesi yalnız takip edilenlerin paylaşımlarını gösterir (`GET /api/feed/timeline`), üyeye açıktır; giriş yoksa giriş penceresi, üyelik yoksa paywall açılır. `/api/feed/timeline` artık `/api/wall` ile **aynı sözleşmeyi** dönerdi (cursor sayfalaması, `viewer`, `followingCount`); \"Daha fazla göster\" her iki sekmede de çalışır</li><li>Yeni: ❤️ **Beğeni** — duvar kartlarında beğeni düğmesi ve sayaç. Beğeni yazmak üyeye açıktır (herkese açık beğeni spam'e açık olurdu); sayaç herkese açık, \"bunu beğendim\" bilgisi yalnız kendi görüntüleyene gider. Aynı kullanıcı iki kez beğenemez (`@@id([userId, projectId])`)</li><li>Yeni: 💬 **Yorum** — kartın 💬 düğmesi yorum panelini açar; okumak herkese açık, yazmak üyeye açık. Yorumu **yazan veya projenin sahibi** silebilir. Gövde 1000 karakterle sınırlı</li><li>Yeni: 🗃️ `Like` ve `Comment` tabloları (`migrations/20261005120000_likes_comments`); beğeni/yorum sayıları `shapeProject` ile herkese açık sayaç olarak döner (içerik değil)</li><li>Düzeltme: **paywall duvarın altında kalıyordu** — duvar açıkken \"Takip\" sekmesine ya da beğeniye tıklayınca paywall açılıyor ama tıklanamıyordu (duvar modalı üstteydi). Modal yığını artık son açılan pencere en üstte olacak şekilde `watchModalStack()` ile yönetiliyor; DOM sırası önemsiz</li><li>Düzeltme: duvar sekmeleri yeniden çizildiğinde her seferinde **ikinci bir çubuk** ekleniyordu (kimlik eksikti). `wallTabsHTML` artık `id=\"wallTabs\"` taşıyor ve `renderWallTabs` eskisini değiştiriyor</li><li>Düzeltme: **görsel presign rotasında depo kontrolü yanlış sırada idi.** Yapılandırma kontrolü yetki ve içerik tipi denetiminden önce geliyordu; görsel deposu olmayan bir sunucuda her istek 503 alıyor, gerçek hata (404 yetkisiz proje / 400 geçersiz dosya tipi) gizleniyor ve depo durumu yetkisiz kullanıcıya sızıyordu. Sıra düzeltildi: sahiplik → içerik tipi → depo yapılandırması</li><li>Test/CI: api işinde **görsel deposu (S3Mock) eklendi**; presigned URL ve görsel bağlama testleri artık CI'da da gerçekten koşuyor (daha önce `S3_ENDPOINT` boş bırakılmıştı, bu testler 503 alıyordu). S3Mock imajında ne curl ne node bulunduğu için hazır olma beklemesi job'ın kendi Node'uyla yapılıyor. CI bucket adı `arlo-ci-gorseller`: S3 bucket adları **alt çizgi içeremez** (`InvalidBucketName`)</li><li>Test: `node --test tests/` 110→122 (7 yeni birim: wallTabsHTML etkin sekme, aria-selected, bilinmeyen sekme, wallEmptyText, beğeni düğmesi/sayaç, likeBtnFace, commentsHTML yazma yetkisi + HTML kaçışı + silme yetkisi + tek çubuk regresyonu), sunucu testleri 51→70 (10 yeni: takip akışı sözleşmesi/cursor sayfalaması, beğeni sayaç-kimlik, yorum yetkileri, **Stripe webhook imzası uçtan uca**, **dönüş adresi güvenliği**). `scripts/verify-member.mjs` 19→34 kontrol: sekmeler, üye olmayan için yorum kutusu ve beğeni paywall'ı, üye olarak beğeni/yorum gönderme</li><li>Test: `safeReturnUrl` (ödeme dönüş adresi) hiç test edilmemişti; beyaz liste dışı origin, `javascript:` ve `*.evil.com` gibi adreslerin varsayılan siteye çevrildiği artık doğrulanıyor</li><li>Yeni: 🧪 `scripts/checkout-smoke.mjs` — Stripe test anahtarıyla $1 ödeme akışını uçtan uca dener (yapılandırma, fiyat kaynağı, gerçek Checkout oturumu, ödeme öncesi üyelik oluşmaması, üyenin tekrar ödeme açamaması). Kart bilgisi girmez; açılan Checkout adresini sen test kartıyla ödersin. Adımlar: SUNUCU.md §4</li><li>Test: webhook imzası artık **gerçekten üretilip doğrulanıyor** (Stripe'ın belgelediği HMAC-SHA256 algoritması): doğru imza üyelik verir, değiştirilmiş gövde/yanlış imza/başlıksız istek reddedilir, aynı olay iki kez gelince tek ödeme kaydı oluşur</li><li>Sürüm 4.1.0 olarak derlendi.</li></ul><h2>[4.0.0] - 2026-10-05</h2><ul><li>Yeni: 👤 **Üyelik arayüzü** — header'da 👤 düğmesi; giriş/ücretsiz kayıt penceresi, üye rozeti (⭐), kalan ücretsiz proje hakkı, \"Profilim\", çıkış. Parola sunucuda argon2id ile saklanır</li><li>Yeni: 🎟️ **Üyelik kapısı** — gerçek yapay zekâ çağrısından önce `POST /api/ai/pass`: giriş yoksa giriş penceresi, hak bittiyse **paywall** (fiyat `/api/health`'den okunur, istemciden tutar gelmez). Demo şablonu (API anahtarı yokken) ücretsiz kalır; kapı sunucu hatasında **açılır**, proje üretimi durmaz</li><li>Yeni: 🌍 **Topluluk duvarı** — `🌍 Duvar` düğmesi herkese açık listeyi açar: görsel, başlık, yazar ve açıklama herkese, **prompt yalnız üyelere** (kilitli kart). Sayfalama \"Daha fazla göster\" düğmesiyle</li><li>Yeni: 🧑‍🚀 **Profil ve takip** — duvar kartındaki yazara ya da \"Profilim\"e tıklayınca profil açılır: avatar, görünen ad, biyografi, proje/takipçi/takip sayaçları ve paylaşılan projeler. **Takip Et / Takip Ediliyor** durumu sunucudan gelen `isFollowing` ile sürülür; kendi profilinde takip düğmesi yerine \"Bu senin profilin\" yazar</li><li>Yeni: 🌍 **Paylaşım akışı** — rehberde \"🌍 Duvarı Paylaş\" düğmesi; başlık/açıklama/prompt hazır gelir, fotoğraf **presigned PUT ile doğrudan depoya** yüklenir ve projeye bağlanır. Üye olmayanlar paywall'a düşer</li><li>Yeni: ⚙️ **Runtime yapılandırma** — `API_BASE` ortam değişkeni `dist/config.js`'e yazılır ve JS'e gömülür; `sw.js` de dosyayı uygulama kabuğuna ekler. Adres boşsa **hiçbir ağ isteği atılmaz**, uygulama eskisi gibi yalnız demo modda çalışır (GitHub Pages dağıtımı bozulmaz)</li><li>Yeni: 🗄️ `server/` altında üyelik/ödeme/duvar API'si — Node 20 + Express 4 + Prisma 6 + PostgreSQL; Docker Compose ile ayağa kalkar (çoklu proje izolasyonu, Traefik etiketleri)</li><li>Yeni: 🔒 **Prompt gizliliği sunucu tarafında zorlanır** — `src/projectSelect.js` tek kapı: üye olmayan istekte Prisma `select` listesine `promptBody` hiç girmez (UI gizlemesi değil). `server/tests/prompt-leak.test.js` ham yanıtı tarar; istemcide `wallCardHTML` de prompt yoksa kilitli kart basar</li><li>Yeni: 💳 Stripe Checkout + webhook (imzalı, `providerRef` ile idempotent) — ilk 1000 kişi tek seferlik $1 ömür boyu, sonrası aylık; **fiyat ve plan yalnız sunucudan** (`config.js` → PRICING)</li><li>Yeni: 🖼️ Görsel deposu S3/MinIO uyumlu; tarayıcı presigned PUT ile yükler, dosya API'den geçmez</li><li>Yeni: 🧪 51 sunucu testi + `wallCardHTML`/`fmtUsd` birim testleri; CI'a Postgres servisiyle ayrı `api` işi eklendi. `scripts/verify-member.mjs` gerçek tarayıcıda 19 kontrol yapar (üye olmayana prompt kilitli, hak bitince paywall, profil + takip/takipten çık)</li><li>Not: `dist/` hâlâ tek dosya + `config.js`; GitHub Pages dağıtımı aynen korunuyor. Kurulum/Stripe/VDS belgeleri: SUNUCU.md</li><li>Düzeltme: `weeklyProgressSVG` testi `Date.now()`'a bağlıydı ve **pazartesi 00:00'den sonra** kırılıyordu (\"dün aynı hafta\" varsayımı yalnız salı–pazar arasında doğru). Test sabit bir referans haftasına (15 Haziran 2026 Pazartesi) bağlandı; kaynak kod değişmedi</li><li>Sürüm 4.0.0 olarak derlendi.</li></ul><h2>[3.1.0] - 2026-10-04</h2><ul><li>Yeni: 📊 **Sınıf karşılaştırma grafiği** — paneldeki ⚖️ kartın altında çift çubuklu SVG: 5 metrik (öğrenci, ort. ilerleme, tamamlanan adım, tahmini bütçe, en aktif hafta) iki sınıf için yan yana çubuk; her metrik iki sınıfın büyüğüne göre ölçeklenir, kazanan taraf teal vurgulu. Bütçede az harcamak iyi sayılır</li><li>Yeni: 🖨️ **Raporda karşılaştırma** — PDF sınıf raporuna \"⚖️ Sınıf Karşılaştırması\" bölümü ve aynı grafik basılır (yalnız ≥2 sınıf kodu varsa; tek sınıf seçiliyken anlamsız olurdu)</li><li>Yeni: 📱 **Mobil uyumluluk** — header 375px'te 824px genişlikte taşıyordu (logo + 6 düğme tek satıra sığmıyor, sayfa yatay kayıyordu). Header artık 640px ve 900px eşiklerinde sarıyor; dokunma hedefleri 34-40px'e büyütüldü. 375/390/768px'te yatay taşma sıfır</li><li>Test: 86→90 birim (4 yeni: compareBarsHTML, bütçede kazanan yönü, classMetricValue, raporda grafik), E2E 31→34 kontrol (10d, 10e, 13c)</li><li>Test altyapısı: E2E senaryoları `tests/e2e.test.mjs` ile `node --test` içine alındı — birim + tarayıcı testleri tek komut (`node --test tests/`). Senaryo tanımları `scripts/e2e.mjs` modülünde kaldı; CLI (`--only`, `--list`) aynen çalışıyor</li><li>CI: iki ayrı job yerine tek job — bağımlılıkları kurar, chromium indirir, derler ve `node --test tests/` koşar</li><li>Düzeltme: `node --test` altında tarayıcı süreci kapatılmadığı için koşu hiç sonlanmıyordu; `after()` kancası eklendi</li></ul><h2>[3.1.0] - 2026-10-04</h2><ul><li>Sürüm 3.1.0 olarak derlendi.</li></ul><h2>[3.0.0] - 2026-10-03</h2><ul><li>Yeni: ⚖️ **Sınıf karşılaştırma** — panelde iki sınıf seçici (A vs B); öğrenci sayısı, ortalama ilerleme, tamamlanan adım, tahmini bütçe ve en aktif hafta yan yana tabloda, daha iyi değer vurgulu; ≥2 sınıf kodu varsa görünür</li><li>Yeni: ⏱️ **Öğrenci zaman çizelgesi** — panelde öğrenci kartında ⏱️ düğmesiyle açılır: adım zaman damgaları + gönderim günü kronolojik (gün/saat); PDF raporda her öğrenci için gün bazlı özet satırı (\"01 Eki (2 adım) · 03 Eki (gönderim)\")</li><li>Yeni: 📄 **Arşiv mini önizleme** — kartta Önizleme düğmesi kartı açar: rehber özeti + ilk 3 adım + ilk ipucu; tekrar tıklayınca kapanır, arama/sıralama odak kaybettirmez</li><li>Yeni: 🎓 **Rapor sınıf turları** — \"Tüm sınıflar\" görünümünde PDF raporu her sınıfı kendi 🎓 bölüm başlığıyla ayrı tabloda dizer; tablo satırlarına sınıf kodu rozeti (cls-tag) eklenir</li><li>Düzeltme: sınıf seçiliyken PDF raporu açmak `esc2` tanımlanmadan erişim (TDZ) nedeniyle hataya düşüyordu — tanım başa alındı</li><li>Test: 86 birim (7 yeni: compareClasses, compareTableHTML, studentTimeline, timelineSummary, groupSubsByClass, rapor turu, archivePreviewData), E2E 21→31 kontrol (10 yeni: 10a-10c, 11a-11c, 12a-12b, 13a-13b)</li><li>Test altyapısı: E2E senaryoları 13 bağımsız bloğa ayrıldı — her senaryo kendi browser context'inde, temiz localStorage ve sıfır modül durumuyla koşar; sıralamaya bağımlılık ve \"senaryo N kalıntısı\" kırılmaları bitti</li><li>Test altyapısı: Senaryo seçici eklendi — `node scripts/e2e.mjs --only 12`, `--only 9-12`, `--only 6,12`, `--list` (bilinmeyen kimlik `exit 2`). Senaryolar bir kayıt defterine alındı, seçim dışı senaryolar hiç açılmıyor</li><li>Düzeltme: `6d` kontrolü yanlış hedefi arıyordu (`[data-act=\"cart\"]` gönderi listesinde değil, ana rehberde var; 1. senaryodan kalma rehbere bakıyordu). Artık satırdaki gerçek aksiyonları doğruluyor: geri bildirim + ⏱️ + sil</li><li>Düzeltme: Sertifika adı (`#certNameInput`) yazıldıktan sonra rehber yeniden render olduğunda (canlı maliyet ipucu ~400 ms) kayboluyordu — input değeri yalnızca sertifika oluşturulunca saklanıyordu. Artık her tuş vuruşunda saklanıyor; öğrenci \"🏅 Sertifika Oluştur\"a basınca ad yerinde duruyor</li></ul><h2>[2.22.0] - 2026-10-02</h2><ul><li>Yeni: 🏫 **Çoklu sınıf desteği** — panelde sınıf seçici (gönderi dosyalarındaki classCode'lardan otomatik); CSV indirmesi ve PDF raporu seçili sınıfa göre süzülür, seçim korunur; \"Tüm sınıflar\" görünümü de var. Rapor başlığında aktif sınıf etiketi (🎓) yazar</li><li>Yeni: 📈 **Panelde canlı haftalık grafik** — rapor açmadan son 8 haftanın adım toplamları sağ kartta görünür; CSS değişkenleriyle koyu/açık temaya uyar (rapordaki grafikle aynı veri kaynağı)</li><li>Yeni: 🔃 **Arşiv sıralama + son açılış** — 🆕 En yeni / ⭐ Favoriler önce / 🔤 A→Z seçici; kartlar en son açıldıkları günü (🔓) gösterir</li></ul><h2>[2.21.0] - 2026-10-02</h2><ul><li>Yeni: 🔍 **Arşiv arama** — arşiv penceresinde başlık, fikir ve etiketlerde Türkçe harf duyarsız (foldTR) anlık süzme; yazarken odak kaybolmaz (grid ayrı çizilir), ⭐/🏷️ çipleriyle birlikte çalışır</li><li>Yeni: 📅 **Haftalık katılım detayı** — sınıf raporunda grafik altında en güncel 4 haftanın her biri için kim kaç adım tamamladı (hafta toplamıyla, en çok 6 isim + \"+n\")</li><li>Yeni: 🕒 **CSV \"Son Etkinlik\" sütunu** — öğrenci başına en son adım işaretlendiği gün (adım yoksa gönderim günü); dönem sonu Excel takibinde risk analizi kolaylaşır</li></ul><h2>[2.20.0] - 2026-10-01</h2><ul><li>Yeni: 📅 **CSV tarih filtresi** — öğretmen panelinde başlangıç/bitiş tarihi seç; CSV indirimi ve gönderi listesi bu aralığa göre süzülür, aralık korunur. Rapor başlığında \"CSV tarih aralığı: … (n/total)\" yazar; temizle düğmesi tek tıkla tüm gönderilere döner</li><li>Yeni: ⭐ **Arşiv favori/etiket sistemi** — ⭐ ile favorile, 🏷️ ile virgülle ayırarak (en çok 5) etiket ver; ⭐ Favoriler / 🏷️ etiket çipleriyle filtrele. Favoriler Portfolyo.zip'te öne alınır, zip'e favoriler + etiket özetli RAPOR.md girer</li><li>Yeni: 👁️ **Göz serbest modu** — \"Bana Anlat\" artık adım adım okur: her adım bitince 2 sn bekler, adımı otomatik işaretler ve sonrakine geçer; işaretli adımlardan kaldığı yerden devam eder. Durdur/Yeniden üret modu güvenle keser</li></ul><h2>[2.19.0] - 2026-10-01</h2><ul><li>Sürüm 2.19.0 olarak derlendi.</li><li>Yeni: 🛒 **Alışveriş listesi** — rehber aksiyonlarına \"Alışveriş Listesi\" düğmesi; malzemeleri \"parça × adet — satır toplamı\" biçiminde WhatsApp'a hazır metne döker, sonda proje toplamı var. Adet geçersiz kılmaları (−/+ kutuları) metne yansır; popup engellenirse liste panoya kopyalanır</li><li>Yeni: 🔍 **Gönderi arama + sayfalama** — öğretmen panelinde öğrenci/proje adında Türkçe harf duyarsız (foldTR) arama; 6'şarlı sayfalama, odak kaybı olmadan anlık filtreleme</li><li>Yeni: 🔥 **En aktif hafta** — sınıf raporunda haftalık grafiğin altında \"En aktif hafta: tarih — N adım\" özeti ( Pazartesi kümeleri ortak mondayOf yardımcısıyla)</li><li>Test: 63→67 birim (4 yeni: shoppingListText, filterSubmissions, paginate, mostActiveWeek), E2E 11→15 kontrol (6a-6d: sayfalama, arama, alışveriş düğmesi)</li></ul><h2>[2.18.0] - 2026-10-01</h2><ul><li>Sürüm 2.18.0 olarak derlendi.</li><li>Yeni: 🏷️ **Katalog öneri çipleri** — öğretmen paneli, depo fiyat kataloğunda (fiyat-katalogu.json) olup henüz özel fiyatı olmayan parçaları çip olarak önerir; tıklayınca parça öğretmenin özel fiyat listesine depo fiyatıyla eklenir ve Ayarlar'daki editörle senkron kalır</li><li>Yeni: 🚨 **Risk Altındaki Öğrenciler** — son 10 gündür yeni adım göndermemiş ve projesini bitirmemiş öğrenciler panelde en eski tarihli önce listelenir (kırmızı vurgulu kart)</li><li>Yeni: ❓ **Fiyatlanamayan Malzemeler** — özel/depoyu/gömülü katalogların hiçbirinde karşılığı olmayan parça adları sınıf genelinde toplanır (büyük/küçük harf farkı birleştirilir, adet sayılır) ve çip olarak gösterilir; öğretmene hangi fiyatları ekleyeceği söylenir</li><li>Yeni: 📊 **CSV dışa aktarma** — sınıf gönderileri Excel uyumlu .csv olarak iner (UTF-8 BOM, ';' ayırıcı, tırnak kaçış), sütunlar: öğrenci, proje, tamamlanan/toplam adım, ilerleme %, tahmini maliyet USD, geri bildirim, tarih</li><li>Test: 58→63 birim test (5 yeni: catalogSuggestions, atRiskStudents, unknownMaterials, classSubsToCSV, downloadClassCSV); E2E 11/11 aynı</li></ul><h2>[2.17.0] - 2026-09-30</h2><ul><li>Sürüm 2.17.0 olarak derlendi.</li><li>Yeni: 📈 **Sınıf raporunda haftalık ilerleme grafiği** — gönderimlerin tamamlanan adımları haftaya kümelendirilir, son 8 haftanın çubuk grafiği lider tablosunun altına basılır</li><li>Yeni: 🎯 **Sınıf bütçe planlayıcısı** — Ayarlar'a \"Sınıf mevcudu\" girdisi; sınıf raporu mevcut × ortalama proje maliyetiyle tüm sınıfın bütçe ihtiyacını hesaplar ve öğretmen bütçe sınırıyla karşılaştırır</li><li>Not: mevcut/bütçe cihaz tercihleri sayılır, veri yedeğine girmez (BACKUP_SKIP)</li><li>Ek: README'ye canlı uygulama ekran görüntüsü (docs/screenshot.png); CI'ya E2E job'ı (Playwright, file:// dist üzerinde 11 kontrol)</li></ul><h2>[2.16.0] - 2026-09-30</h2><ul><li>Sürüm 2.16.0 olarak derlendi.</li><li>Yeni: ✨ **AI'lı canlı maliyet tahmini** — API anahtarı varsa yazdığın fikir AI'a kısa bir istemle gönderilir, AI gerçek parça listesi döndürür ve o liste fiyatlanır (\"✨ AI tahmini ≈ …\"). Anahtar yoksa/istek başarısızsa demo şablon ipucusuna sessizce düşer; sonuç 10 dk önbelleklenir, yarış koşulu korumalı (yalnız en yeni girişin cevabı basılır)</li><li>Yeni: 💱 **Otomatik kur tazeleme** — uygulama açılışında saklanan kur 24 saatten eskiyse çevrimiçi sessizce güncellenir; başarılıysa açık rehber yeni kurla yeniden çizilir</li><li>Temizlik: sw.js sürüm yorumu netleştirildi (CACHE_NAME build.py ile güncellenmeye devam eder); PWA dosyaları canlı sitede doğrulandı (manifest/icon/sw 200)</li><li>Not: v2.16.0 testlerle 56/56; AI tahmini için 3 yeni test (istem şeması, gemini yanıtı ayrıştırma/hata yolları, AI/demo fallback + önbellek)</li></ul><h2>[2.15.0] - 2026-09-30</h2><ul><li>Sürüm 2.15.0 olarak derlendi.</li><li>Yeni: 💱 **Çevrimiçi kur** — Ayarlar'da \"1 USD = X₺ (zaman önce güncellendi)\" durumu + 🌐 Çevrimiçi Güncelle düğmesi; exchangerate.host/er-api'den çekilir, localStorage'da saklanır, hata anında saklanan/varsayılan kur (34) kullanılır. Tüm ₺ gösterimleri (tablo, PDF, rapor, sertifika, Portfolyo, kart) bu kurdan hesaplanır</li><li>Yeni: 🚀 **publish.sh** — test + sürümlü derleme + gh-pages yenileme + push'u tek komutta birleştiren yayın script'i (./publish.sh veya ./publish.sh 2.16.0)</li><li>Yeni: 🤝 **CONTRIBUTING.md** + 🐛/💡 issue şablonları + PR şablonu</li><li>Not: Proje ~/Documents/GitHub/arduino-ruya-atolyesi'ye taşındı; GitHub Pages canlı: proacademycomtr.github.io/arduino-ruya-atolyesi</li></ul><h2>[2.14.0] - 2026-09-30</h2><ul><li>Sürüm 2.14.0 olarak derlendi.</li><li>Yeni: 📁 **Depoda varsayılan katalog** — `fiyat-katalogu.json` artık projenin kökünde; build.py onu hem dist'e kopyalar hem FILE_CATALOG olarak JS'e gömer. Fiyat önceliği: öğretmen özel (localStorage) → depo → gömülü PRICE_CATALOG; Ayarlar'daki bütçe alanı depo sınırını placeholder olarak gösterir</li><li>Yeni: 💡 **Bütçe aşımı önerisi** — toplam sınırı aşarsa tabloda \"Bütçe önerisi: Arduino Uno yerine Arduino Nano kullan ($10.00 → $6.00)\" satırı (özel fiyatlar da hesaba katılır)</li><li>Yeni: ⌨️ **Canlı maliyet ipucu** — fikir yazarken 30+ karakterde demo rehber üzerinden anlık tahmin: \"💡 Bu fikre benzer proje ≈ 646.00₺ ($19.00)\" (400ms gecikmeli)</li><li>Yeni: 📋 **SÜRÜM_NOTLARI.md** — v2.10→v2.14 fiyat modülünün tamamını özetleyen sürüm notları sayfası</li></ul><h2>[2.13.0] - 2026-09-30</h2><ul><li>Sürüm 2.13.0 olarak derlendi.</li><li>Yeni: 🔽 **Fiyata göre sıralama** — malzeme tablosunun Tutar başlığındaki düğme pahalıdan ucuza (↓) → ucuza pahalıya (↑) → orijinal sıra (⇅) döngüsü yapar; fiyatlanamayan parçalar her zaman sonda, tercih hatırlanır</li><li>Yeni: 📎 **Portfolyo.zip'e fiyat katalogu** — öğretmen özel fiyatları + bütçe sınırı `fiyat-katalogu.json` olarak arşive girer; PORTFOLYO.txt'te veliler/okul idaresi için açıklama notu taşır (katalog boşsa dosya üretilmez)</li><li>Yeni: 💰 **Sınıf raporunda toplam bütçe** — tüm öğrencilerin projelerinin tahmini maliyeti toplanır ve raporun üstünde \"Sınıf toplam bütçesi\" satırında gösterilir; bütçe sınırı aşılırsa ⚠️ \"bütçe aşımı\" işaretiyle</li><li>Gelişti: 🏅 **Sertifikada bütçe aşımı işareti** — proje maliyeti öğretmen sınırını aşarsa sertifika şeridi (PDF + Portfolyo SVG'si) kırmızıya döner: \"⚠️ BÜTÇE AŞIMI\"; sınır içindeyse altın şerit + normal not</li></ul><h2>[2.12.0] - 2026-09-30</h2><ul><li>Sürüm 2.12.0 olarak derlendi.</li><li>Değişti: 💱 **TL ana para birimi** — tüm fiyat gösterimlerinde ₺ öncelikli, $ parantez içinde ikincil: `612.00₺ ($18.00)`; tablo, PDF, sınıf raporu, WhatsApp, sertifika kartı ve Portfolyo özetinde tek biçim</li><li>Yeni: 🎯 **Bütçe sınırı uyarısı** — Ayarlar'dan USD cinsinden üst sınır girilir; proje toplamı aşarsa malzeme tablosunda ⚠️ kırmızı \"Bütçe aşımı (Sınır: …)\" satırı ve PDF'te \"bütçe aşımı\" etiketi; 0/boş = kapalı, cihaz tercihi (yedeğe girmez)</li><li>Yeni: 🏅 **Sertifikada fiyat şeridi** — PDF (canvas) ve Portfolyo SVG sertifikasında altın yuvarlak köşeli şerit: \"Tahmini proje maliyeti: 612.00₺ ($18.00) · ortalama perakende tahmini\"</li><li>Yeni: 📤 **Katalog JSON paylaşımı** — öğretmen özel fiyatlarını + bütçe sınırını `fiyat-katalogu.json` olarak dışa aktarır; diğer öğretmen aynı dosyayı içe aktararak katalogu devralır (sayı olmayan fiyatlar sessizce atlanır)</li></ul><h2>[2.11.0] - 2026-09-29</h2><ul><li>Sürüm 2.11.0 olarak derlendi.</li><li>Yeni: 🏷️ **Öğretmen fiyat kataloğu** — Ayarlar'a \"Parça adı: fiyat (USD)\" satırları yazılır (noktalı/virgüllü ondalık ikisi de olur), localStorage'da kalıcıdır ve fiyat tahmininde katalog fiyatının YERİNE geçer; en uzun eşleşen ad kazanır, ✏️ işaretiyle tabloda belli olur</li><li>Yeni: 🔢 **Canlı adet düzenleyici** — malzeme tablosunda her satırda −/+ düğmeleri ve yazılabilir adet kutusu; toplam anında güncellenir, adetler proje başına localStorage'da saklanır</li><li>Yeni: 📊 **Sınıf raporunda Maliyet sütunu** — gönderim dosyası artık proje malzemelerini taşır; öğretmen her öğrencinin projesinin tahmini maliyetini raporda görür</li><li>Yeni: 💰 **Portfolyo.zip'e bütçe özeti** — PORTFOLYO.txt'te proje başına tahmini maliyet + portfolyo toplamı (\"alışveriş listesi değildir\" notuyla)</li></ul><h2>[2.10.0] - 2026-09-29</h2><ul><li>Sürüm 2.10.0 olarak derlendi.</li><li>Yeni: 💰 **Malzeme fiyat tahmini** — her rehberin malzeme tablosunda Birim Fiyat ve Tutar sütunları; yaklaşık Türkiye perakende fiyatları 39 parçalık katalogdan ($ + ₺ çift gösterim, kur bilgi amaçlı ~34)</li><li>Yeni: **Ortalama Proje Fiyatı** satırı — adet × birim hesabıyla proje toplamı; katalogda olmayan parçalar \"—\" ile işaretlenir ve toplama katılmaz</li><li>PDF çıktısı ve WhatsApp paylaşımı da fiyat toplamını taşır; sertifika projesi kartına 4. istatistik kutusu (≈ fiyat) eklendi</li><li>AI rehberlerinde de çalışır: AI malzeme adlarını aynı katalogla fiyatlar, bilinmeyenler dürüstçe \"fiyatlanmadı\" olarak gösterilir</li></ul><h2>[2.9.0] - 2026-09-28</h2><ul><li>Sürüm 2.9.0 olarak derlendi.</li><li>Yeni: 🌙🎲📏 **3 yeni demo rehber** — otomatik gece lambası (LDR + histeresis), butonla atılan dijital zar (randomSeed gürültü tohumu, 6 LED'li zar yüzleri), OLED mesafe ölçer (HC-SR04 + SSD1306 ikili kütüphane); üçü de wokwiValidate'ten 0 uyarıyla geçer ve 🚀 İleri Seviye bölümü taşır. Demo sayısı 11 → 14; altın rozet eşiği artık demo sayısından otomatik türetilir</li><li>Yeni: 📜 **Portfolyo.zip'e sertifikalar** — her proje klasörüne baskı-dostu SERTIFIKA.svg eklenir (certificateSVG, certCanvas ile aynı görsel dil)</li><li>Yeni: ⚡ **Toplu geri bildirim** — öğretmen panelinde yorumu bekleyen tüm gönderiler tek listede; \"Hepsini İndir\" her öğrenciye kişisel .geribildirim.json dosyası indirir ve gönderileri işaretler</li><li>Yeni: 💾 **Veri yedeği** — Ayarlar'dan tüm uygulama verisi (arşiv, adımlar, sınıf, gönderiler, rozetler, geri bildirimler, özel bileşenler) tek .yedek.json dosyasına dışa aktarılır / başka bilgisayarda geri yüklenir; dil/tema gibi cihaz yerel tercihleri hariçtir</li><li>Çözücü iyileştirmeleri: satır sahibi parça tespiti (\"OLED GND → GND\" satırındaki GND, satırdaki OLED parçasınındır), çoklu örnek parça bağlantıları (LED1/LED2… ayrı ayrı çözülür), OLED'de LCD'ye yanlış eşleşme engellendi, wokwi-7segment DP pini, RGB/OLED'de boşta düz LED parçası üretilmez</li></ul><h2>[2.8.0] - 2026-09-28</h2><ul><li>Sürüm 2.8.0 olarak derlendi.</li><li>Yeni: 🎨🔧🕐 **3 yeni demo rehber** — LCD'li dijital saat (I2C, millis() sayaç), RGB LED mood lambası (0-767 ton haritası, PWM karıştırma), servo kapı kilidi (kenar algılama, durum makinesi); üçü de wokwiValidate'ten 0 uyarıyla geçer ve 🚀 İleri Seviye bölümü taşır</li><li>Yeni: 📄 **Sınıf raporuna Geri Bildirim sütunu** — her gönderimde \"Verildi ✓ / Bekliyor\" durumu + varsa öğretmen yorumunun 80 karakterlik özeti</li><li>Yeni: 🥉🥈🥇 **Rozet kademeleri** — Başarımlar modalında bronz (3 sertifika) / gümüş (5) / altın (tüm 11 demo) ilerleme kartı + \"sonraki hedef\" metni</li><li>Yeni: 📦 **Portfolyo.zip** — sertifikalı tüm rehberlerin Wokwi paketleri (sketch.ino + diagram.json + öğretmen notları) numaralı klasörler hâlinde tek arşivde; kökte PORTFOLYO.txt özeti. Sertifikalar artık rehber snapshot'ı saklar; eski guide'sız kayıtlar atlanır</li><li>Düzeltme: RGB projesinde \"RGB LED\" metni ayrıca boşta bir wokwi-led parçası üretiyordu — RGB varken düz LED eklenmez</li></ul><h2>[2.7.0] - 2026-09-25</h2><ul><li>Sürüm 2.7.0 olarak derlendi.</li><li>Yeni: 🏫 **Öğretmen paneli** — Sınıf Modu artık iki sütunlu geniş panel: solda sınıf kodu + içe aktarma + rapor, sağda ilerleme yüzdeli gönderi kartları ve geri bildirim yazma (tek ekranda)</li><li>Yeni: 🏅 **Öğrenci başarımları** — header'da sayaçlı yeni düğme; kazanılan sertifikalar + okunan öğretmen geri bildirimleri kart görünümünde listelenir (mükerrer kayıt engellenir)</li><li>Yeni: 🚀 **İleri Seviye bölümü** — 7 segment (ikinci display ile 0-99 multiplexing, butonla durdur/başlat) ve piyano (kayıt/çalma, pot ile oktav) demo rehberlerine katlanabilir gelişmiş kutu: ek wiring satırları + kod parçaları</li><li>Yeni: 📦 **Zip kişiselleştirme** — Wokwi paketi öğrenci adı + sınıf kodunu bilir: sketch.ino'ya başlık yorumu, öğretmen notlarına \"Öğrenci / Sınıf kodu\" satırları (ad: gönderim/sertifika girişlerinden)</li></ul><h2>[2.6.0] - 2026-09-25</h2><ul><li>Sürüm 2.6.0 olarak derlendi.</li><li>Yeni: 💬 **Öğretmen geri bildirimi** — öğretmen içe aktarılan gönderiye yorum yazar, `.geribildirim.json` indirir; öğrenci \"Geri Bildirimi Göster\" ile açıp rehberde okur (yorumlar tarayıcıda saklanır)</li><li>Yeni: ⚡ **Wokwi'de Aç güçlendirildi** — sketch kodu + tüm bağlantılar çözülmüşse diagram.json tek kopyada panoya; Wokwi şablonu yeni sekmede açılır</li><li>Yeni: 🏆 **Lider tablosu** — sınıf raporuna ilerlemeye göre sıralı SVG çubuk grafik (ilk 10, print-to-PDF dostu, bağımlılıksız)</li><li>Yeni: 🔢🚗🎹 **3 yeni demo rehber** — 7 segment display sayacı (wokwi-7segment, ortak katot), ultrasonik park sensörü, buzzer'lı mini piyano (INPUT_PULLUP, 4 buton); üçü de wokwiValidate'ten 0 uyarıyla geçer</li><li>Düzeltme: sınıf gönderim içe aktarma tek-nesne `.klasor.json` biçimini kabul eder (dizi/sarmalayıcı yanına)</li><li>Düzeltme: çözücüde tek harfli pin kelimeleri (\"Display A\") sahip parça adına gömülü olduğu için yutuluyordu — 3+ harf sınırıyla pinler doğru çözülür</li></ul><h2>[2.5.0] - 2026-09-25</h2><ul><li>Sürüm 2.5.0 olarak derlendi.</li><li>Yeni: 🏫 **Sınıf Modu** — öğretmen sınıf kodu üretir, öğrenci adımlarını tamamlayıp `.klasor.json` gönderim dosyası indirir; öğretmen gönderimleri içe aktarıp PDF sınıf raporu alır (sunucusuz, dosya tabanlı)</li><li>Yeni: 📦 **Wokwi Paketi (.zip)** — rehberden sketch.ino + diagram.json + öğretmen notları içeren gerçek proje arşivi; bağımlılıksız zip yazıcı (STORE yöntemi, CRC32 doğrulanmış)</li><li>Yeni: 🛠️ **Adım takibi** — her adımda onay kutusu + ilerleme çubuğu; tüm adımlar bitince sertifika ve gönderim satırları açılır</li><li>Yeni: 🧪 birim testler — `node --test tests/`; çözücü, wokwiValidate, zip yazıcı, sınıf gönderimi ve özel set normalize senaryoları (16 test, app.js sanal ortamda değerlendirilir)</li></ul><h2>[2.4.0] - 2026-09-25</h2><ul><li>Sürüm 2.4.0 olarak derlendi.</li><li>Yeni: 5 demo rehbere `wokwiHints` — demo modunda bile gerçek röle/motor/servo kablolaması çıkar (L298N/DC motor Wokwi'de olmadığı için potansiyometre ile simüle edilir, satır notuyla açıklanır)</li><li>Yeni: `wokwiValidate` taslak doğrulaması — pin çakışması (aynı pine iki kablo) + eksik GND/5V uyarıları, öğretici kontrol kutusunda</li><li>Yeni: sertifika penceresine 1080×1080 paylaşım kartı PNG indirme düğmesi</li><li>Yeni: özel bileşen seti — öğretmenler bileşen ekler, JSON olarak dışa/içe aktarır (localStorage kalıcı, \"Özel Set\" kategorisi)</li><li>Düzeltme: Wokwi parça tipleri gerçek adlarına güncellendi (relay-module, lcd1602, pir-motion-sensor, photoresistor-sensor, ssd1306)</li><li>Düzeltme: AI prompt'u yalnızca geçerli Wokwi tiplerini listeler; L298N/DC motor uydurma tip yerine NULL döndürür</li><li>İyileştirme: kablo çözücü — ARDUINO öneki, ~10 PWM pini, satır-sahibi parça yönlendirmesi, çoklu aynı-tip parça desteği</li><li>Düzeltme: çözücü büyük/küçük harf duyarsız; \"IR sensör SOL — OUT\" gibi tireli satırlar çözülür; VCC/GND satırın kendi parçasına bağlanır (yanlış hint-parçası değil)</li><li>Düzeltme: \"DC motor\" artık yanlışlıkla \"Servo Motor\" kütüphane parçasına eşleşmez (genel kelimeler eşleştirmede hariç)</li></ul><h2>[2.3.0] - 2026-09-24</h2><ul><li>Sürüm 2.3.0 olarak derlendi.</li><li>Yeni: AI şemasına `wokwiHints` alanı — her malzeme için Wokwi parça tipi + pin eşlemesi; kablo üretimi bunları öncelikli kullanır</li><li>Yeni: bileşen kütüphanesi kartlarına Wokwi parça tipi/pin eşlemeleri eklendi ve taslak üretiminde kullanılıyor</li><li>Yeni: eşleşmeyen bağlantı satırları için rehberde öğretici yardım kutusu</li><li>Yeni: arşivden tek tıkla sertifika üretimi (🏅, ad sorulur, PDF iner)</li><li>İyileştirme: sertifika adı hatırlanır, sonraki sertifikalarda önerilir</li></ul><h2>[2.2.0] - 2026-09-24</h2><ul><li>Sürüm 2.2.0 olarak derlendi.</li><li>Yeni: sürüm rozeti + sürüm geçmişi modalı (footer)</li><li>Yeni: paylaşım kartını Web Share API ile doğrudan paylaşma (desteklenmezse indirme)</li><li>Yeni: PWA — manifest + service worker ile çevrimdışı kullanım</li><li>Yeni: Wokwi diagram.json kopyalarken parça/kablo özeti ve eşleşmeyen satır uyarısı</li></ul><h2>[2.1.0] - 2026-09-24</h2><ul><li>Sürüm 2.1.0 olarak derlendi.</li></ul>";
+  window.__CHANGELOG_HTML = "<p>Bu dosya `build.py` tarafından otomatik güncellenir.</p><h2>[4.3.0] - 2026-10-05</h2><ul><li>Yeni: 🔎 **Duvar ve arşiv araması** — başlık, açıklama ve etiketlerde arama kutusu; Türkçe duyarlı (büyük/küçük harf, `ç ğ ı ö ş ü` ve aksan farkı sonucu değiştirmiyor). Metin kayıt anında katlanıp `Project.searchText` içine yazılıyor, sorgu da aynı katlamayla karşılaştırılıyor</li><li>Yeni: ↕️ **Duvar sıralaması** — \"En yeni / En çok beğenilen / En çok konuşulan\". `new` imleç (id) sayfalıyor, sayısal sıralamalar offset sayfalıyor. `GET /api/wall?q=&sort=` ve `GET /api/feed/timeline` aynı sözleşmeyi kullanıyor</li><li>Yeni: 🚩 **Şikâyet/raporlama** — duvar kartından, yorumdan ve profilinden gerekçeli şikâyet gönderimi (`POST /api/reports`); aynı kişi aynı hedefi iki kez şikâyet edemiyor, kullanıcıya anlaşılır bir mesaj dönüyor</li><li>Yeni: 🙈 **Yorum gizleme** ve 🗑️ **paylaşım kaldırma** — yazar/proje sahibi (yorum gizleme) ve proje sahibi (paylaşım kaldırma) kendi içeriğini geri alabiliyor; gizli içerik herkese açık sayaçlardan düşülüyor</li><li>Yeni: 👤 **Profil avatarı** — kendi profilinden görsel yükleme/silme. Yükleme iki adımlı: `POST /api/users/me/avatar/presign` → `POST /api/users/me/avatar`</li><li>Yeni: `isAdmin` istemciye de gönderiliyor; yönetici olan için yorum gizleme ve şikâyet yönetimi açılıyor</li><li>Düzeltme: `.modal` yükseklik sınırı yoktu — duvar penceresi 955px'e çıkıp 800px ekranda \"yorum gönder\" düğmesi erişilemez oluyordu. Artık `max-height: calc(100vh - 2.5rem)` + kendi kaydırma</li><li>Düzeltme: **Test ortamı `app.js`'i satır 6776'da öldürüyordu** ama testler yeşil görünüyordu. `build.py` `const API_BASE_DEFAULT = \"\";` satırını enjekte ediyor, kaynakta yoktu; sandbox'ta TDZ hatası veriyordu. Sabit artık kaynakta tanımlı. Ayrıca sandbox'a `MutationObserver`, `IntersectionObserver`, `window.addEventListener/scrollTo`, `history.replaceState` stub'ları eklendi</li><li>Düzeltme: `scripts/verify-member.mjs` arama kontrolü **her zaman yeşildi** — düz `/irmak/i` kontrolü sorgu metnini kendisi arıyordu. Artık duvardaki gerçek bir başlıktan kelime seçiliyor ve dönen kart gerçekten eşleşiyor mu diye bakılıyor (Türkçe katlama ile karşılaştırılıyor; Türkçe harfleri silmek \"kişilik\"→\"kilik\" yapıp eşleşme varken kontrolü düşürüyordu)</li><li>Test: `node --test tests/` 125→135. Sunucu testleri 72→109: yeni `search.test.js`, `moderation.test.js`, `avatar.test.js`. `scripts/verify-member.mjs` 74→76 kontrol (arama gerçekten eşleşiyor mu)</li><li>Sürüm 4.3.0 olarak derlendi.</li></ul><h2>[4.2.1] - 2026-10-05</h2><ul><li>Düzeltme: **Menü kilidi bölümü gizlemiyordu.** Kütüphane, Arşiv, Başarımlar, Sınıf Modu ve Ayarlar kilitli görünüyordu ama sayfadaki gerçek bölüm (ör. Bileşen Kütüphanesi `<section id=\"kutuphane\">`) **sayfayı aşağı kaydırarak erişilebilir** durumdaydı. Artık kilitle birlikte bölümün içeriği de gizleniyor</li><li>Düzeltme: Adres çubuğuna elle `#kutuphane` yazan ziyaretçi bölüme kaydırılabiliyordu. Artık giriş yoksa giriş penceresi açılıyor, hedef engelleniyor ve adres temizleniyor. `hashchange` yalnız sonradan değişen hash'lerde çalıştığı için ilk yüklemede de kontrol ediliyor</li><li>Düzeltme: `scripts/e2e.mjs` mevcut `dist/` derlemesini kullanıyordu, yani testler bunun `API_BASE` ile mi derlendiğine bağlıydı (kilitli menüyle kırılıyordu). Artık test **kendi derlemesini** yapıyor</li><li>Düzeltme: `scripts/verify-member.mjs` beğeni testi mutlak sayıya bakıyordu; veritabanında beğeni birikince (1 → 0) yanlış alarm veriyordu. Artık tıklamanın **yönünü** ölçüyor, durumu geri alıp testi bırakmadan önce doğruluyor</li><li>Test: `scripts/verify-member.mjs` 54→55 kontrol</li></ul><h2>[4.2.0] - 2026-10-05</h2><ul><li>Yeni: 🔒 **Giriş kapısı** — Kütüphane, Arşiv, Başarımlar, Sınıf Modu ve Ayarlar menüleri giriş yapana kadar **kilitlidir**: görünür ama 🔒 işaretlidir, tıklanınca içeri açılmaz ve giriş penceresi açılır. Kilit kararı TEK yerde toplanır (`GATED_MENU_IDS` + `requireLogin`); topluluk duvarı herkese açık kalmaya devam eder</li><li>Yeni: 💎 **Lansman sayfası (ziyaretçi)** — giriş yapmamış kullanıcıya ekranı saran tek sayfalık tanıtım: **8 özellik kartı** (yapay zekâ rehberi, Wokwi + .zip, Göz Serbest sesli rehber, gerçek malzeme fiyatı, alışveriş listesi, başarı sertifikaları, sınıf modu, portfolyo arşivi) ve güçlü **$1 ömür boyu** CTA'sı. Giriş yapılınca landing gizlenir ve uygulama açılır</li><li>Yeni: 🎟️ **Header'da ayrı “💎 Üye Ol — $1” ve “👤 Giriş Yap” düğmeleri** (ziyaretçide görünür, giriş yapınca yerini profil düğmesine bırakır). Üye Ol düğmesi doğrudan kayıt penceresini kampanya metniyle açar</li><li>Yeni: 💵 **Tek fiyat** — ilk 1000 kişi için $1 ömür boyu. Sınır dolunca üyelik **satışı kapanır** (`launch_sold_out`); daha önce aylık aboneliğe geçiliyordu. Kullanıcıya sonradan geri çekilecek bir abonelik vaadi yerine kapı açıkça kapatılıyor</li><li>Değişti: **“Demo Modu” rozeti artık tıklanamaz.** Daha önce Ayarlar'ı (API anahtarı) açıyordu; artık `aria-disabled` + `pointer-events: none` ile yalnız bilgi veriyor. Üyelik akışı üyelik düğmelerinden yürür</li><li>Düzeltme: `renderAuthBtn` içindeki erken dönüşlerde menü kilitleri hiç güncellenmiyordu (sunucu yokken ve kullanıcı yokken). `renderMenuLocks` artık HER yolda çalışıyor</li><li>Düzeltme: `bootstrapApi` API adresi boşken hiçbir şey çağırmadan dönüyordu; bu yüzden demo modunda landing CTA'sı hiç gösterilmiyor, “Üye Ol” düğmeleri başlıksız kalıyordu. Demo durumu da artık arayüzü hazırlıyor (kilitler açık — demo bozulmaz, üyelik düğmeleri pasif)</li><li>Test: `node --test tests/` 122→125, sunucu testleri 70→72 (tek fiyat kuralı: `soldOut`, `remaining`, her durumda LIFETIME). `scripts/verify-member.mjs` 34→54 kontrol: ziyaretçi CTA'ları, $1 metni, demo rozeti tıklanamazlığı, kilitli menünün **içeri açılmaması**, giriş/çıkış sonrası kilit durumunun değişmesi</li><li>Test altyapısı: `tests/extract.js` ikinci turda `LIB_DATA`/`ALL_LIB`'i yeniden tanımlayıp \"Identifier has already been declared\" hatası veriyordu. Bu hata yeni bir isim `missing` düştüğünde ortaya çıkıyordu; artık yalnız gerçekten tanımsız olanlar ekleniyor</li><li>Sürüm 4.2.0 olarak derlendi.</li></ul><h2>[4.1.0] - 2026-10-05</h2><ul><li>Yeni: 👥 **Takip akışı sekmesi** — duvarın üstünde \"🌍 Tümü / 👥 Takip Ettiklerim\" sekmeleri. Takip sekmesi yalnız takip edilenlerin paylaşımlarını gösterir (`GET /api/feed/timeline`), üyeye açıktır; giriş yoksa giriş penceresi, üyelik yoksa paywall açılır. `/api/feed/timeline` artık `/api/wall` ile **aynı sözleşmeyi** dönerdi (cursor sayfalaması, `viewer`, `followingCount`); \"Daha fazla göster\" her iki sekmede de çalışır</li><li>Yeni: ❤️ **Beğeni** — duvar kartlarında beğeni düğmesi ve sayaç. Beğeni yazmak üyeye açıktır (herkese açık beğeni spam'e açık olurdu); sayaç herkese açık, \"bunu beğendim\" bilgisi yalnız kendi görüntüleyene gider. Aynı kullanıcı iki kez beğenemez (`@@id([userId, projectId])`)</li><li>Yeni: 💬 **Yorum** — kartın 💬 düğmesi yorum panelini açar; okumak herkese açık, yazmak üyeye açık. Yorumu **yazan veya projenin sahibi** silebilir. Gövde 1000 karakterle sınırlı</li><li>Yeni: 🗃️ `Like` ve `Comment` tabloları (`migrations/20261005120000_likes_comments`); beğeni/yorum sayıları `shapeProject` ile herkese açık sayaç olarak döner (içerik değil)</li><li>Düzeltme: **paywall duvarın altında kalıyordu** — duvar açıkken \"Takip\" sekmesine ya da beğeniye tıklayınca paywall açılıyor ama tıklanamıyordu (duvar modalı üstteydi). Modal yığını artık son açılan pencere en üstte olacak şekilde `watchModalStack()` ile yönetiliyor; DOM sırası önemsiz</li><li>Düzeltme: duvar sekmeleri yeniden çizildiğinde her seferinde **ikinci bir çubuk** ekleniyordu (kimlik eksikti). `wallTabsHTML` artık `id=\"wallTabs\"` taşıyor ve `renderWallTabs` eskisini değiştiriyor</li><li>Düzeltme: **görsel presign rotasında depo kontrolü yanlış sırada idi.** Yapılandırma kontrolü yetki ve içerik tipi denetiminden önce geliyordu; görsel deposu olmayan bir sunucuda her istek 503 alıyor, gerçek hata (404 yetkisiz proje / 400 geçersiz dosya tipi) gizleniyor ve depo durumu yetkisiz kullanıcıya sızıyordu. Sıra düzeltildi: sahiplik → içerik tipi → depo yapılandırması</li><li>Test/CI: api işinde **görsel deposu (S3Mock) eklendi**; presigned URL ve görsel bağlama testleri artık CI'da da gerçekten koşuyor (daha önce `S3_ENDPOINT` boş bırakılmıştı, bu testler 503 alıyordu). S3Mock imajında ne curl ne node bulunduğu için hazır olma beklemesi job'ın kendi Node'uyla yapılıyor. CI bucket adı `arlo-ci-gorseller`: S3 bucket adları **alt çizgi içeremez** (`InvalidBucketName`)</li><li>Test: `node --test tests/` 110→122 (7 yeni birim: wallTabsHTML etkin sekme, aria-selected, bilinmeyen sekme, wallEmptyText, beğeni düğmesi/sayaç, likeBtnFace, commentsHTML yazma yetkisi + HTML kaçışı + silme yetkisi + tek çubuk regresyonu), sunucu testleri 51→70 (10 yeni: takip akışı sözleşmesi/cursor sayfalaması, beğeni sayaç-kimlik, yorum yetkileri, **Stripe webhook imzası uçtan uca**, **dönüş adresi güvenliği**). `scripts/verify-member.mjs` 19→34 kontrol: sekmeler, üye olmayan için yorum kutusu ve beğeni paywall'ı, üye olarak beğeni/yorum gönderme</li><li>Test: `safeReturnUrl` (ödeme dönüş adresi) hiç test edilmemişti; beyaz liste dışı origin, `javascript:` ve `*.evil.com` gibi adreslerin varsayılan siteye çevrildiği artık doğrulanıyor</li><li>Yeni: 🧪 `scripts/checkout-smoke.mjs` — Stripe test anahtarıyla $1 ödeme akışını uçtan uca dener (yapılandırma, fiyat kaynağı, gerçek Checkout oturumu, ödeme öncesi üyelik oluşmaması, üyenin tekrar ödeme açamaması). Kart bilgisi girmez; açılan Checkout adresini sen test kartıyla ödersin. Adımlar: SUNUCU.md §4</li><li>Test: webhook imzası artık **gerçekten üretilip doğrulanıyor** (Stripe'ın belgelediği HMAC-SHA256 algoritması): doğru imza üyelik verir, değiştirilmiş gövde/yanlış imza/başlıksız istek reddedilir, aynı olay iki kez gelince tek ödeme kaydı oluşur</li><li>Sürüm 4.1.0 olarak derlendi.</li></ul><h2>[4.0.0] - 2026-10-05</h2><ul><li>Yeni: 👤 **Üyelik arayüzü** — header'da 👤 düğmesi; giriş/ücretsiz kayıt penceresi, üye rozeti (⭐), kalan ücretsiz proje hakkı, \"Profilim\", çıkış. Parola sunucuda argon2id ile saklanır</li><li>Yeni: 🎟️ **Üyelik kapısı** — gerçek yapay zekâ çağrısından önce `POST /api/ai/pass`: giriş yoksa giriş penceresi, hak bittiyse **paywall** (fiyat `/api/health`'den okunur, istemciden tutar gelmez). Demo şablonu (API anahtarı yokken) ücretsiz kalır; kapı sunucu hatasında **açılır**, proje üretimi durmaz</li><li>Yeni: 🌍 **Topluluk duvarı** — `🌍 Duvar` düğmesi herkese açık listeyi açar: görsel, başlık, yazar ve açıklama herkese, **prompt yalnız üyelere** (kilitli kart). Sayfalama \"Daha fazla göster\" düğmesiyle</li><li>Yeni: 🧑‍🚀 **Profil ve takip** — duvar kartındaki yazara ya da \"Profilim\"e tıklayınca profil açılır: avatar, görünen ad, biyografi, proje/takipçi/takip sayaçları ve paylaşılan projeler. **Takip Et / Takip Ediliyor** durumu sunucudan gelen `isFollowing` ile sürülür; kendi profilinde takip düğmesi yerine \"Bu senin profilin\" yazar</li><li>Yeni: 🌍 **Paylaşım akışı** — rehberde \"🌍 Duvarı Paylaş\" düğmesi; başlık/açıklama/prompt hazır gelir, fotoğraf **presigned PUT ile doğrudan depoya** yüklenir ve projeye bağlanır. Üye olmayanlar paywall'a düşer</li><li>Yeni: ⚙️ **Runtime yapılandırma** — `API_BASE` ortam değişkeni `dist/config.js`'e yazılır ve JS'e gömülür; `sw.js` de dosyayı uygulama kabuğuna ekler. Adres boşsa **hiçbir ağ isteği atılmaz**, uygulama eskisi gibi yalnız demo modda çalışır (GitHub Pages dağıtımı bozulmaz)</li><li>Yeni: 🗄️ `server/` altında üyelik/ödeme/duvar API'si — Node 20 + Express 4 + Prisma 6 + PostgreSQL; Docker Compose ile ayağa kalkar (çoklu proje izolasyonu, Traefik etiketleri)</li><li>Yeni: 🔒 **Prompt gizliliği sunucu tarafında zorlanır** — `src/projectSelect.js` tek kapı: üye olmayan istekte Prisma `select` listesine `promptBody` hiç girmez (UI gizlemesi değil). `server/tests/prompt-leak.test.js` ham yanıtı tarar; istemcide `wallCardHTML` de prompt yoksa kilitli kart basar</li><li>Yeni: 💳 Stripe Checkout + webhook (imzalı, `providerRef` ile idempotent) — ilk 1000 kişi tek seferlik $1 ömür boyu, sonrası aylık; **fiyat ve plan yalnız sunucudan** (`config.js` → PRICING)</li><li>Yeni: 🖼️ Görsel deposu S3/MinIO uyumlu; tarayıcı presigned PUT ile yükler, dosya API'den geçmez</li><li>Yeni: 🧪 51 sunucu testi + `wallCardHTML`/`fmtUsd` birim testleri; CI'a Postgres servisiyle ayrı `api` işi eklendi. `scripts/verify-member.mjs` gerçek tarayıcıda 19 kontrol yapar (üye olmayana prompt kilitli, hak bitince paywall, profil + takip/takipten çık)</li><li>Not: `dist/` hâlâ tek dosya + `config.js`; GitHub Pages dağıtımı aynen korunuyor. Kurulum/Stripe/VDS belgeleri: SUNUCU.md</li><li>Düzeltme: `weeklyProgressSVG` testi `Date.now()`'a bağlıydı ve **pazartesi 00:00'den sonra** kırılıyordu (\"dün aynı hafta\" varsayımı yalnız salı–pazar arasında doğru). Test sabit bir referans haftasına (15 Haziran 2026 Pazartesi) bağlandı; kaynak kod değişmedi</li><li>Sürüm 4.0.0 olarak derlendi.</li></ul><h2>[3.1.0] - 2026-10-04</h2><ul><li>Yeni: 📊 **Sınıf karşılaştırma grafiği** — paneldeki ⚖️ kartın altında çift çubuklu SVG: 5 metrik (öğrenci, ort. ilerleme, tamamlanan adım, tahmini bütçe, en aktif hafta) iki sınıf için yan yana çubuk; her metrik iki sınıfın büyüğüne göre ölçeklenir, kazanan taraf teal vurgulu. Bütçede az harcamak iyi sayılır</li><li>Yeni: 🖨️ **Raporda karşılaştırma** — PDF sınıf raporuna \"⚖️ Sınıf Karşılaştırması\" bölümü ve aynı grafik basılır (yalnız ≥2 sınıf kodu varsa; tek sınıf seçiliyken anlamsız olurdu)</li><li>Yeni: 📱 **Mobil uyumluluk** — header 375px'te 824px genişlikte taşıyordu (logo + 6 düğme tek satıra sığmıyor, sayfa yatay kayıyordu). Header artık 640px ve 900px eşiklerinde sarıyor; dokunma hedefleri 34-40px'e büyütüldü. 375/390/768px'te yatay taşma sıfır</li><li>Test: 86→90 birim (4 yeni: compareBarsHTML, bütçede kazanan yönü, classMetricValue, raporda grafik), E2E 31→34 kontrol (10d, 10e, 13c)</li><li>Test altyapısı: E2E senaryoları `tests/e2e.test.mjs` ile `node --test` içine alındı — birim + tarayıcı testleri tek komut (`node --test tests/`). Senaryo tanımları `scripts/e2e.mjs` modülünde kaldı; CLI (`--only`, `--list`) aynen çalışıyor</li><li>CI: iki ayrı job yerine tek job — bağımlılıkları kurar, chromium indirir, derler ve `node --test tests/` koşar</li><li>Düzeltme: `node --test` altında tarayıcı süreci kapatılmadığı için koşu hiç sonlanmıyordu; `after()` kancası eklendi</li></ul><h2>[3.1.0] - 2026-10-04</h2><ul><li>Sürüm 3.1.0 olarak derlendi.</li></ul><h2>[3.0.0] - 2026-10-03</h2><ul><li>Yeni: ⚖️ **Sınıf karşılaştırma** — panelde iki sınıf seçici (A vs B); öğrenci sayısı, ortalama ilerleme, tamamlanan adım, tahmini bütçe ve en aktif hafta yan yana tabloda, daha iyi değer vurgulu; ≥2 sınıf kodu varsa görünür</li><li>Yeni: ⏱️ **Öğrenci zaman çizelgesi** — panelde öğrenci kartında ⏱️ düğmesiyle açılır: adım zaman damgaları + gönderim günü kronolojik (gün/saat); PDF raporda her öğrenci için gün bazlı özet satırı (\"01 Eki (2 adım) · 03 Eki (gönderim)\")</li><li>Yeni: 📄 **Arşiv mini önizleme** — kartta Önizleme düğmesi kartı açar: rehber özeti + ilk 3 adım + ilk ipucu; tekrar tıklayınca kapanır, arama/sıralama odak kaybettirmez</li><li>Yeni: 🎓 **Rapor sınıf turları** — \"Tüm sınıflar\" görünümünde PDF raporu her sınıfı kendi 🎓 bölüm başlığıyla ayrı tabloda dizer; tablo satırlarına sınıf kodu rozeti (cls-tag) eklenir</li><li>Düzeltme: sınıf seçiliyken PDF raporu açmak `esc2` tanımlanmadan erişim (TDZ) nedeniyle hataya düşüyordu — tanım başa alındı</li><li>Test: 86 birim (7 yeni: compareClasses, compareTableHTML, studentTimeline, timelineSummary, groupSubsByClass, rapor turu, archivePreviewData), E2E 21→31 kontrol (10 yeni: 10a-10c, 11a-11c, 12a-12b, 13a-13b)</li><li>Test altyapısı: E2E senaryoları 13 bağımsız bloğa ayrıldı — her senaryo kendi browser context'inde, temiz localStorage ve sıfır modül durumuyla koşar; sıralamaya bağımlılık ve \"senaryo N kalıntısı\" kırılmaları bitti</li><li>Test altyapısı: Senaryo seçici eklendi — `node scripts/e2e.mjs --only 12`, `--only 9-12`, `--only 6,12`, `--list` (bilinmeyen kimlik `exit 2`). Senaryolar bir kayıt defterine alındı, seçim dışı senaryolar hiç açılmıyor</li><li>Düzeltme: `6d` kontrolü yanlış hedefi arıyordu (`[data-act=\"cart\"]` gönderi listesinde değil, ana rehberde var; 1. senaryodan kalma rehbere bakıyordu). Artık satırdaki gerçek aksiyonları doğruluyor: geri bildirim + ⏱️ + sil</li><li>Düzeltme: Sertifika adı (`#certNameInput`) yazıldıktan sonra rehber yeniden render olduğunda (canlı maliyet ipucu ~400 ms) kayboluyordu — input değeri yalnızca sertifika oluşturulunca saklanıyordu. Artık her tuş vuruşunda saklanıyor; öğrenci \"🏅 Sertifika Oluştur\"a basınca ad yerinde duruyor</li></ul><h2>[2.22.0] - 2026-10-02</h2><ul><li>Yeni: 🏫 **Çoklu sınıf desteği** — panelde sınıf seçici (gönderi dosyalarındaki classCode'lardan otomatik); CSV indirmesi ve PDF raporu seçili sınıfa göre süzülür, seçim korunur; \"Tüm sınıflar\" görünümü de var. Rapor başlığında aktif sınıf etiketi (🎓) yazar</li><li>Yeni: 📈 **Panelde canlı haftalık grafik** — rapor açmadan son 8 haftanın adım toplamları sağ kartta görünür; CSS değişkenleriyle koyu/açık temaya uyar (rapordaki grafikle aynı veri kaynağı)</li><li>Yeni: 🔃 **Arşiv sıralama + son açılış** — 🆕 En yeni / ⭐ Favoriler önce / 🔤 A→Z seçici; kartlar en son açıldıkları günü (🔓) gösterir</li></ul><h2>[2.21.0] - 2026-10-02</h2><ul><li>Yeni: 🔍 **Arşiv arama** — arşiv penceresinde başlık, fikir ve etiketlerde Türkçe harf duyarsız (foldTR) anlık süzme; yazarken odak kaybolmaz (grid ayrı çizilir), ⭐/🏷️ çipleriyle birlikte çalışır</li><li>Yeni: 📅 **Haftalık katılım detayı** — sınıf raporunda grafik altında en güncel 4 haftanın her biri için kim kaç adım tamamladı (hafta toplamıyla, en çok 6 isim + \"+n\")</li><li>Yeni: 🕒 **CSV \"Son Etkinlik\" sütunu** — öğrenci başına en son adım işaretlendiği gün (adım yoksa gönderim günü); dönem sonu Excel takibinde risk analizi kolaylaşır</li></ul><h2>[2.20.0] - 2026-10-01</h2><ul><li>Yeni: 📅 **CSV tarih filtresi** — öğretmen panelinde başlangıç/bitiş tarihi seç; CSV indirimi ve gönderi listesi bu aralığa göre süzülür, aralık korunur. Rapor başlığında \"CSV tarih aralığı: … (n/total)\" yazar; temizle düğmesi tek tıkla tüm gönderilere döner</li><li>Yeni: ⭐ **Arşiv favori/etiket sistemi** — ⭐ ile favorile, 🏷️ ile virgülle ayırarak (en çok 5) etiket ver; ⭐ Favoriler / 🏷️ etiket çipleriyle filtrele. Favoriler Portfolyo.zip'te öne alınır, zip'e favoriler + etiket özetli RAPOR.md girer</li><li>Yeni: 👁️ **Göz serbest modu** — \"Bana Anlat\" artık adım adım okur: her adım bitince 2 sn bekler, adımı otomatik işaretler ve sonrakine geçer; işaretli adımlardan kaldığı yerden devam eder. Durdur/Yeniden üret modu güvenle keser</li></ul><h2>[2.19.0] - 2026-10-01</h2><ul><li>Sürüm 2.19.0 olarak derlendi.</li><li>Yeni: 🛒 **Alışveriş listesi** — rehber aksiyonlarına \"Alışveriş Listesi\" düğmesi; malzemeleri \"parça × adet — satır toplamı\" biçiminde WhatsApp'a hazır metne döker, sonda proje toplamı var. Adet geçersiz kılmaları (−/+ kutuları) metne yansır; popup engellenirse liste panoya kopyalanır</li><li>Yeni: 🔍 **Gönderi arama + sayfalama** — öğretmen panelinde öğrenci/proje adında Türkçe harf duyarsız (foldTR) arama; 6'şarlı sayfalama, odak kaybı olmadan anlık filtreleme</li><li>Yeni: 🔥 **En aktif hafta** — sınıf raporunda haftalık grafiğin altında \"En aktif hafta: tarih — N adım\" özeti ( Pazartesi kümeleri ortak mondayOf yardımcısıyla)</li><li>Test: 63→67 birim (4 yeni: shoppingListText, filterSubmissions, paginate, mostActiveWeek), E2E 11→15 kontrol (6a-6d: sayfalama, arama, alışveriş düğmesi)</li></ul><h2>[2.18.0] - 2026-10-01</h2><ul><li>Sürüm 2.18.0 olarak derlendi.</li><li>Yeni: 🏷️ **Katalog öneri çipleri** — öğretmen paneli, depo fiyat kataloğunda (fiyat-katalogu.json) olup henüz özel fiyatı olmayan parçaları çip olarak önerir; tıklayınca parça öğretmenin özel fiyat listesine depo fiyatıyla eklenir ve Ayarlar'daki editörle senkron kalır</li><li>Yeni: 🚨 **Risk Altındaki Öğrenciler** — son 10 gündür yeni adım göndermemiş ve projesini bitirmemiş öğrenciler panelde en eski tarihli önce listelenir (kırmızı vurgulu kart)</li><li>Yeni: ❓ **Fiyatlanamayan Malzemeler** — özel/depoyu/gömülü katalogların hiçbirinde karşılığı olmayan parça adları sınıf genelinde toplanır (büyük/küçük harf farkı birleştirilir, adet sayılır) ve çip olarak gösterilir; öğretmene hangi fiyatları ekleyeceği söylenir</li><li>Yeni: 📊 **CSV dışa aktarma** — sınıf gönderileri Excel uyumlu .csv olarak iner (UTF-8 BOM, ';' ayırıcı, tırnak kaçış), sütunlar: öğrenci, proje, tamamlanan/toplam adım, ilerleme %, tahmini maliyet USD, geri bildirim, tarih</li><li>Test: 58→63 birim test (5 yeni: catalogSuggestions, atRiskStudents, unknownMaterials, classSubsToCSV, downloadClassCSV); E2E 11/11 aynı</li></ul><h2>[2.17.0] - 2026-09-30</h2><ul><li>Sürüm 2.17.0 olarak derlendi.</li><li>Yeni: 📈 **Sınıf raporunda haftalık ilerleme grafiği** — gönderimlerin tamamlanan adımları haftaya kümelendirilir, son 8 haftanın çubuk grafiği lider tablosunun altına basılır</li><li>Yeni: 🎯 **Sınıf bütçe planlayıcısı** — Ayarlar'a \"Sınıf mevcudu\" girdisi; sınıf raporu mevcut × ortalama proje maliyetiyle tüm sınıfın bütçe ihtiyacını hesaplar ve öğretmen bütçe sınırıyla karşılaştırır</li><li>Not: mevcut/bütçe cihaz tercihleri sayılır, veri yedeğine girmez (BACKUP_SKIP)</li><li>Ek: README'ye canlı uygulama ekran görüntüsü (docs/screenshot.png); CI'ya E2E job'ı (Playwright, file:// dist üzerinde 11 kontrol)</li></ul><h2>[2.16.0] - 2026-09-30</h2><ul><li>Sürüm 2.16.0 olarak derlendi.</li><li>Yeni: ✨ **AI'lı canlı maliyet tahmini** — API anahtarı varsa yazdığın fikir AI'a kısa bir istemle gönderilir, AI gerçek parça listesi döndürür ve o liste fiyatlanır (\"✨ AI tahmini ≈ …\"). Anahtar yoksa/istek başarısızsa demo şablon ipucusuna sessizce düşer; sonuç 10 dk önbelleklenir, yarış koşulu korumalı (yalnız en yeni girişin cevabı basılır)</li><li>Yeni: 💱 **Otomatik kur tazeleme** — uygulama açılışında saklanan kur 24 saatten eskiyse çevrimiçi sessizce güncellenir; başarılıysa açık rehber yeni kurla yeniden çizilir</li><li>Temizlik: sw.js sürüm yorumu netleştirildi (CACHE_NAME build.py ile güncellenmeye devam eder); PWA dosyaları canlı sitede doğrulandı (manifest/icon/sw 200)</li><li>Not: v2.16.0 testlerle 56/56; AI tahmini için 3 yeni test (istem şeması, gemini yanıtı ayrıştırma/hata yolları, AI/demo fallback + önbellek)</li></ul><h2>[2.15.0] - 2026-09-30</h2><ul><li>Sürüm 2.15.0 olarak derlendi.</li><li>Yeni: 💱 **Çevrimiçi kur** — Ayarlar'da \"1 USD = X₺ (zaman önce güncellendi)\" durumu + 🌐 Çevrimiçi Güncelle düğmesi; exchangerate.host/er-api'den çekilir, localStorage'da saklanır, hata anında saklanan/varsayılan kur (34) kullanılır. Tüm ₺ gösterimleri (tablo, PDF, rapor, sertifika, Portfolyo, kart) bu kurdan hesaplanır</li><li>Yeni: 🚀 **publish.sh** — test + sürümlü derleme + gh-pages yenileme + push'u tek komutta birleştiren yayın script'i (./publish.sh veya ./publish.sh 2.16.0)</li><li>Yeni: 🤝 **CONTRIBUTING.md** + 🐛/💡 issue şablonları + PR şablonu</li><li>Not: Proje ~/Documents/GitHub/arduino-ruya-atolyesi'ye taşındı; GitHub Pages canlı: proacademycomtr.github.io/arduino-ruya-atolyesi</li></ul><h2>[2.14.0] - 2026-09-30</h2><ul><li>Sürüm 2.14.0 olarak derlendi.</li><li>Yeni: 📁 **Depoda varsayılan katalog** — `fiyat-katalogu.json` artık projenin kökünde; build.py onu hem dist'e kopyalar hem FILE_CATALOG olarak JS'e gömer. Fiyat önceliği: öğretmen özel (localStorage) → depo → gömülü PRICE_CATALOG; Ayarlar'daki bütçe alanı depo sınırını placeholder olarak gösterir</li><li>Yeni: 💡 **Bütçe aşımı önerisi** — toplam sınırı aşarsa tabloda \"Bütçe önerisi: Arduino Uno yerine Arduino Nano kullan ($10.00 → $6.00)\" satırı (özel fiyatlar da hesaba katılır)</li><li>Yeni: ⌨️ **Canlı maliyet ipucu** — fikir yazarken 30+ karakterde demo rehber üzerinden anlık tahmin: \"💡 Bu fikre benzer proje ≈ 646.00₺ ($19.00)\" (400ms gecikmeli)</li><li>Yeni: 📋 **SÜRÜM_NOTLARI.md** — v2.10→v2.14 fiyat modülünün tamamını özetleyen sürüm notları sayfası</li></ul><h2>[2.13.0] - 2026-09-30</h2><ul><li>Sürüm 2.13.0 olarak derlendi.</li><li>Yeni: 🔽 **Fiyata göre sıralama** — malzeme tablosunun Tutar başlığındaki düğme pahalıdan ucuza (↓) → ucuza pahalıya (↑) → orijinal sıra (⇅) döngüsü yapar; fiyatlanamayan parçalar her zaman sonda, tercih hatırlanır</li><li>Yeni: 📎 **Portfolyo.zip'e fiyat katalogu** — öğretmen özel fiyatları + bütçe sınırı `fiyat-katalogu.json` olarak arşive girer; PORTFOLYO.txt'te veliler/okul idaresi için açıklama notu taşır (katalog boşsa dosya üretilmez)</li><li>Yeni: 💰 **Sınıf raporunda toplam bütçe** — tüm öğrencilerin projelerinin tahmini maliyeti toplanır ve raporun üstünde \"Sınıf toplam bütçesi\" satırında gösterilir; bütçe sınırı aşılırsa ⚠️ \"bütçe aşımı\" işaretiyle</li><li>Gelişti: 🏅 **Sertifikada bütçe aşımı işareti** — proje maliyeti öğretmen sınırını aşarsa sertifika şeridi (PDF + Portfolyo SVG'si) kırmızıya döner: \"⚠️ BÜTÇE AŞIMI\"; sınır içindeyse altın şerit + normal not</li></ul><h2>[2.12.0] - 2026-09-30</h2><ul><li>Sürüm 2.12.0 olarak derlendi.</li><li>Değişti: 💱 **TL ana para birimi** — tüm fiyat gösterimlerinde ₺ öncelikli, $ parantez içinde ikincil: `612.00₺ ($18.00)`; tablo, PDF, sınıf raporu, WhatsApp, sertifika kartı ve Portfolyo özetinde tek biçim</li><li>Yeni: 🎯 **Bütçe sınırı uyarısı** — Ayarlar'dan USD cinsinden üst sınır girilir; proje toplamı aşarsa malzeme tablosunda ⚠️ kırmızı \"Bütçe aşımı (Sınır: …)\" satırı ve PDF'te \"bütçe aşımı\" etiketi; 0/boş = kapalı, cihaz tercihi (yedeğe girmez)</li><li>Yeni: 🏅 **Sertifikada fiyat şeridi** — PDF (canvas) ve Portfolyo SVG sertifikasında altın yuvarlak köşeli şerit: \"Tahmini proje maliyeti: 612.00₺ ($18.00) · ortalama perakende tahmini\"</li><li>Yeni: 📤 **Katalog JSON paylaşımı** — öğretmen özel fiyatlarını + bütçe sınırını `fiyat-katalogu.json` olarak dışa aktarır; diğer öğretmen aynı dosyayı içe aktararak katalogu devralır (sayı olmayan fiyatlar sessizce atlanır)</li></ul><h2>[2.11.0] - 2026-09-29</h2><ul><li>Sürüm 2.11.0 olarak derlendi.</li><li>Yeni: 🏷️ **Öğretmen fiyat kataloğu** — Ayarlar'a \"Parça adı: fiyat (USD)\" satırları yazılır (noktalı/virgüllü ondalık ikisi de olur), localStorage'da kalıcıdır ve fiyat tahmininde katalog fiyatının YERİNE geçer; en uzun eşleşen ad kazanır, ✏️ işaretiyle tabloda belli olur</li><li>Yeni: 🔢 **Canlı adet düzenleyici** — malzeme tablosunda her satırda −/+ düğmeleri ve yazılabilir adet kutusu; toplam anında güncellenir, adetler proje başına localStorage'da saklanır</li><li>Yeni: 📊 **Sınıf raporunda Maliyet sütunu** — gönderim dosyası artık proje malzemelerini taşır; öğretmen her öğrencinin projesinin tahmini maliyetini raporda görür</li><li>Yeni: 💰 **Portfolyo.zip'e bütçe özeti** — PORTFOLYO.txt'te proje başına tahmini maliyet + portfolyo toplamı (\"alışveriş listesi değildir\" notuyla)</li></ul><h2>[2.10.0] - 2026-09-29</h2><ul><li>Sürüm 2.10.0 olarak derlendi.</li><li>Yeni: 💰 **Malzeme fiyat tahmini** — her rehberin malzeme tablosunda Birim Fiyat ve Tutar sütunları; yaklaşık Türkiye perakende fiyatları 39 parçalık katalogdan ($ + ₺ çift gösterim, kur bilgi amaçlı ~34)</li><li>Yeni: **Ortalama Proje Fiyatı** satırı — adet × birim hesabıyla proje toplamı; katalogda olmayan parçalar \"—\" ile işaretlenir ve toplama katılmaz</li><li>PDF çıktısı ve WhatsApp paylaşımı da fiyat toplamını taşır; sertifika projesi kartına 4. istatistik kutusu (≈ fiyat) eklendi</li><li>AI rehberlerinde de çalışır: AI malzeme adlarını aynı katalogla fiyatlar, bilinmeyenler dürüstçe \"fiyatlanmadı\" olarak gösterilir</li></ul><h2>[2.9.0] - 2026-09-28</h2><ul><li>Sürüm 2.9.0 olarak derlendi.</li><li>Yeni: 🌙🎲📏 **3 yeni demo rehber** — otomatik gece lambası (LDR + histeresis), butonla atılan dijital zar (randomSeed gürültü tohumu, 6 LED'li zar yüzleri), OLED mesafe ölçer (HC-SR04 + SSD1306 ikili kütüphane); üçü de wokwiValidate'ten 0 uyarıyla geçer ve 🚀 İleri Seviye bölümü taşır. Demo sayısı 11 → 14; altın rozet eşiği artık demo sayısından otomatik türetilir</li><li>Yeni: 📜 **Portfolyo.zip'e sertifikalar** — her proje klasörüne baskı-dostu SERTIFIKA.svg eklenir (certificateSVG, certCanvas ile aynı görsel dil)</li><li>Yeni: ⚡ **Toplu geri bildirim** — öğretmen panelinde yorumu bekleyen tüm gönderiler tek listede; \"Hepsini İndir\" her öğrenciye kişisel .geribildirim.json dosyası indirir ve gönderileri işaretler</li><li>Yeni: 💾 **Veri yedeği** — Ayarlar'dan tüm uygulama verisi (arşiv, adımlar, sınıf, gönderiler, rozetler, geri bildirimler, özel bileşenler) tek .yedek.json dosyasına dışa aktarılır / başka bilgisayarda geri yüklenir; dil/tema gibi cihaz yerel tercihleri hariçtir</li><li>Çözücü iyileştirmeleri: satır sahibi parça tespiti (\"OLED GND → GND\" satırındaki GND, satırdaki OLED parçasınındır), çoklu örnek parça bağlantıları (LED1/LED2… ayrı ayrı çözülür), OLED'de LCD'ye yanlış eşleşme engellendi, wokwi-7segment DP pini, RGB/OLED'de boşta düz LED parçası üretilmez</li></ul><h2>[2.8.0] - 2026-09-28</h2><ul><li>Sürüm 2.8.0 olarak derlendi.</li><li>Yeni: 🎨🔧🕐 **3 yeni demo rehber** — LCD'li dijital saat (I2C, millis() sayaç), RGB LED mood lambası (0-767 ton haritası, PWM karıştırma), servo kapı kilidi (kenar algılama, durum makinesi); üçü de wokwiValidate'ten 0 uyarıyla geçer ve 🚀 İleri Seviye bölümü taşır</li><li>Yeni: 📄 **Sınıf raporuna Geri Bildirim sütunu** — her gönderimde \"Verildi ✓ / Bekliyor\" durumu + varsa öğretmen yorumunun 80 karakterlik özeti</li><li>Yeni: 🥉🥈🥇 **Rozet kademeleri** — Başarımlar modalında bronz (3 sertifika) / gümüş (5) / altın (tüm 11 demo) ilerleme kartı + \"sonraki hedef\" metni</li><li>Yeni: 📦 **Portfolyo.zip** — sertifikalı tüm rehberlerin Wokwi paketleri (sketch.ino + diagram.json + öğretmen notları) numaralı klasörler hâlinde tek arşivde; kökte PORTFOLYO.txt özeti. Sertifikalar artık rehber snapshot'ı saklar; eski guide'sız kayıtlar atlanır</li><li>Düzeltme: RGB projesinde \"RGB LED\" metni ayrıca boşta bir wokwi-led parçası üretiyordu — RGB varken düz LED eklenmez</li></ul><h2>[2.7.0] - 2026-09-25</h2><ul><li>Sürüm 2.7.0 olarak derlendi.</li><li>Yeni: 🏫 **Öğretmen paneli** — Sınıf Modu artık iki sütunlu geniş panel: solda sınıf kodu + içe aktarma + rapor, sağda ilerleme yüzdeli gönderi kartları ve geri bildirim yazma (tek ekranda)</li><li>Yeni: 🏅 **Öğrenci başarımları** — header'da sayaçlı yeni düğme; kazanılan sertifikalar + okunan öğretmen geri bildirimleri kart görünümünde listelenir (mükerrer kayıt engellenir)</li><li>Yeni: 🚀 **İleri Seviye bölümü** — 7 segment (ikinci display ile 0-99 multiplexing, butonla durdur/başlat) ve piyano (kayıt/çalma, pot ile oktav) demo rehberlerine katlanabilir gelişmiş kutu: ek wiring satırları + kod parçaları</li><li>Yeni: 📦 **Zip kişiselleştirme** — Wokwi paketi öğrenci adı + sınıf kodunu bilir: sketch.ino'ya başlık yorumu, öğretmen notlarına \"Öğrenci / Sınıf kodu\" satırları (ad: gönderim/sertifika girişlerinden)</li></ul><h2>[2.6.0] - 2026-09-25</h2><ul><li>Sürüm 2.6.0 olarak derlendi.</li><li>Yeni: 💬 **Öğretmen geri bildirimi** — öğretmen içe aktarılan gönderiye yorum yazar, `.geribildirim.json` indirir; öğrenci \"Geri Bildirimi Göster\" ile açıp rehberde okur (yorumlar tarayıcıda saklanır)</li><li>Yeni: ⚡ **Wokwi'de Aç güçlendirildi** — sketch kodu + tüm bağlantılar çözülmüşse diagram.json tek kopyada panoya; Wokwi şablonu yeni sekmede açılır</li><li>Yeni: 🏆 **Lider tablosu** — sınıf raporuna ilerlemeye göre sıralı SVG çubuk grafik (ilk 10, print-to-PDF dostu, bağımlılıksız)</li><li>Yeni: 🔢🚗🎹 **3 yeni demo rehber** — 7 segment display sayacı (wokwi-7segment, ortak katot), ultrasonik park sensörü, buzzer'lı mini piyano (INPUT_PULLUP, 4 buton); üçü de wokwiValidate'ten 0 uyarıyla geçer</li><li>Düzeltme: sınıf gönderim içe aktarma tek-nesne `.klasor.json` biçimini kabul eder (dizi/sarmalayıcı yanına)</li><li>Düzeltme: çözücüde tek harfli pin kelimeleri (\"Display A\") sahip parça adına gömülü olduğu için yutuluyordu — 3+ harf sınırıyla pinler doğru çözülür</li></ul><h2>[2.5.0] - 2026-09-25</h2><ul><li>Sürüm 2.5.0 olarak derlendi.</li><li>Yeni: 🏫 **Sınıf Modu** — öğretmen sınıf kodu üretir, öğrenci adımlarını tamamlayıp `.klasor.json` gönderim dosyası indirir; öğretmen gönderimleri içe aktarıp PDF sınıf raporu alır (sunucusuz, dosya tabanlı)</li><li>Yeni: 📦 **Wokwi Paketi (.zip)** — rehberden sketch.ino + diagram.json + öğretmen notları içeren gerçek proje arşivi; bağımlılıksız zip yazıcı (STORE yöntemi, CRC32 doğrulanmış)</li><li>Yeni: 🛠️ **Adım takibi** — her adımda onay kutusu + ilerleme çubuğu; tüm adımlar bitince sertifika ve gönderim satırları açılır</li><li>Yeni: 🧪 birim testler — `node --test tests/`; çözücü, wokwiValidate, zip yazıcı, sınıf gönderimi ve özel set normalize senaryoları (16 test, app.js sanal ortamda değerlendirilir)</li></ul><h2>[2.4.0] - 2026-09-25</h2><ul><li>Sürüm 2.4.0 olarak derlendi.</li><li>Yeni: 5 demo rehbere `wokwiHints` — demo modunda bile gerçek röle/motor/servo kablolaması çıkar (L298N/DC motor Wokwi'de olmadığı için potansiyometre ile simüle edilir, satır notuyla açıklanır)</li><li>Yeni: `wokwiValidate` taslak doğrulaması — pin çakışması (aynı pine iki kablo) + eksik GND/5V uyarıları, öğretici kontrol kutusunda</li><li>Yeni: sertifika penceresine 1080×1080 paylaşım kartı PNG indirme düğmesi</li><li>Yeni: özel bileşen seti — öğretmenler bileşen ekler, JSON olarak dışa/içe aktarır (localStorage kalıcı, \"Özel Set\" kategorisi)</li><li>Düzeltme: Wokwi parça tipleri gerçek adlarına güncellendi (relay-module, lcd1602, pir-motion-sensor, photoresistor-sensor, ssd1306)</li><li>Düzeltme: AI prompt'u yalnızca geçerli Wokwi tiplerini listeler; L298N/DC motor uydurma tip yerine NULL döndürür</li><li>İyileştirme: kablo çözücü — ARDUINO öneki, ~10 PWM pini, satır-sahibi parça yönlendirmesi, çoklu aynı-tip parça desteği</li><li>Düzeltme: çözücü büyük/küçük harf duyarsız; \"IR sensör SOL — OUT\" gibi tireli satırlar çözülür; VCC/GND satırın kendi parçasına bağlanır (yanlış hint-parçası değil)</li><li>Düzeltme: \"DC motor\" artık yanlışlıkla \"Servo Motor\" kütüphane parçasına eşleşmez (genel kelimeler eşleştirmede hariç)</li></ul><h2>[2.3.0] - 2026-09-24</h2><ul><li>Sürüm 2.3.0 olarak derlendi.</li><li>Yeni: AI şemasına `wokwiHints` alanı — her malzeme için Wokwi parça tipi + pin eşlemesi; kablo üretimi bunları öncelikli kullanır</li><li>Yeni: bileşen kütüphanesi kartlarına Wokwi parça tipi/pin eşlemeleri eklendi ve taslak üretiminde kullanılıyor</li><li>Yeni: eşleşmeyen bağlantı satırları için rehberde öğretici yardım kutusu</li><li>Yeni: arşivden tek tıkla sertifika üretimi (🏅, ad sorulur, PDF iner)</li><li>İyileştirme: sertifika adı hatırlanır, sonraki sertifikalarda önerilir</li></ul><h2>[2.2.0] - 2026-09-24</h2><ul><li>Sürüm 2.2.0 olarak derlendi.</li><li>Yeni: sürüm rozeti + sürüm geçmişi modalı (footer)</li><li>Yeni: paylaşım kartını Web Share API ile doğrudan paylaşma (desteklenmezse indirme)</li><li>Yeni: PWA — manifest + service worker ile çevrimdışı kullanım</li><li>Yeni: Wokwi diagram.json kopyalarken parça/kablo özeti ve eşleşmeyen satır uyarısı</li></ul><h2>[2.1.0] - 2026-09-24</h2><ul><li>Sürüm 2.1.0 olarak derlendi.</li></ul>";
   </script>
 </body>
 </html>
