@@ -4,6 +4,7 @@ import { isMember, requireAuth, requireMember } from "../auth.js";
 import { projectSelect, shapeProject } from "../projectSelect.js";
 import { publicUrlFor } from "../storage.js";
 import { config } from "../config.js";
+import { likeInfo } from "./social.js";
 
 const router = express.Router();
 
@@ -27,9 +28,12 @@ router.get("/wall", async (req, res, next) => {
       select: projectSelect(isMember(req.user))
     });
     const hasMore = rows.length > limit;
-    const items = rows.slice(0, limit).map((p) => shapeProject(p, { publicUrlFor }));
+    const page = rows.slice(0, limit);
+    const items = page.map((p) => shapeProject(p, { publicUrlFor }));
+    // Görüntüleyenin kendi beğenileri (herkese açık; üye olmayan hep false).
+    const likes = await likeInfo(page.map((p) => p.id), req.user ? req.user.id : null);
     res.json({
-      items,
+      items: items.map((p) => ({ ...p, likedByViewer: isMember(req.user) && likes.liked(p.id) })),
       nextCursor: hasMore ? rows[limit - 1].id : null,
       wallEnabled: config.wallEnabled,
       viewer: { isMember: isMember(req.user), handle: req.user ? req.user.handle : null }
@@ -39,23 +43,40 @@ router.get("/wall", async (req, res, next) => {
   }
 });
 
-/** GET /api/feed/timeline — üye olmak zorunda. */
+/**
+ * GET /api/feed/timeline — üye olmak zorunda. Yalnız takip edilenlerin
+ * paylaştığı projeleri, /api/wall ile aynı sözleşmeyle döner.
+ */
 router.get("/feed/timeline", requireMember, async (req, res, next) => {
   try {
     const limit = parseLimit(req.query.limit);
+    const cursor = req.query.cursor ? String(req.query.cursor) : null;
     const following = await prisma.follow.findMany({
       where: { followerId: req.user.id },
       select: { followingId: true }
     });
     const ids = following.map((f) => f.followingId);
-    if (ids.length === 0) return res.json({ items: [] });
+    const viewer = { isMember: true, handle: req.user.handle, followingCount: ids.length };
+    if (ids.length === 0) {
+      return res.json({ items: [], nextCursor: null, followingCount: 0, viewer });
+    }
     const rows = await prisma.project.findMany({
       where: { isShared: true, ownerId: { in: ids } },
-      orderBy: { sharedAt: "desc" },
-      take: limit,
+      orderBy: [{ sharedAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       select: projectSelect(true)
     });
-    res.json({ items: rows.map((p) => shapeProject(p, { publicUrlFor })) });
+    const hasMore = rows.length > limit;
+    const page = rows.slice(0, limit);
+    const items = page.map((p) => shapeProject(p, { publicUrlFor }));
+    const likes = await likeInfo(page.map((p) => p.id), req.user.id);
+    res.json({
+      items: items.map((p) => ({ ...p, likedByViewer: likes.liked(p.id) })),
+      nextCursor: hasMore ? rows[limit - 1].id : null,
+      followingCount: ids.length,
+      viewer
+    });
   } catch (e) {
     next(e);
   }
@@ -75,7 +96,13 @@ router.get("/projects/:id", async (req, res, next) => {
       const full = await prisma.project.findUnique({ where: { id: project.id }, select: { promptBody: true } });
       project.promptBody = full.promptBody;
     }
-    res.json({ project: shapeProject(project, { publicUrlFor }) });
+    const member = isMember(req.user);
+    const likes = await likeInfo([project.id], req.user ? req.user.id : null);
+    res.json({
+      project: { ...shapeProject(project, { publicUrlFor }), likedByViewer: member && likes.liked(project.id) },
+      canComment: config.wallEnabled && member,
+      isOwner
+    });
   } catch (e) {
     next(e);
   }

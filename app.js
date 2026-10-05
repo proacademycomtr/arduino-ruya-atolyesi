@@ -5102,6 +5102,25 @@ const I18N = {
     "Prompt'ları yalnızca üyeler görebilir. Üye olmak $1.": "Prompts are visible to members only. Joining is $1.",
     "Daha fazla göster": "Show more",
     "Henüz paylaşılmış proje yok — ilk sen ol!": "No shared projects yet — be the first!",
+    // v4.1.0 — Takip akışı sekmesi
+    "Akış": "Feed",
+    "Tümü": "All",
+    "Takip Ettiklerim": "Following",
+"Takip ettiğin kişiler henüz proje paylaşmadı.": "The people you follow haven't shared a project yet.",
+    "Takip akışı için giriş yap.": "Sign in to see your feed.",
+    // v4.1.0 — beğeni ve yorum
+    "Beğenmek için giriş yap.": "Sign in to like.",
+    "Beğeni kaydedilemedi.": "Could not save the like.",
+    "Yorumlar yükleniyor…": "Loading comments…",
+    "Yorumlar yüklenemedi.": "Could not load comments.",
+    "Yorumlar yüklenemedi": "Could not load comments.",
+    "Henüz yorum yok — ilk yorumu sen yaz!": "No comments yet — write the first one!",
+    "Yorum yazmak için üye ol.": "Join to write a comment.",
+    "Yorumunu yaz…": "Write a comment…",
+    "Gönder": "Send",
+    "Yorum gönderilemedi.": "Could not send the comment.",
+    "Yorum silinemedi.": "Could not delete the comment.",
+    "Sil": "Delete",
     // v4.0.0 — Profil ve takip
     "🧑‍🚀 Profil": "🧑‍🚀 Profile",
     "🧑‍🚀 Profilim": "🧑‍🚀 My profile",
@@ -6712,6 +6731,7 @@ const memberState = {
   freePasses: 0,
   wallCursor: null,
   wallLoading: false,
+  wallTab: "all",
   shareImages: []
 };
 
@@ -6851,6 +6871,47 @@ async function gateGeneration() {
 }
 
 /* ───────────────────── Modal yardımcıları ───────────────────── */
+/**
+ * Modal yığını: yeni açılan pencere her zaman en üstte olmalı (ör. duvar
+ * açıkken paywall). DOM sırası tek başına yetmez, açık olanlara alttan
+ * üste z-index veriyoruz. Tek noktadan yönetildiği için yeni modal
+ * eklenince burada başka değişiklik gerekmiyor.
+ */
+function watchModalStack() {
+  // CSS'teki .modal-overlay varsayılanı (100) ile uyumlu taban.
+  const base = 100;
+  // Önemli olan DOM sırası değil, son AÇILAN modalin üstte olması: paywall
+  // DOM'da duvardan önce dursa bile, duvar açıkken açıldığı için üstte
+  // durmalı. Gözlemci 'hidden' değişimlerini toplu bildirdiği için
+  // sıralamayı tahmin etmek yerine açılan modalın en üste taşındığını
+  // açıkça uyguluyoruz.
+  const raise = (acilan) => {
+    if (!acilan || acilan.hidden) return;
+    let enYuksek = base;
+    for (const m of document.querySelectorAll(".modal-overlay")) {
+      if (m.hidden) continue;
+      const z = Number(m.dataset.zAt || base);
+      if (z > enYuksek) enYuksek = z;
+    }
+    acilan.dataset.zAt = String(enYuksek + 1);
+    acilan.style.zIndex = acilan.dataset.zAt;
+  };
+  const acilanTopla = (mutasyonlar) => {
+    const acilanlar = [];
+    for (const m of mutasyonlar) {
+      const el = m.target;
+      if (el && el.classList && el.classList.contains("modal-overlay") && !el.hidden) acilanlar.push(el);
+    }
+    // Aynı karede birden çok modal açıldıysa DOM sırasında üstteki son olmalı.
+    for (const el of acilanlar) raise(el);
+  };
+  new MutationObserver(acilanTopla).observe(document.body, {
+    attributes: true,
+    subtree: true,
+    attributeFilter: ["hidden"]
+  });
+}
+
 function wireModal(id, closeId, onClose) {
   const modal = $(id);
   if (!modal) return null;
@@ -7055,11 +7116,24 @@ function openPaywall(reason) {
 }
 
 /* ───────────────────── Topluluk duvarı ───────────────────── */
+/** Beğeni düğmesinin görünümü — hem ilk basımda hem güncellemede aynı kaynak. */
+function likeBtnFace(liked, count) {
+  const on = Boolean(liked);
+  return {
+    icon: on ? "❤️" : "🤍",
+    count: Number(count) || 0,
+    pressed: on ? "true" : "false",
+    cls: "wall-act" + (on ? " is-on" : "")
+  };
+}
+
 function wallCardHTML(item) {
   const img = item.images && item.images[0];
   const locked = typeof item.promptBody !== "string";
+  const face = likeBtnFace(item.likedByViewer, item.likeCount);
+  const comments = Number(item.commentCount) || 0;
   return `
-    <article class="wall-card">
+    <article class="wall-card" data-project-id="${esc(item.id)}">
       ${img && img.url ? `<img class="wall-img" src="${esc(img.url)}" alt="${esc(item.title)}" loading="lazy" />` : ""}
       <div class="wall-card-body">
         <h3 class="wall-title">${esc(item.title)}</h3>
@@ -7068,9 +7142,70 @@ function wallCardHTML(item) {
         ${locked
           ? `<div class="wall-locked">🔒 ${esc(t("Prompt'u görmek için üye ol"))}</div>`
           : `<pre class="wall-prompt">${esc(item.promptBody)}</pre>`}
+        <div class="wall-social">
+          <button class="${face.cls}" data-act="like" type="button" aria-pressed="${face.pressed}">${face.icon} <span class="wall-count">${face.count}</span></button>
+          <button class="wall-act" data-act="comments" type="button" aria-expanded="false">💬 <span class="wall-count">${comments}</span></button>
+        </div>
+        <div class="wall-comments" hidden></div>
       </div>
     </article>
   `;
+}
+
+/** Duvar sekmeleri: "Tümü" herkese açık, "Takip" yalnız üyelere açık. */
+function wallTabsHTML(active) {
+  // Dikkat: bu HTML her yeniden çizimde DOM'a tekrar giriyor. Kimlik
+  // (wallTabs) `renderWallTabs`'ın eskisini bulup değiştirmesini sağlar;
+  // kimlik olmazsa her çağrıda ikinci bir çubuk eklenir.
+  const following = active === "following";
+  return `
+    <div class="wall-tabs" id="wallTabs" role="tablist" aria-label="${esc(t("Akış"))}">
+      <button class="wall-tab${following ? "" : " is-active"}" data-wall-tab="all" role="tab" type="button"
+        aria-selected="${following ? "false" : "true"}">🌍 ${esc(t("Tümü"))}</button>
+      <button class="wall-tab${following ? " is-active" : ""}" data-wall-tab="following" role="tab" type="button"
+        aria-selected="${following ? "true" : "false"}">👥 ${esc(t("Takip Ettiklerim"))}</button>
+    </div>`;
+}
+
+/** Sekmeye göre boş durum metni. */
+function wallEmptyText(active) {
+  return t(active === "following"
+    ? "Takip ettiğin kişiler henüz proje paylaşmadı."
+    : "Henüz paylaşılmış proje yok — ilk sen ol!");
+}
+
+/** Kaç sekme çubuğu basıldı — yalnız test için: 1 olmalı, 1'den fazla ise DOM'da kopya var. */
+function wallTabsCount(container) {
+  return container ? container.querySelectorAll(".wall-tabs").length : 0;
+}
+
+function renderWallTabs() {
+  const active = memberState.wallTab;
+  const sub = $("wallSub");
+  if (sub) {
+    sub.textContent = active === "following" ? ""
+      : t(isMember()
+        ? "Üyesin — tüm prompt'lar görünür."
+        : "Prompt'ları yalnızca üyeler görebilir. Üye olmak $1.");
+  }
+  const old = $("wallTabs");
+  if (old) old.outerHTML = wallTabsHTML(active);
+  else if (sub) sub.insertAdjacentHTML("afterend", wallTabsHTML(active));
+}
+
+/** Sekmeyi değiştirir; aynı sekmeye tekrar tıklamak hiçbir şey yapmaz. */
+function setWallTab(tab) {
+  if (tab !== "all" && tab !== "following") return;
+  if (tab === "following" && !isMember()) {
+    if (!memberState.user) { openAuthModal(t("Takip akışı için giriş yap.")); return; }
+    openPaywall();
+    return;
+  }
+  if (memberState.wallTab === tab) return;
+  memberState.wallTab = tab;
+  memberState.wallCursor = null;
+  renderWallTabs();
+  loadWall(true);
 }
 
 async function loadWall(reset) {
@@ -7079,8 +7214,9 @@ async function loadWall(reset) {
   if (memberState.wallLoading) return;
   memberState.wallLoading = true;
   const cursor = reset ? "" : memberState.wallCursor || "";
+  const path = memberState.wallTab === "following" ? "/api/feed/timeline" : "/api/wall";
   try {
-    const r = await apiFetch("/api/wall?limit=12" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
+    const r = await apiFetch(path + "?limit=12" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
     memberState.wallCursor = r.nextCursor || null;
     const html = (r.items || []).map(wallCardHTML).join("");
     let grid = $("wallGrid");
@@ -7108,14 +7244,9 @@ async function loadWall(reset) {
     } else if (more) {
       more.remove();
     }
-    const sub = $("wallSub");
-    if (sub) {
-      sub.textContent = (r.viewer && r.viewer.isMember)
-        ? t("Üyesin — tüm prompt'lar görünür.")
-        : t("Prompt'ları yalnızca üyeler görebilir. Üye olmak $1.");
-    }
+    renderWallTabs();
     if (!(r.items || []).length && reset) {
-      content.innerHTML = `<p class="field-hint">${esc(t("Henüz paylaşılmış proje yok — ilk sen ol!"))}</p>`;
+      content.innerHTML = `<p class="field-hint">${esc(wallEmptyText(memberState.wallTab))}</p>`;
       return;
     }
   } catch (e) {
@@ -7130,7 +7261,139 @@ function openWall() {
   if (!m) return;
   m.hidden = false;
   memberState.wallCursor = null;
+  renderWallTabs();
   loadWall(true);
+}
+
+/* ───────────────────── Beğeni ve yorum ───────────────────── */
+/** Kartın kendi butonlarını sunucudan gelen sayaçlarla günceller. */
+function updateWallLikeBtn(btn, liked, count) {
+  const face = likeBtnFace(liked, count);
+  btn.className = face.cls;
+  btn.setAttribute("aria-pressed", face.pressed);
+  const n = btn.querySelector(".wall-count");
+  if (n) n.textContent = String(face.count);
+  const icon = btn.childNodes[0];
+  if (icon && icon.nodeType === 3) icon.nodeValue = face.icon + " ";
+}
+
+async function toggleLike(btn) {
+  const card = btn.closest("[data-project-id]");
+  const id = card && card.dataset.projectId;
+  if (!id) return;
+  if (!memberState.user) { openAuthModal(t("Beğenmek için giriş yap.")); return; }
+  if (!isMember()) { openPaywall(); return; }
+  const wasLiked = btn.getAttribute("aria-pressed") === "true";
+  btn.disabled = true;
+  try {
+    const r = await apiFetch(`/api/projects/${encodeURIComponent(id)}/like`, {
+      method: wasLiked ? "DELETE" : "POST"
+    });
+    updateWallLikeBtn(btn, Boolean(r.liked), Number(r.likeCount) || 0);
+  } catch (e) {
+    showToast(e.message || t("Beğeni kaydedilemedi."));
+  } finally {
+    if (btn.isConnected) btn.disabled = false;
+  }
+}
+
+/** Yorum panelini açar/kapatır — veriyi ilk açılışta bir kez çeker. */
+async function toggleComments(btn) {
+  const card = btn.closest("[data-project-id]");
+  if (!card) return;
+  const panel = card.querySelector(".wall-comments");
+  if (!panel) return;
+  if (!panel.hidden) {
+    panel.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+    return;
+  }
+  panel.hidden = false;
+  btn.setAttribute("aria-expanded", "true");
+  if (panel.dataset.loaded === "1") return;
+  panel.innerHTML = `<p class="field-hint">${esc(t("Yorumlar yükleniyor…"))}</p>`;
+  const id = card.dataset.projectId;
+  try {
+    const r = await apiFetch(`/api/projects/${encodeURIComponent(id)}/comments`);
+    panel.dataset.loaded = "1";
+    renderComments(panel, r);
+    const count = Number(r.comments ? r.comments.length : 0) || 0;
+    const n = btn.querySelector(".wall-count");
+    if (n && count) n.textContent = String(count);
+  } catch (e) {
+    panel.innerHTML = `<p class="field-hint warn">${esc(e.message || t("Yorumlar yüklenemedi."))}</p>`;
+  }
+}
+
+/** Yorum listesinin HTML'i — saf; renderComments bunu panele basar. */
+function commentsHTML(list, canComment) {
+  const items = Array.isArray(list) ? list : [];
+  const body = items.length
+    ? items.map((c) => `
+        <div class="cmt" data-comment-id="${esc(c.id)}">
+          <p class="cmt-by"><button class="wall-author" data-profile-handle="${esc(c.author.handle)}" type="button">${esc(c.author.displayName)}</button></p>
+          <p class="cmt-body">${esc(c.body)}</p>
+          ${c.canDelete ? `<button class="cmt-del" type="button">${esc(t("Sil"))}</button>` : ""}
+        </div>`).join("")
+    : `<p class="field-hint">${esc(t("Henüz yorum yok — ilk yorumu sen yaz!"))}</p>`;
+  return body + (canComment
+    ? `<div class="cmt-form">
+         <input type="text" class="cmt-input" maxlength="1000" placeholder="${esc(t("Yorumunu yaz…"))}" />
+         <button class="btn btn-primary cmt-send" type="button">${esc(t("Gönder"))}</button>
+       </div>`
+    : `<p class="field-hint">${esc(t("Yorum yazmak için üye ol."))}</p>`);
+}
+
+/** Yorum listesini basar; yazma kutusu yalnız üyeye açıktır. */
+function renderComments(panel, r) {
+  panel.innerHTML = commentsHTML(r.comments, r.canComment);
+}
+
+async function submitComment(panel) {
+  const input = panel.querySelector(".cmt-input");
+  const btn = panel.querySelector(".cmt-send");
+  if (!input || !btn) return;
+  const body = (input.value || "").trim();
+  if (body.length < 2) return;
+  const id = panel.closest("[data-project-id]").dataset.projectId;
+  btn.disabled = true;
+  try {
+    await apiFetch(`/api/projects/${encodeURIComponent(id)}/comments`, { method: "POST", body: { body } });
+    const card = panel.closest("[data-project-id]");
+    const act = card.querySelector('[data-act="comments"] .wall-count');
+    if (act) act.textContent = String((Number(act.textContent) || 0) + 1);
+    panel.dataset.loaded = "0";
+    panel.hidden = true;
+    const again = card.querySelector('[data-act="comments"]');
+    if (again) again.setAttribute("aria-expanded", "false");
+    await toggleComments(again);
+    input.value = "";
+  } catch (e) {
+    showToast(e.message || t("Yorum gönderilemedi."));
+  } finally {
+    if (btn.isConnected) btn.disabled = false;
+  }
+}
+
+async function deleteComment(del) {
+  const row = del.closest("[data-comment-id]");
+  if (!row) return;
+  const id = row.dataset.commentId;
+  del.disabled = true;
+  try {
+    await apiFetch(`/api/comments/${encodeURIComponent(id)}`, { method: "DELETE" });
+    row.remove();
+    const panel = del.closest(".wall-comments");
+    const n = panel.closest("[data-project-id]").querySelector('[data-act="comments"] .wall-count');
+    if (n) n.textContent = String(Math.max(0, (Number(n.textContent) || 0) - 1));
+    if (!panel.querySelector(".cmt")) {
+      panel.dataset.loaded = "0";
+      renderComments(panel, { comments: [], canComment: isMember() });
+    }
+  } catch (e) {
+    showToast(e.message || t("Yorum silinemedi."));
+    if (del.isConnected) del.disabled = false;
+  }
 }
 
 /* ───────────────────── Paylaşım ───────────────────── */
@@ -7317,6 +7580,7 @@ wireModal("wallModal", "closeWall", () => {
 });
 wireModal("shareModal", "closeShare");
 wireModal("profileModal", "closeProfile");
+watchModalStack();
 
 // Duvar kartlarındaki yazara tıklayınca profil açılır (olay delegasyonu)
 ["wallContent", "profileBody"].forEach((id) => {
@@ -7324,9 +7588,26 @@ wireModal("profileModal", "closeProfile");
   if (!host) return;
   host.addEventListener("click", (e) => {
     const author = e.target.closest("[data-profile-handle]");
-    if (author) openProfile(author.dataset.profileHandle);
+    if (author) { openProfile(author.dataset.profileHandle); return; }
+    const like = e.target.closest('[data-act="like"]');
+    if (like) { toggleLike(like); return; }
+    const cmt = e.target.closest('[data-act="comments"]');
+    if (cmt) { toggleComments(cmt); return; }
+    const del = e.target.closest(".cmt-del");
+    if (del) { deleteComment(del); return; }
+    const send = e.target.closest(".cmt-send");
+    if (send) submitComment(send.closest(".wall-comments"));
   });
 });
+
+// Duvar sekmeleri (olay delegasyonu — sekmeler yeniden çizildiğinde bağ kaybolmaz)
+const wallModalEl = $("wallModal");
+if (wallModalEl) {
+  wallModalEl.addEventListener("click", (e) => {
+    const tab = e.target.closest("[data-wall-tab]");
+    if (tab) setWallTab(tab.dataset.wallTab);
+  });
+}
 
 const wallBtnEl = $("wallBtn");
 if (wallBtnEl) wallBtnEl.addEventListener("click", openWall);

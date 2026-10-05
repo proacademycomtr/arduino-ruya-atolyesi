@@ -134,7 +134,8 @@ function loadCore() {
     "loadRate", "rate", "rateAgeHours", "updateRateFromWeb",
     "liveCostHintSync", "buildCostPrompt", "askAICostMaterials", "aiCostCache",
     // v4.0.0 — üyelik/duvar istemcisi
-    "wallCardHTML", "fmtUsd", "sharePrefill",
+    "wallCardHTML", "fmtUsd", "sharePrefill", "wallTabsHTML", "wallEmptyText", "wallTabsCount",
+    "commentsHTML", "renderComments", "updateWallLikeBtn", "likeBtnFace",
     "loadClassSize", "weeklyProgressSVG",
     "catalogSuggestions", "atRiskStudents", "unknownMaterials", "classSubsToCSV", "downloadClassCSV",
     "shoppingListText", "shareShoppingList", "filterSubmissions", "paginate", "mostActiveWeek", "mondayOf",

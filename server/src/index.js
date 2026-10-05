@@ -13,6 +13,7 @@ import authRoutes from "./routes/auth.js";
 import aiPassRoutes from "./routes/aipass.js";
 import wallRoutes from "./routes/wall.js";
 import projectRoutes from "./routes/projects.js";
+import socialRoutes from "./routes/social.js";
 import userRoutes from "./routes/users.js";
 import billingRoutes, { handleWebhook } from "./routes/billing.js";
 
@@ -80,6 +81,7 @@ export function createApp() {
   app.use("/api/users", userRoutes);
   app.use("/api/projects", projectRoutes);
   app.use("/api/billing", billingRoutes);
+  app.use("/api", socialRoutes);
   app.use("/api", wallRoutes);
 
   app.use("/api", (_req, res) => res.status(404).json({ error: "not_found" }));

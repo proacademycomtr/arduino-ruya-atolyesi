@@ -165,7 +165,7 @@ docker compose -p arlo exec db pg_dump -U arlo arlo_db > arlo-$(date +%F).sql
 | GET | `/api/auth/me` | — | jetonsuz da çağrılabilir |
 | POST | `/api/ai/pass` | üye | hak varsa `allowed:true`, yoksa `402 upgrade_required` |
 | GET | `/api/wall?cursor=&limit=` | **herkese açık** | `promptBody` üye değilse **yok** |
-| GET | `/api/feed/timeline` | üye | takip edilenler |
+| GET | `/api/feed/timeline` | üye | takip edilenler; `/api/wall` ile aynı sözleşme (cursor, viewer, followingCount) |
 | GET | `/api/projects/:id` | herkese açık | `promptBody` üye değilse yok |
 | POST | `/api/projects` | üye | duvara paylaşım |
 | POST | `/api/projects/:id/images/presign` | üye (sahip) | MinIO presigned PUT |
@@ -206,14 +206,24 @@ gibi) — aksi hâlde CORS engeller ve düğmeler "sunucuya ulaşılamıyor" der
 ## 9. İstemci özellikleri ve neler yapılmadı
 
 Hazır olanlar: üyelik penceresi, üyelik kapısı + paywall, herkese açık duvar (prompt kilitli),
-paylaşım (fotoğraf + prompt), profil sayfası, takip/takipten çık, runtime yapılandırma.
+paylaşım (fotoğraf + prompt), profil sayfası, takip/takipten çık, **takip akışı sekmesi**,
+**beğeni ve yorum**, runtime yapılandırma.
 
 **Henüz olmayanlar:**
-- Takip edilenlerin akışı **sunucuda var** (`GET /api/feed/timeline`, üye zorunlu) ama arayüzde "Takip Akışı" görünümü yok; duvar şu an herkese açık listeyi gösteriyor.
-- Beğeni/yorum, arama, sıralama, moderasyon, raporlama yok.
+- Arama, sıralama, moderasyon, raporlama yok.
 - Profil yüklemesi (avatar) sunucuda alan olarak var (`User.avatarKey`) ama yükleme arayüzü yok.
-
-- Profil ve takip hem sunucuda hem arayüzde hazır; ancak **avatar yükleme** arayüzü yok (alan şemada mevcut).
-- Beğeni/yorum, arama, sıralama, moderasyon, raporlama yok.
 - E-posta doğrulama ve parola sıfırlama yok.
+
+### Yeni uçlar (v4.1.0)
+
+| Yöntem | Yol | Yetki | Not |
+|---|---|---|---|
+| GET | `/api/projects/:id/comments` | herkese açık | `canComment` yalnız üye için true |
+| POST | `/api/projects/:id/comments` | üye | gövde 2–1000 karakter |
+| DELETE | `/api/comments/:id` | yazar veya proje sahibi | |
+| POST | `/api/projects/:id/like` | üye | aynı kullanıcı iki kez beğenemez |
+| DELETE | `/api/projects/:id/like` | üye | |
+
+`shapeProject` artık herkese açık `likeCount` / `commentCount` döner; kartlardaki
+`likedByViewer` yalnız gerçekten üye olan görüntüleyiciye `true` gider.
 - Giriş kapısı **yalnız gerçek yapay zekâ çağrısında** devreye girer (API anahtarı varken). Demo şablonu ücretsiz kalır; aksi hâlde GitHub Pages'teki "kurulum yok, aç ve kullan" vaadi bozulurdu.

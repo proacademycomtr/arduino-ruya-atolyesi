@@ -78,12 +78,56 @@ test("zaman akışı yalnız takip edilenlerin paylaşımlarını gösterir", as
   assert.ok(!basliklar.includes("Takip Edilmeyen Proje"));
 });
 
-test("hiç kimseyi takip etmeyen üyenin akışı boştur", async () => {
+test("zaman akışı sözleşmesi /api/wall ile aynı: viewer, followingCount, cursor", async () => {
+  await prisma.follow.deleteMany();
+  await prisma.project.deleteMany();
+  const takip = await makeUser({ member: true });
+  const kaynak = await makeUser({ member: true });
+  for (let i = 0; i < 5; i += 1) {
+    await makeProject(kaynak.id, { title: `Sayfalama ${i}` });
+  }
+  const token = await login(takip.email);
+  await request(app).post(`/api/users/${kaynak.handle}/follow`).set("Authorization", `Bearer ${token}`);
+
+  const ilk = await request(app).get("/api/feed/timeline?limit=2").set("Authorization", `Bearer ${token}`);
+  assert.equal(ilk.status, 200);
+  assert.equal(ilk.body.items.length, 2);
+  assert.equal(ilk.body.nextCursor, ilk.body.items[1].id);
+  assert.equal(ilk.body.viewer.isMember, true);
+  assert.equal(ilk.body.viewer.handle, takip.handle);
+  assert.equal(ilk.body.followingCount, 1);
+
+  const ikinci = await request(app)
+    .get(`/api/feed/timeline?limit=2&cursor=${ilk.body.nextCursor}`)
+    .set("Authorization", `Bearer ${token}`);
+  const ilkKarmasik = ilk.body.items.map((p) => p.id).sort().join(",");
+  const ikinciKarmasik = ikinci.body.items.map((p) => p.id).sort().join(",");
+  assert.notEqual(ilkKarmasik, ikinciKarmasik, "sayfa 2, sayfa 1 ile aynı kayıtları dönmemeli");
+
+  // Kalan sayfaları gez: hiçbir kayıt iki kez görünmemeli.
+  const gorulen = new Set([...ilk.body.items, ...ikinci.body.items].map((p) => p.id));
+  let cursor = ikinci.body.nextCursor;
+  while (cursor) {
+    const sayfa = await request(app)
+      .get(`/api/feed/timeline?limit=2&cursor=${cursor}`)
+      .set("Authorization", `Bearer ${token}`);
+    for (const p of sayfa.body.items) {
+      assert.ok(!gorulen.has(p.id), `kayıt iki kez döndü: ${p.id}`);
+      gorulen.add(p.id);
+    }
+    cursor = sayfa.body.nextCursor;
+  }
+  assert.equal(gorulen.size, 5, "beş kayıt da tam olarak bir kez gelmeli");
+});
+
+test("hiç kimseyi takip etmeyen üyede followingCount 0 ve cursor yok", async () => {
   const yalniz = await makeUser({ member: true });
   const token = await login(yalniz.email);
   const akis = await request(app).get("/api/feed/timeline").set("Authorization", `Bearer ${token}`);
   assert.equal(akis.status, 200);
   assert.deepEqual(akis.body.items, []);
+  assert.equal(akis.body.nextCursor, null);
+  assert.equal(akis.body.followingCount, 0);
 });
 
 test("üye olmayan kullanıcının zaman akışına erişimi reddedilir", async () => {

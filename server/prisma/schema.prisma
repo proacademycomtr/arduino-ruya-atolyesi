@@ -34,6 +34,8 @@ model User {
   /// Bu kullanıcının takip ettikleri (Follow.followerId = user.id)
   following  Follow[]   @relation("follower")
   payments   Payment[]
+  likes      Like[]
+  comments   Comment[]
 }
 
 model Membership {
@@ -91,6 +93,8 @@ model Project {
 
   owner  User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   images ProjectImage[]
+  likes  Like[]
+  comments Comment[]
 
   @@index([isShared, sharedAt])
   @@index([ownerId, createdAt])
@@ -121,6 +125,33 @@ model Follow {
 
   @@id([followerId, followingId])
   @@index([followingId])
+}
+
+/// Bir kullanıcının bir projeye verdiği tek beğeni.
+model Like {
+  userId    String
+  projectId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([userId, projectId])
+  @@index([projectId, createdAt])
+}
+
+/// Proje yorumu. Prompt içeriği gibi herkese açıktır — yazmak üyelere açıktır.
+model Comment {
+  id        String   @id @default(cuid())
+  projectId String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
 }
 
 model Session {

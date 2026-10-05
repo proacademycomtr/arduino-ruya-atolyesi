@@ -14,7 +14,9 @@ const PUBLIC_SELECT = {
   images: {
     select: { objectKey: true, width: true, height: true, sortOrder: true },
     orderBy: { sortOrder: "asc" }
-  }
+  },
+  // Beğeni/yorum sayıları herkese açıktır (içerik değil, sayaç).
+  _count: { select: { likes: true, comments: true } }
 };
 
 const MEMBER_SELECT = { ...PUBLIC_SELECT, promptBody: true };
@@ -25,6 +27,7 @@ export function projectSelect(isMember) {
 
 export function shapeProject(project, { publicUrlFor }) {
   if (!project) return null;
+  const counts = project._count || {};
   return {
     id: project.id,
     title: project.title,
@@ -32,6 +35,8 @@ export function shapeProject(project, { publicUrlFor }) {
     isShared: project.isShared,
     sharedAt: project.sharedAt,
     createdAt: project.createdAt,
+    likeCount: counts.likes || 0,
+    commentCount: counts.comments || 0,
     owner: {
       handle: project.owner.handle,
       displayName: project.owner.displayName,

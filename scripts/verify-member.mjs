@@ -17,6 +17,11 @@ import { chromium } from "playwright";
 const SITE = process.env.SITE || "http://127.0.0.1:8000/index.html";
 const email = `demo${Date.now().toString(36)}@example.com`;
 const password = "deneme12345";
+// Beğeni/yorum yazmak üyeye açıktır; üye bir hesapla giriş yapılır (bkz. prisma/seed.js).
+const uye = {
+  email: process.env.MEMBER_EMAIL || "deniz@example.com",
+  password: process.env.MEMBER_PASSWORD || "demo1234"
+};
 
 let browser;
 const results = [];
@@ -151,6 +156,84 @@ try {
     ((await page.locator("#followToggle").textContent()) || "").includes("Takip Et"),
     (await page.locator("#followToggle").textContent() || "").trim());
   await page.locator("#closeProfile").click();
+
+  // 8) Üye olmayan kullanıcı "Takip Ettiklerim" sekmesine tıklayınca paywall açılır
+  const takipSekmesi = page.locator('[data-wall-tab="following"]');
+  check("Duvar sekmeleri görünür", await takipSekmesi.isVisible());
+  await takipSekmesi.click();
+  await page.waitForTimeout(700);
+  check("Üye olmayan için takip sekmesi paywall açtı",
+    await page.locator("#paywallModal:not([hidden])").isVisible());
+  await page.locator("#payClose2").click();
+  await page.waitForTimeout(400);
+  const aktifSekme = await page.locator(".wall-tab.is-active").getAttribute("data-wall-tab");
+  check("Paywall'dan sonra 'Tümü' sekmesinde kalındı", aktifSekme === "all", `aktif=${aktifSekme}`);
+
+  // 9) Yorum yazmak üyeye açık olmalı (bu kullanıcı üye değil)
+  await page.locator('[data-act="comments"]').first().click();
+  await page.waitForTimeout(900);
+  check("Yorum paneli açıldı", await page.locator(".wall-comments:not([hidden])").first().isVisible());
+  check("Üye olmayan için yorum kutusu yok", (await page.locator(".cmt-form").count()) === 0);
+  check("Üye olmayan için 'üye ol' ipucu var",
+    ((await page.locator(".wall-comments").first().textContent()) || "").includes("üye ol"));
+  await page.locator('[data-act="comments"]').first().click();
+  await page.waitForTimeout(400);
+
+  // 10) Beğeni düğmesi üye olmayan için paywall açmalı
+  await page.locator('[data-act="like"]').first().click();
+  await page.waitForTimeout(700);
+  check("Üye olmayan için beğeni paywall açtı",
+    await page.locator("#paywallModal:not([hidden])").isVisible());
+  await page.locator("#payClose2").click();
+  await page.waitForTimeout(400);
+
+  // 10b) Üye olan biriyle aynı beğeni düğmesi çalışmalı (duvar zaten açık)
+  const duvarAcik = await page.locator("#wallModal:not([hidden])").isVisible();
+  check("Paywall kapanınca duvar açık kaldı", duvarAcik);
+
+  // 11) Beğeni ve yorum akışı ÜYE ile: seed üyesi girilir
+  // (Paywall arkasında duvar kalmıştı; modal yığını düzelttikten sonra
+  //  üstteki duvarı kapatıp yeniden açıyoruz ki kontroller net olsun.)
+  await page.locator("#closeWall").click();
+  await page.waitForTimeout(400);
+  await authBtn.click();
+  await page.locator("#authLogout").click();
+  await page.waitForTimeout(700);
+  await authBtn.click();
+  await page.locator('[data-auth-tab="login"]').click();
+  await page.locator("#authEmail").fill(uye.email);
+  await page.locator("#authPassword").fill(uye.password);
+  await page.locator("#authForm button[type=submit]").click();
+  await page.waitForFunction(() => document.getElementById("authModal").hidden === true, { timeout: 10000 });
+  await page.waitForTimeout(600);
+  check("Seed üyesi giriş yaptı", ((await authBtn.textContent()) || "").includes("Deniz"));
+
+  await wallBtn.click();
+  await page.waitForTimeout(1200);
+  check("Üye olarak duvar yeniden açıldı", (await page.locator(".wall-card").count()) > 0,
+    `${await page.locator(".wall-card").count()} kart`);
+
+  const begeniBtn = page.locator('[data-act="like"]').first();
+  const oncekiSayi = Number(((await begeniBtn.textContent()) || "0").replace(/\D/g, "")) || 0;
+  await begeniBtn.click();
+  await page.waitForTimeout(900);
+  const sonrakiSayi = Number(((await begeniBtn.textContent()) || "0").replace(/\D/g, "")) || 0;
+  check("Beğeni tıklaması sayacı artırdı", sonrakiSayi === oncekiSayi + 1, `${oncekiSayi} → ${sonrakiSayi}`);
+  check("Beğenilen düğmede is-on var", (await begeniBtn.getAttribute("class") || "").includes("is-on"));
+
+  await page.locator('[data-act="comments"]').first().click();
+  await page.waitForTimeout(900);
+  const yorumVar = (await page.locator(".cmt-form").count()) > 0;
+  check("Yorum yazma kutusu basıldı (üye)", yorumVar);
+  if (yorumVar) {
+    const yorumMetni = "Otomatik deneme yorumu " + Date.now().toString(36);
+    await page.locator(".cmt-input").first().fill(yorumMetni);
+    await page.locator(".cmt-send").first().click();
+    await page.waitForTimeout(1500);
+    const panelMetni = (await page.locator(".wall-comments:not([hidden])").first().textContent()) || "";
+    check("Yorum gönderildi ve listede göründü", panelMetni.includes(yorumMetni));
+    check("Kendı yorumunda sil düğmesi var", (await page.locator(".cmt-del").count()) > 0);
+  }
 
   check("Sayfada JS hatası yok", errors.length === 0, errors.slice(0, 2).join(" | "));
 } catch (e) {

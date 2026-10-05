@@ -1728,3 +1728,127 @@ test("v4.0.0 fmtUsd: sentleri biçimlendirir", () => {
   assert.equal(core.fmtUsd(300), "$3");
   assert.match(core.fmtUsd(199), /1\.99/);
 });
+
+/* ─────────────────────────────────────────────────────────────
+   v4.1.0 — Takip akışı sekmesi
+   ───────────────────────────────────────────────────────────── */
+test("v4.1.0 wallTabsHTML: iki sekme basılır, etkin olan is-active", () => {
+  const all = core.wallTabsHTML("all");
+  assert.ok(all.includes('data-wall-tab="all"'), "Tümü sekmesi olmalı");
+  assert.ok(all.includes('data-wall-tab="following"'), "Takip sekmesi olmalı");
+  const allOn = all.match(/class="wall-tab is-active" data-wall-tab="([^"]+)"/);
+  assert.equal(allOn && allOn[1], "all", "all seçiliyken 'Tümü' etkin olmalı");
+
+  const follow = core.wallTabsHTML("following");
+  const followOn = follow.match(/class="wall-tab is-active" data-wall-tab="([^"]+)"/);
+  assert.equal(followOn && followOn[1], "following", "following seçiliyken 'Takip' etkin olmalı");
+});
+
+test("v4.1.0 wallTabsHTML: bilinmeyen sekme 'Tümü'ye düşer", () => {
+  const html = core.wallTabsHTML("bogus");
+  assert.ok(html.includes('class="wall-tab is-active" data-wall-tab="all"'));
+  assert.ok(!html.includes('is-active" data-wall-tab="following"'));
+});
+
+test("v4.1.0 wallTabsHTML: aria-selected etkin sekmede true", () => {
+  const follow = core.wallTabsHTML("following");
+  assert.ok(follow.includes('data-wall-tab="following" role="tab" type="button"\n        aria-selected="true"'),
+    "etkin sekmede aria-selected=true olmalı");
+  assert.ok(follow.includes('aria-selected="false">🌍'), "pasif sekmede aria-selected=false olmalı");
+});
+
+test("v4.1.0 wallEmptyText: sekmeye göre boş durum metni değişir", () => {
+  assert.match(core.wallEmptyText("all"), /Henüz paylaşılmış proje yok/);
+  assert.match(core.wallEmptyText("following"), /henüz proje paylaşmadı/);
+  assert.notEqual(core.wallEmptyText("all"), core.wallEmptyText("following"));
+});
+
+test("v4.1.0 wallCardHTML: beğeni/yorum düğmeleri ve sayaçları basılır", () => {
+  const html = core.wallCardHTML({
+    id: "p1",
+    title: "Yağmur Sensörü",
+    summary: "Özet",
+    images: [],
+    owner: { displayName: "Deniz", handle: "deniz" },
+    likeCount: 3,
+    commentCount: 2,
+    likedByViewer: true
+  });
+  assert.ok(html.includes('data-project-id="p1"'), "kart kimliği taşımalı");
+  assert.ok(html.includes('data-act="like"'), "beğeni düğmesi olmalı");
+  assert.ok(html.includes('data-act="comments"'), "yorum düğmesi olmalı");
+  assert.ok(html.includes('aria-pressed="true"'), "beğenilmişse aria-pressed true");
+  assert.ok(html.includes('❤️ <span class="wall-count">3</span>'), "kalp ve beğeni sayısı");
+  assert.ok(html.includes('💬 <span class="wall-count">2</span>'), "yorum sayısı");
+  assert.ok(html.includes('class="wall-comments" hidden'), "yorum paneli gizli başlamalı");
+});
+
+test("v4.1.0 wallCardHTML: beğenilmemişse boş kalp, sayaç 0'a düşmez", () => {
+  const html = core.wallCardHTML({
+    id: "p2", title: "X", summary: "", images: [],
+    owner: { displayName: "A", handle: "a" }
+  });
+  assert.ok(html.includes('aria-pressed="false"'));
+  assert.ok(html.includes('🤍 <span class="wall-count">0</span>'));
+  assert.ok(html.includes('💬 <span class="wall-count">0</span>'));
+  assert.ok(!html.includes("is-on"), "beğenilmemişken is-on olmamalı");
+});
+
+test("v4.1.0 likeBtnFace: durum ve sayaç tek kaynaktan gelir", () => {
+  const on = core.likeBtnFace(true, 5);
+  assert.equal(on.icon, "❤️");
+  assert.equal(on.count, 5);
+  assert.equal(on.pressed, "true");
+  assert.equal(on.cls, "wall-act is-on");
+
+  const off = core.likeBtnFace(false, "3");
+  assert.equal(off.icon, "🤍");
+  assert.equal(off.count, 3, "metin olarak gelen sayaç sayıya çevrilmeli");
+  assert.equal(off.pressed, "false");
+  assert.equal(off.cls, "wall-act");
+});
+
+test("v4.1.0 commentsHTML: yorum yazma kutusu yalnız üyeye açık", () => {
+  const member = core.commentsHTML([], true);
+  assert.ok(member.includes("cmt-form"), "üye için yazma kutusu olmalı");
+  assert.ok(member.includes("cmt-input"));
+  assert.ok(member.includes("Henüz yorum yok"), "boş liste ipucu basmalı");
+
+  const guest = core.commentsHTML([], false);
+  assert.ok(!guest.includes("cmt-form"), "üye olmayan için yazma kutusu olmamalı");
+  assert.ok(guest.includes("Yorum yazmak için üye ol."));
+});
+
+test("v4.1.0 commentsHTML: yorum gövdesi HTML kaçışından geçer", () => {
+  const html = core.commentsHTML([
+    { id: "c1", body: '<script>alert("x")</script> harika', author: { displayName: "Ayşe", handle: "ayse" }, canDelete: false }
+  ], true);
+  assert.ok(!html.includes("<script>alert"), "ham script sızmamalı");
+  assert.ok(html.includes("&lt;script&gt;"), "kaçış uygulanmalı");
+  assert.ok(!html.includes("cmt-del"), "canDelete yoksa sil düğmesi olmamalı");
+  assert.ok(html.includes('data-comment-id="c1"'), "yorum kimliği taşımalı");
+});
+
+test("v4.1.0 commentsHTML: silme yetkisi olanın düğmesi basılır", () => {
+  const html = core.commentsHTML([
+    { id: "c2", body: "Metin", author: { displayName: "Ali", handle: "ali" }, canDelete: true }
+  ], false);
+  assert.ok(html.includes("cmt-del"), "canDelete true ise sil düğmesi olmalı");
+});
+
+test("v4.1.0 wallTabsHTML: kimlik taşır (kopya çubuk oluşmaz)", () => {
+  const html = core.wallTabsHTML("all");
+  assert.ok(html.includes('id="wallTabs"'),
+    "sekme çubuğunun kimliği olmalı; renderWallTabs eskisini bulup değiştiriyor");
+});
+
+test("v4.1.0 wallTabsCount: DOM'da tek çubuk sayılır", () => {
+  const fake = {
+    querySelectorAll(sel) {
+      assert.equal(sel, ".wall-tabs");
+      return [1];   // bir çubuk
+    }
+  };
+  assert.equal(core.wallTabsCount(fake), 1);
+  assert.equal(core.wallTabsCount(null), 0);
+});

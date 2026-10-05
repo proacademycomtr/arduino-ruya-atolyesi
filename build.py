@@ -24,7 +24,7 @@ import sys
 from datetime import date
 
 # ── Sürüm sabiti: yeni sürüm buradan değiştirilir ──
-VERSION = "3.1.0"
+VERSION = "4.1.0"
 
 # v4.0.0: Üyelik/duvar API'sinin adresi.
 #   API_BASE=  boş  → API kapalı; uygulama eskisi gibi yalnız demo modda çalışır

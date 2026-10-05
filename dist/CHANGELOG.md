@@ -1,6 +1,18 @@
 # Changelog
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
+## [4.1.0] - 2026-10-05
+
+- Yeni: 👥 **Takip akışı sekmesi** — duvarın üstünde "🌍 Tümü / 👥 Takip Ettiklerim" sekmeleri. Takip sekmesi yalnız takip edilenlerin paylaşımlarını gösterir (`GET /api/feed/timeline`), üyeye açıktır; giriş yoksa giriş penceresi, üyelik yoksa paywall açılır. `/api/feed/timeline` artık `/api/wall` ile **aynı sözleşmeyi** dönerdi (cursor sayfalaması, `viewer`, `followingCount`); "Daha fazla göster" her iki sekmede de çalışır
+- Yeni: ❤️ **Beğeni** — duvar kartlarında beğeni düğmesi ve sayaç. Beğeni yazmak üyeye açıktır (herkese açık beğeni spam'e açık olurdu); sayaç herkese açık, "bunu beğendim" bilgisi yalnız kendi görüntüleyene gider. Aynı kullanıcı iki kez beğenemez (`@@id([userId, projectId])`)
+- Yeni: 💬 **Yorum** — kartın 💬 düğmesi yorum panelini açar; okumak herkese açık, yazmak üyeye açık. Yorumu **yazan veya projenin sahibi** silebilir. Gövde 1000 karakterle sınırlı
+- Yeni: 🗃️ `Like` ve `Comment` tabloları (`migrations/20261005120000_likes_comments`); beğeni/yorum sayıları `shapeProject` ile herkese açık sayaç olarak döner (içerik değil)
+- Düzeltme: **paywall duvarın altında kalıyordu** — duvar açıkken "Takip" sekmesine ya da beğeniye tıklayınca paywall açılıyor ama tıklanamıyordu (duvar modalı üstteydi). Modal yığını artık son açılan pencere en üstte olacak şekilde `watchModalStack()` ile yönetiliyor; DOM sırası önemsiz
+- Düzeltme: duvar sekmeleri yeniden çizildiğinde her seferinde **ikinci bir çubuk** ekleniyordu (kimlik eksikti). `wallTabsHTML` artık `id="wallTabs"` taşıyor ve `renderWallTabs` eskisini değiştiriyor
+- Test: `node --test tests/` 110→122 (7 yeni birim: wallTabsHTML etkin sekme, aria-selected, bilinmeyen sekme, wallEmptyText, beğeni düğmesi/sayaç, likeBtnFace, commentsHTML yazma yetkisi + HTML kaçışı + silme yetkisi + tek çubuk regresyonu), sunucu testleri 51→69 (9 yeni: takip akışı sözleşmesi/cursor sayfalaması, beğeni sayaç-kimlik, yorum yetkileri, **Stripe webhook imzası uçtan uca**). `scripts/verify-member.mjs` 19→34 kontrol: sekmeler, üye olmayan için yorum kutusu ve beğeni paywall'ı, üye olarak beğeni/yorum gönderme
+- Test: webhook imzası artık **gerçekten üretilip doğrulanıyor** (Stripe'ın belgelediği HMAC-SHA256 algoritması): doğru imza üyelik verir, değiştirilmiş gövde/yanlış imza/başlıksız istek reddedilir, aynı olay iki kez gelince tek ödeme kaydı oluşur
+- Sürüm 4.1.0 olarak derlendi.
+
 ## [4.0.0] - 2026-10-05
 
 - Yeni: 👤 **Üyelik arayüzü** — header'da 👤 düğmesi; giriş/ücretsiz kayıt penceresi, üye rozeti (⭐), kalan ücretsiz proje hakkı, "Profilim", çıkış. Parola sunucuda argon2id ile saklanır
