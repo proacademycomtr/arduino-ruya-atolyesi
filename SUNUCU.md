@@ -72,6 +72,9 @@ docker compose -p arlo --profile dev run --rm test
 > Docker Hub'da `minio/minio` imajına erişimin yoksa (kurumsuz ağ gibi):
 > `docker compose -p arlo -f docker-compose.yml -f docker-compose.s3mock.yml up -d`
 > S3 API'si aynıdır; yalnız konsol ve kalıcılık farklıdır.
+> Not: S3Mock **9090** portunu dinler (MinIO 9000); override `S3_ENDPOINT`'i buna göre
+> düzeltir. GitHub Actions'ta da aynı S3Mock kullanılır, `arlo-ci-gorseller` bucket
+> adıyla — S3 bucket adları alt çizgi içeremez (`InvalidBucketName`).
 
 ## 4. Stripe kurulumu
 
