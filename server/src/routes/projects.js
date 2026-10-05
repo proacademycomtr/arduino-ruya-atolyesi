@@ -62,15 +62,19 @@ router.post("/", requireMember, async (req, res, next) => {
 /** POST /api/projects/:id/images/presign — tarayıcı görseli doğrudan MinIO'ya yükler. */
 router.post("/:id/images/presign", requireMember, async (req, res, next) => {
   try {
-    if (!storageConfigured()) {
-      return res.status(503).json({ error: "storage_not_configured", message: "Görsel deposu yapılandırılmamış." });
-    }
+    // Sıralama önemli: yetki ve içerik tipi ÖNCE doğrulanır. Aksi hâlde
+    // depo yapılandırılmamışken her istek 503 alır ve gerçek hata (404/400)
+    // gizlenir; ayrıca depo durumu yetkisiz kullanıcıya sızar.
     const project = await prisma.project.findUnique({ where: { id: String(req.params.id) }, select: { id: true, ownerId: true } });
     if (!project || project.ownerId !== req.user.id) return res.status(404).json({ error: "not_found" });
 
     const contentType = str(req.body?.contentType, 60).toLowerCase();
     if (!imageContentTypeOk(contentType)) {
       return res.status(400).json({ error: "unsupported_type", message: "Yalnız JPG, PNG, WEBP veya GIF." });
+    }
+
+    if (!storageConfigured()) {
+      return res.status(503).json({ error: "storage_not_configured", message: "Görsel deposu yapılandırılmamış." });
     }
     const objectKey = newObjectKey(req.user.id, project.id, contentType);
     const url = await presignUpload(objectKey, contentType, 600);

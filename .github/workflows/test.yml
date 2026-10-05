@@ -45,12 +45,30 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
+      # Görsel deposu. S3Mock S3 API'sini birebir uygular; presigned URL
+      # üretimi ve görsel bağlama testleri ancak depo varken anlamlı.
+      # (Üretimde MinIO kullanılır; CI'da imaja erişim sorunu olmasın.)
+      storage:
+        image: adobe/s3mock:latest
+        env:
+          initialBuckets: arlo_test
+          compatibility: default
+        ports:
+          - 9090:9090
+        # S3Mock imajında ne curl ne node var; sağlık kontrolü konteyner
+        # içinde çalışamaz. Bu yüzden bekleme aşağıdaki "Depo hazır olsun"
+        # adımında, job'ın kendi Node'u ile yapılıyor.
     env:
       NODE_ENV: test
       DATABASE_URL: postgresql://arlo:arlo_ci_password@localhost:5432/arlo_test
       APP_ORIGIN: http://localhost:8000
-      # Depolama/Stripe yok: ilgili testler bunu "yapılandırılmamış" kabul eder.
-      S3_ENDPOINT: ""
+      # Görsel deposu (S3Mock, 9090). Stripe yok: ödeme testleri bunu
+      # "yapılandırılmamış" kabul eder ve webhook imzası kendi sırrıyla çalışır.
+      S3_ENDPOINT: http://localhost:9090
+      S3_ACCESS_KEY_ID: arlo
+      S3_SECRET_ACCESS_KEY: arlo_ci_password
+      S3_BUCKET: arlo_test
+      S3_FORCE_PATH_STYLE: "true"
     defaults:
       run:
         working-directory: server
@@ -65,5 +83,14 @@ jobs:
         run: npx prisma generate
       - name: Migration'ları uygula
         run: npx prisma migrate deploy
+      - name: "Depo hazır olsun"
+        run: |
+          for i in $(seq 1 30); do
+            if node -e "fetch('http://localhost:9090').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null; then
+              echo "S3Mock hazır"; exit 0
+            fi
+            sleep 2
+          done
+          echo "S3Mock 60 saniyede hazır olmadı"; exit 1
       - name: Sunucu testleri
         run: node --test --test-concurrency=1 tests/
