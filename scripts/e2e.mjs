@@ -20,14 +20,27 @@
 import { chromium } from "playwright";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { resolve } from "node:path";
+import { execFileSync } from "node:child_process";
 
 /* --only / --list bayraklarını ayrıştır; ilk konumsal argüman URL'dir. */
 const argv = process.argv.slice(2);
 const flag = (n) => { const i = argv.indexOf(n); return i === -1 ? null : argv.splice(i, 2)[1]; };
 const listOnly = argv.includes("--list") && argv.splice(argv.indexOf("--list"), 1).length === 1;
 const onlyArg = flag("--only");
-const target = argv[0]
-  || pathToFileURL(resolve(process.cwd(), "dist/index.html")).href;
+
+/* Verilen URL yoksa DEMO derlemesini üret (API adresi boş). Menü kilitleri
+   kapandığında bölümlerin açılabilmesi gerekiyor; dist daha önce API_BASE'li
+   derlenmişse (yerel doğrulama sonrası) senaryolar kilitli menülere tıklayıp
+   kırılır. Bu yüzden test kendi derlemesini yapar — ortamdan bağımsız olur. */
+let target = argv[0];
+if (!target) {
+  try {
+    execFileSync("python3", ["build.py"], { cwd: resolve(process.cwd()), stdio: "pipe" });
+  } catch (e) {
+    console.warn("UYARI: build.py çalışmadı, mevcut dist kullanılıyor:", e.message);
+  }
+  target = pathToFileURL(resolve(process.cwd(), "dist/index.html")).href;
+}
 
 /** --only 12 / 6,7 / 9-12 → çalıştırılacak kimlik listesi (null = hepsi). */
 function parseOnly(spec) {

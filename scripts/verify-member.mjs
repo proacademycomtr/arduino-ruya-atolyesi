@@ -282,12 +282,23 @@ try {
     `${await page.locator(".wall-card").count()} kart`);
 
   const begeniBtn = page.locator('[data-act="like"]').first();
-  const oncekiSayi = Number(((await begeniBtn.textContent()) || "0").replace(/\D/g, "")) || 0;
+  const sayiOku = async () => Number(((await begeniBtn.textContent()) || "0").replace(/\D/g, "")) || 0;
+  const begeniliMi = async () => (await begeniBtn.getAttribute("class") || "").includes("is-on");
+  // Seed üyesi önceki koşularda beğenmiş olabilir; test mutlak sayıya değil
+  // TIKLAMANIN YÖNÜNE bakar: beğenmemişse +1, beğenmişse -1 beklenir.
+  const oncedenBegenmis = await begeniliMi();
+  const oncekiSayi = await sayiOku();
   await begeniBtn.click();
   await page.waitForTimeout(900);
-  const sonrakiSayi = Number(((await begeniBtn.textContent()) || "0").replace(/\D/g, "")) || 0;
-  check("Beğeni tıklaması sayacı artırdı", sonrakiSayi === oncekiSayi + 1, `${oncekiSayi} → ${sonrakiSayi}`);
-  check("Beğenilen düğmede is-on var", (await begeniBtn.getAttribute("class") || "").includes("is-on"));
+  const sonrakiSayi = await sayiOku();
+  check("Beğeni tıklaması sayacı doğru yönde değişti",
+    oncedenBegenmis ? sonrakiSayi === oncekiSayi - 1 : sonrakiSayi === oncekiSayi + 1,
+    `${oncedenBegenmis ? "beğenmiş" : "beğenmemiş"} · ${oncekiSayi} → ${sonrakiSayi}`);
+  check("Beğeni düğmesi durum değiştirdi", (await begeniliMi()) === !oncedenBegenmis);
+  // Testi geri al: veritabanı birikmesin, sonraki koşullar aynı durumdan başlasın.
+  await begeniBtn.click();
+  await page.waitForTimeout(700);
+  check("Beğeni geri alındı", (await begeniliMi()) === oncedenBegenmis);
 
   await page.locator('[data-act="comments"]').first().click();
   await page.waitForTimeout(900);

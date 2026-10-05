@@ -6827,6 +6827,11 @@ function renderMenuLocks() {
   // görünür KALMALIDIR; ziyaretçide yerini Üye Ol / Giriş Yap alır.
   const authEl = $("authBtn");
   if (authEl && API_BASE) authEl.hidden = girisYok;
+  // Menü düğmesini kilitlemek YETMEZ: sayfadaki gerçek bölüm (ör. Bileşen
+  // Kütüphanesi <section id="kutuphane">) kaydırılarak veya #kutuphane
+  // yazılarak erişilebilir. Menü kilidiyle birlikte İÇERİĞİ de gizliyoruz.
+  const lib = $("kutuphane");
+  if (lib) lib.hidden = !acik;
   // Ziyaretçiye "üye ol" görünür ama sunucu yoksa işe yaramaz — belli et.
   for (const id of ["joinBtn", "joinBtnHero", "joinBtnFinal", "loginBtn", "loginBtnHero"]) {
     const el = $(id);
@@ -7729,6 +7734,20 @@ if (wallModalEl) {
 
 const wallBtnEl = $("wallBtn");
 if (wallBtnEl) wallBtnEl.addEventListener("click", openWall);
+
+// #kutuphane gibi bir bağlantıyı elle yazan ziyaretçi de bölüme
+// kaydırılmasın: giriş yoksa giriş penceresi açılır ve hedef engellenir.
+// `hashchange` YALNIZ sonradan değişen hash'lerde çalışır; adres çubuğundan
+// doğrudan girildiğinde sayfa yüklendiği anda da kontrol etmeliyiz.
+const kutuphaneKontrol = () => {
+  if (canUseApp()) return;
+  if (location.hash !== "#kutuphane") return;
+  openAuthModal(t("Bu bölüm için giriş yap ya da ücretsiz üye ol."));
+  if (history.replaceState) history.replaceState(null, "", location.pathname + location.search);
+  window.scrollTo(0, 0);
+};
+window.addEventListener("hashchange", kutuphaneKontrol);
+if (location.hash) setTimeout(kutuphaneKontrol, 0);
 
 // ── Kilitli menüler: tıklanınca içeriye GİRMEZ, giriş penceresini açar.
 // ÖNEMLİ: Bu dinleyici `capture` fazında bağlanır ve `stopImmediatePropagation`
