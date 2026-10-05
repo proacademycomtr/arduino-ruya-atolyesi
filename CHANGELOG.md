@@ -1,6 +1,34 @@
 # Changelog
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
+## [4.1.0] - 2026-10-05
+
+- Yeni: 👥 **Takip akışı sekmesi** — duvarın üstünde "🌍 Tümü / 👥 Takip Ettiklerim" sekmeleri. Takip sekmesi yalnız takip edilenlerin paylaşımlarını gösterir (`GET /api/feed/timeline`), üyeye açıktır; giriş yoksa giriş penceresi, üyelik yoksa paywall açılır. `/api/feed/timeline` artık `/api/wall` ile **aynı sözleşmeyi** dönerdi (cursor sayfalaması, `viewer`, `followingCount`); "Daha fazla göster" her iki sekmede de çalışır
+- Yeni: ❤️ **Beğeni** — duvar kartlarında beğeni düğmesi ve sayaç. Beğeni yazmak üyeye açıktır (herkese açık beğeni spam'e açık olurdu); sayaç herkese açık, "bunu beğendim" bilgisi yalnız kendi görüntüleyene gider. Aynı kullanıcı iki kez beğenemez (`@@id([userId, projectId])`)
+- Yeni: 💬 **Yorum** — kartın 💬 düğmesi yorum panelini açar; okumak herkese açık, yazmak üyeye açık. Yorumu **yazan veya projenin sahibi** silebilir. Gövde 1000 karakterle sınırlı
+- Yeni: 🗃️ `Like` ve `Comment` tabloları (`migrations/20261005120000_likes_comments`); beğeni/yorum sayıları `shapeProject` ile herkese açık sayaç olarak döner (içerik değil)
+- Düzeltme: **paywall duvarın altında kalıyordu** — duvar açıkken "Takip" sekmesine ya da beğeniye tıklayınca paywall açılıyor ama tıklanamıyordu (duvar modalı üstteydi). Modal yığını artık son açılan pencere en üstte olacak şekilde `watchModalStack()` ile yönetiliyor; DOM sırası önemsiz
+- Düzeltme: duvar sekmeleri yeniden çizildiğinde her seferinde **ikinci bir çubuk** ekleniyordu (kimlik eksikti). `wallTabsHTML` artık `id="wallTabs"` taşıyor ve `renderWallTabs` eskisini değiştiriyor
+- Test: `node --test tests/` 110→122 (7 yeni birim: wallTabsHTML etkin sekme, aria-selected, bilinmeyen sekme, wallEmptyText, beğeni düğmesi/sayaç, likeBtnFace, commentsHTML yazma yetkisi + HTML kaçışı + silme yetkisi + tek çubuk regresyonu), sunucu testleri 51→69 (9 yeni: takip akışı sözleşmesi/cursor sayfalaması, beğeni sayaç-kimlik, yorum yetkileri, **Stripe webhook imzası uçtan uca**). `scripts/verify-member.mjs` 19→34 kontrol: sekmeler, üye olmayan için yorum kutusu ve beğeni paywall'ı, üye olarak beğeni/yorum gönderme
+- Test: webhook imzası artık **gerçekten üretilip doğrulanıyor** (Stripe'ın belgelediği HMAC-SHA256 algoritması): doğru imza üyelik verir, değiştirilmiş gövde/yanlış imza/başlıksız istek reddedilir, aynı olay iki kez gelince tek ödeme kaydı oluşur
+- Sürüm 4.1.0 olarak derlendi.
+
+## [4.0.0] - 2026-10-05
+
+- Yeni: 👤 **Üyelik arayüzü** — header'da 👤 düğmesi; giriş/ücretsiz kayıt penceresi, üye rozeti (⭐), kalan ücretsiz proje hakkı, "Profilim", çıkış. Parola sunucuda argon2id ile saklanır
+- Yeni: 🎟️ **Üyelik kapısı** — gerçek yapay zekâ çağrısından önce `POST /api/ai/pass`: giriş yoksa giriş penceresi, hak bittiyse **paywall** (fiyat `/api/health`'den okunur, istemciden tutar gelmez). Demo şablonu (API anahtarı yokken) ücretsiz kalır; kapı sunucu hatasında **açılır**, proje üretimi durmaz
+- Yeni: 🌍 **Topluluk duvarı** — `🌍 Duvar` düğmesi herkese açık listeyi açar: görsel, başlık, yazar ve açıklama herkese, **prompt yalnız üyelere** (kilitli kart). Sayfalama "Daha fazla göster" düğmesiyle
+- Yeni: 🧑‍🚀 **Profil ve takip** — duvar kartındaki yazara ya da "Profilim"e tıklayınca profil açılır: avatar, görünen ad, biyografi, proje/takipçi/takip sayaçları ve paylaşılan projeler. **Takip Et / Takip Ediliyor** durumu sunucudan gelen `isFollowing` ile sürülür; kendi profilinde takip düğmesi yerine "Bu senin profilin" yazar
+- Yeni: 🌍 **Paylaşım akışı** — rehberde "🌍 Duvarı Paylaş" düğmesi; başlık/açıklama/prompt hazır gelir, fotoğraf **presigned PUT ile doğrudan depoya** yüklenir ve projeye bağlanır. Üye olmayanlar paywall'a düşer
+- Yeni: ⚙️ **Runtime yapılandırma** — `API_BASE` ortam değişkeni `dist/config.js`'e yazılır ve JS'e gömülür; `sw.js` de dosyayı uygulama kabuğuna ekler. Adres boşsa **hiçbir ağ isteği atılmaz**, uygulama eskisi gibi yalnız demo modda çalışır (GitHub Pages dağıtımı bozulmaz)
+- Yeni: 🗄️ `server/` altında üyelik/ödeme/duvar API'si — Node 20 + Express 4 + Prisma 6 + PostgreSQL; Docker Compose ile ayağa kalkar (çoklu proje izolasyonu, Traefik etiketleri)
+- Yeni: 🔒 **Prompt gizliliği sunucu tarafında zorlanır** — `src/projectSelect.js` tek kapı: üye olmayan istekte Prisma `select` listesine `promptBody` hiç girmez (UI gizlemesi değil). `server/tests/prompt-leak.test.js` ham yanıtı tarar; istemcide `wallCardHTML` de prompt yoksa kilitli kart basar
+- Yeni: 💳 Stripe Checkout + webhook (imzalı, `providerRef` ile idempotent) — ilk 1000 kişi tek seferlik $1 ömür boyu, sonrası aylık; **fiyat ve plan yalnız sunucudan** (`config.js` → PRICING)
+- Yeni: 🖼️ Görsel deposu S3/MinIO uyumlu; tarayıcı presigned PUT ile yükler, dosya API'den geçmez
+- Yeni: 🧪 51 sunucu testi + `wallCardHTML`/`fmtUsd` birim testleri; CI'a Postgres servisiyle ayrı `api` işi eklendi. `scripts/verify-member.mjs` gerçek tarayıcıda 19 kontrol yapar (üye olmayana prompt kilitli, hak bitince paywall, profil + takip/takipten çık)
+- Not: `dist/` hâlâ tek dosya + `config.js`; GitHub Pages dağıtımı aynen korunuyor. Kurulum/Stripe/VDS belgeleri: SUNUCU.md
+- Düzeltme: `weeklyProgressSVG` testi `Date.now()`'a bağlıydı ve **pazartesi 00:00'den sonra** kırılıyordu ("dün aynı hafta" varsayımı yalnız salı–pazar arasında doğru). Test sabit bir referans haftasına (15 Haziran 2026 Pazartesi) bağlandı; kaynak kod değişmedi
+- Sürüm 4.0.0 olarak derlendi.
 
 ## [3.1.0] - 2026-10-04
 
