@@ -258,11 +258,11 @@ paylaşım kaldırma) ve şikâyet/raporlama**, **profil avatarı yükleme**, ru
 | DELETE | `/api/projects/:id/share` | proje sahibi veya yönetici | paylaşımı duvardan kaldırır |
 | PATCH | `/api/projects/:id/moderation` | yönetici | `{hidden}` |
 | POST | `/api/reports` | üye | `targetType`: `project`, `comment`, `user` |
-| GET | `/api/reports` | yönetici | duruma göre süzme |
-| PATCH | `/api/reports/:id` | yönetici | `{status}` |
-| POST | `/api/users/me/avatar/presign` | üye | görsel presign, `image/*` |
-| POST | `/api/users/me/avatar` | üye | `key` bağlar (`newAvatarKey` ile üretilmiş olmalı) |
-| DELETE | `/api/users/me/avatar` | üye | avatarı siler |
+| GET | `/api/reports` | yönetici | `requireAuth` + `isAdmin`; duruma göre süzme |
+| PATCH | `/api/reports/:id` | yönetici | `{status}`: `RESOLVED` / `DISMISSED` |
+| POST | `/api/users/me/avatar/presign` | giriş yapmış | görsel presign, `image/*` |
+| POST | `/api/users/me/avatar` | giriş yapmış | `objectKey` bağlar (`newAvatarKey` ile üretilmiş olmalı) |
+| DELETE | `/api/users/me/avatar` | giriş yapmış | avatarı siler |
 
 Arama Türkçe duyarlıdır: metin kayıt anında `server/src/str.js` → `foldTR` ile
 katlanıp `Project.searchText` içine yazılır, sorgu da aynı katlamayla karşılaştırılır
