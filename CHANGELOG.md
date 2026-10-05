@@ -1,9 +1,13 @@
 # Changelog
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
-## [4.2.0] - 2026-10-05
+## [4.2.1] - 2026-10-05
 
-- Sürüm 4.2.0 olarak derlendi.
+- Düzeltme: **Menü kilidi bölümü gizlemiyordu.** Kütüphane, Arşiv, Başarımlar, Sınıf Modu ve Ayarlar kilitli görünüyordu ama sayfadaki gerçek bölüm (ör. Bileşen Kütüphanesi `<section id="kutuphane">`) **sayfayı aşağı kaydırarak erişilebilir** durumdaydı. Artık kilitle birlikte bölümün içeriği de gizleniyor
+- Düzeltme: Adres çubuğuna elle `#kutuphane` yazan ziyaretçi bölüme kaydırılabiliyordu. Artık giriş yoksa giriş penceresi açılıyor, hedef engelleniyor ve adres temizleniyor. `hashchange` yalnız sonradan değişen hash'lerde çalıştığı için ilk yüklemede de kontrol ediliyor
+- Düzeltme: `scripts/e2e.mjs` mevcut `dist/` derlemesini kullanıyordu, yani testler bunun `API_BASE` ile mi derlendiğine bağlıydı (kilitli menüyle kırılıyordu). Artık test **kendi derlemesini** yapıyor
+- Düzeltme: `scripts/verify-member.mjs` beğeni testi mutlak sayıya bakıyordu; veritabanında beğeni birikince (1 → 0) yanlış alarm veriyordu. Artık tıklamanın **yönünü** ölçüyor, durumu geri alıp testi bırakmadan önce doğruluyor
+- Test: `scripts/verify-member.mjs` 54→55 kontrol
 
 ## [4.2.0] - 2026-10-05
 
