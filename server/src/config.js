@@ -21,13 +21,18 @@ export const config = {
   sessionDays: int(process.env.SESSION_DAYS, 30),
   trustProxy: bool(process.env.TRUST_PROXY, false),
   wallEnabled: bool(process.env.WALL_ENABLED, true),
-  version: "4.2.0"
+  version: "4.4.0"
 };
 
 export const pricing = {
-  // İlk 1000 kişi: tek seferlik $1 ömür boyu üyelik.
-  // Limit dolunca aylık abonelik devreye girer.
-  lifetimeLimit: int(process.env.PRICING_LIFETIME_LIMIT, 1000),
+  // v4.4.0 — İki kademeli lansman kontenjanı:
+  //   1) İlk `freeLimit` (1000) kişi  → ÜCRETSİZ ömür boyu üyelik (ödeme yok)
+  //   2) Sonraki (`freeLimit`…`paidLimit`) kişi → tek seferlik `lifetimeCents` ($1)
+  //   3) `paidLimit` (2000) sonrası     → `monthlyCents` ($1/ay) aylık abonelik
+  // Kontenjan AŞAĞIYA doğru ilerler; doluluğu istemciye `/api/health`
+  // üzerinden `used` olarak veririz ki doluluk barı gösterebilsin.
+  freeLimit: int(process.env.PRICING_FREE_LIMIT, 1000),
+  paidLimit: int(process.env.PRICING_PAID_LIMIT, 2000),
   lifetimeCents: int(process.env.PRICING_LIFETIME_CENTS, 100),
   monthlyCents: int(process.env.PRICING_MONTHLY_CENTS, 100),
   currency: (process.env.PRICING_CURRENCY || "usd").toLowerCase()

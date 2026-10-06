@@ -152,18 +152,28 @@ html[data-theme="light"] .step-num { color: #04231d; }
   padding: 4.5rem 1.25rem 2rem;
   overflow: visible;
 }
+/* Dev kesikli dikdörtgenler çizik gibi duruyordu: ince, teal tonlu ve
+   yumuşak uçlu hâle getirildi — artık arka planda bir "devre" dokusu. */
 .circuit-bg {
   position: absolute;
   inset: -4rem 0 auto;
   height: 600px;
   pointer-events: none;
-  opacity: 0.55;
+  opacity: 0.4;
+}
+.circuit-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(60% 55% at 50% 42%, rgba(0, 209, 178, 0.16), transparent 72%);
 }
 .circuit-bg svg { width: 100%; height: 100%; }
 .circuit-bg path {
   fill: none;
-  stroke: var(--border);
-  stroke-width: 2;
+  stroke: rgba(0, 209, 178, 0.45);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .circuit-bg circle { fill: var(--teal); opacity: 0.6; }
 .trace path {
@@ -191,15 +201,27 @@ html[data-theme="light"] .step-num { color: #04231d; }
 }
 h1 {
   font-family: var(--font-display);
-  font-size: clamp(2rem, 5.2vw, 3.4rem);
+  /* 3 satırlık dev başlık CTA'yı aşağı itip ilk ekranı boğuyordu. */
+  font-size: clamp(1.9rem, 4.4vw, 2.9rem);
   line-height: 1.15;
-  margin: 0 0 1rem;
+  margin: 0 0 0.85rem;
 }
 .grad-text {
-  background: linear-gradient(90deg, var(--teal), var(--orange));
+  /* Pazarlama v4.4.0: başlıktaki degrade sabit durmuyor — yavaşça kayarak
+     ilk bakışta hareket hissi verir (yalnız metin, yerleşim değişmez). */
+  background: linear-gradient(90deg, var(--teal), var(--orange), var(--teal));
+  background-size: 200% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  animation: gradShift 9s ease-in-out infinite;
+}
+@keyframes gradShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .grad-text, .launch-badge, .occupancy-fill { animation: none !important; }
 }
 .hero-sub {
   color: var(--text-dim);
@@ -496,6 +518,9 @@ h1 {
   border: 1px solid var(--border-soft);
   border-radius: 14px;
   padding: 1.1rem 1.25rem 1.1rem 3.4rem;
+  /* Tik kutusu numaranın altında duruyor; kart onu kesecek kadar
+     kısaltmasın diye alt sınır. */
+  min-height: 5.6rem;
 }
 .step-item::before {
   content: counter(step);
@@ -511,6 +536,7 @@ h1 {
   border: 1px solid rgba(0, 209, 178, 0.4);
   border-radius: 50%;
   font: 700 0.85rem var(--font-display);
+  z-index: 1;
 }
 .step-item strong { color: var(--teal); display: block; margin-bottom: 0.2rem; }
 .step-item p { margin: 0; color: var(--text-dim); font-size: 0.95rem; }
@@ -1218,10 +1244,13 @@ pre.code-block .num { color: #7dd3fc; }
 }
 
 /* ────────── Adım Takibi ────────── */
+/* Tik kutusu metnin ÜSTÜNE biniyordu (sol kenar boşluğu 3.4rem, kutu
+   3.55rem'de duruyordu). Artık adım numarasının HEMEN ALTINDA, sol
+   rayda duruyor; metin alanına hiç girmiyor. */
 .step-check {
   position: absolute;
-  left: 3.55rem;
-  top: 1.13rem;
+  left: 1.175rem;
+  top: 2.97rem;
   width: 1.35rem;
   height: 1.35rem;
   accent-color: var(--teal);
@@ -1342,7 +1371,99 @@ pre.code-block .num { color: #7dd3fc; }
 @media (max-width: 900px) {
   .header-inner { flex-wrap: wrap; gap: 0.6rem; padding: 0.7rem 1rem; }
   .header-actions { flex-wrap: wrap; gap: 0.45rem; width: 100%; justify-content: flex-end; }
-  .header-actions .btn { flex: 1 1 auto; min-width: 0; justify-content: center; padding: 0.5rem 0.5rem; }
+  /* Yalnız DoĞRUDAN alt butonlar eşit paylaşıp sarılır; hamburger panelinin
+     (`.header-menu`) içindeki öğeler bu kurala girmemeli. */
+  .header-actions > .btn { flex: 1 1 auto; min-width: 0; justify-content: center; padding: 0.5rem 0.5rem; }
+  .header-actions > .menu-toggle { flex: 0 0 auto; min-width: 40px; padding: 0.5rem; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   v4.4.0 — Başlık: hamburger menü + ziyaretçi görünümü
+   ══════════════════════════════════════════════════════════════ */
+/* Butonlar tek satıra sığmıyordu; menü ayrı bir panele alındı. */
+.header-actions { position: relative; }
+
+.menu-toggle {
+  min-width: 38px;
+  width: 38px;
+  padding: 0;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.menu-toggle[hidden] { display: none; }
+
+.header-menu {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  right: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 13.5rem;
+  padding: 0.55rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.22);
+}
+.header-menu[hidden] { display: none; }
+.header-menu .btn {
+  flex: none;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 40px;
+  padding: 0.5rem 0.7rem;
+}
+.header-menu .count-badge { margin-left: auto; }
+
+/* `hidden` özelliği `display: inline-flex` tarafından eziliyordu. */
+#aiStatus[hidden] { display: none; }
+#authBtn[hidden] { display: none; }
+
+/* ────────── v4.4.0: Lansman doluluk barı ────────── */
+.occupancy { margin-top: 1rem; text-align: left; }
+.occupancy[hidden] { display: none; }
+.occupancy-track {
+  height: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.occupancy-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--teal), var(--accent));
+  box-shadow: 0 0 12px rgba(0, 209, 178, 0.45);
+  transition: width 0.6s ease;
+}
+.occupancy-label {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+html[data-theme="light"] .occupancy-label { color: #4a5568; }
+
+/* ────────── v4.4.0: dar ekranda başlık ──────────
+   375px'te tema/dil/rozet/Duvar bir satıra, Üye Ol + Giriş Yap ikinci
+   satıra oturuyor; böylece başlık 3 satıra (160px) taşmıyor. */
+@media (max-width: 640px) {
+  /* Logo metni satırı ayrı bir satıra itip başlığı 146px'e çıkarıyordu.
+     Dar ekranda yalnız marka işareti kalır (bağlantının aria-label'ı var). */
+  .header-inner { flex-wrap: nowrap; }
+  .logo-text { display: none; }
+  .logo-mark { width: 30px; height: 30px; }
+  .header-actions { width: auto; flex: 1; gap: 0.35rem; }
+  .header-actions > .btn {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.85rem;
+    min-height: 36px;
+  }
+  .ai-status { font-size: 0.72rem; padding: 0.25rem 0.6rem; }
+  /* Üye Ol / Giriş Yap aynı satırı paylaşıp tam genişliği alsın. */
+  #joinBtn, #loginBtn { flex: 1 1 calc(50% - 0.2rem); }
 }
 /* ══════════════════════════════════════════════════════════════
    v4.0.0 — Üyelik, paywall ve topluluk duvarı
@@ -1417,6 +1538,9 @@ pre.code-block .num { color: #7dd3fc; }
   border-radius: var(--radius);
   background: linear-gradient(135deg, rgba(20, 184, 166, 0.10), rgba(99, 102, 241, 0.08));
   text-align: center;
+  /* Fiyat kutusu sayfanın ana aksiyonu: teal ışıma + yumuşak gölge ile
+     arka plandan ayrışır, göz ilk olarak buraya gider. */
+  box-shadow: 0 24px 60px -30px rgba(0, 209, 178, 0.55), 0 0 0 1px rgba(0, 209, 178, 0.06);
 }
 .launch-badge {
   display: inline-block;
@@ -1427,6 +1551,12 @@ pre.code-block .num { color: #7dd3fc; }
   font-size: 0.74rem;
   font-weight: 800;
   letter-spacing: 0.04em;
+  /* Kontenjan rozeti "canlı" hissi versin: dışa doğru yayılan halka. */
+  animation: badgePulse 2.8s ease-out infinite;
+}
+@keyframes badgePulse {
+  0% { box-shadow: 0 0 0 0 rgba(0, 209, 178, 0.45); }
+  70%, 100% { box-shadow: 0 0 0 9px rgba(0, 209, 178, 0); }
 }
 .launch-price-line {
   margin: 0.5rem 0 0.2rem;
@@ -1441,11 +1571,37 @@ pre.code-block .num { color: #7dd3fc; }
   line-height: 1;
   color: var(--teal, #14b8a6);
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 38px rgba(0, 209, 178, 0.35);
 }
 .launch-suffix { font-size: 1.1rem; color: var(--text-dim); font-weight: 600; }
 .launch-note { margin: 0.2rem 0 0.8rem; font-size: 0.9rem; color: var(--text-dim); }
 .launch-actions { display: flex; gap: 0.6rem; justify-content: center; flex-wrap: wrap; }
 .launch-fine { margin: 0.7rem 0 0; font-size: 0.76rem; color: var(--text-dim); opacity: 0.85; }
+
+/* ────────── v4.4.0: hero değer şeridi (yalnız ziyaretçi) ──────────
+   İlk ekranda "ne kazanacağım" sorusunu çiplerle hızlıca yanıtlar. */
+.hero-trust {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 1.1rem 0 0;
+  padding: 0;
+}
+.hero-trust li {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .hero-trust li { white-space: normal; text-align: center; }
+}
 
 /* ────────── v4.2.0: Özellik anlatımı ────────── */
 .landing-features {
@@ -1475,8 +1631,15 @@ pre.code-block .num { color: #7dd3fc; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--card);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
-.feat-ico { font-size: 1.5rem; line-height: 1; }
+.feat-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(0, 209, 178, 0.45);
+  box-shadow: 0 16px 36px -20px rgba(0, 209, 178, 0.55);
+}
+.feat-ico { font-size: 1.5rem; line-height: 1; display: inline-block; transition: transform 0.18s ease; }
+.feat-card:hover .feat-ico { transform: scale(1.14) rotate(-4deg); }
 .feat-card h3 { margin: 0.35rem 0 0.25rem; font-size: 1rem; }
 .feat-card p { margin: 0; font-size: 0.88rem; color: var(--text-dim); }
 .landing-final { margin-top: 1.6rem; text-align: center; }

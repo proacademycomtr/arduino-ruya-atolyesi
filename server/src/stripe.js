@@ -16,30 +16,49 @@ export function getStripe() {
 /**
  * Fiyat ve plan YALNIZCA sunucuda belirlenir; istemciden gelen fiyat yok sayılır.
  *
- * TEK FİYAT: ilk `lifetimeLimit` (1000) kişi için ömür boyu tek seferlik ödeme.
- * Sınır dolduğunda üyelik SATIŞI KAPANIR — aylık plana geçilmez: kullanıcıya
- * yanlış beklenti verip sonra geri çekmektense, kapıyı açıkça kapatıyoruz.
- * Kampanya bitince `SOLDOUT` döner ve rota 409 döner.
+ * ÜÇ KADEME (v4.4.0):
+ *   1. `freeLimit` kişiye kadar   → ÜCRETSİZ ömür boyu (`free: true`, fiyat 0)
+ *   2. `paidLimit`'e kadar       → tek seferlik `lifetimeCents` ($1) ömür boyu
+ *   3. sonrası                  → `monthlyCents` ($1/ay) aylık abonelik
+ *
+ * `amountCents: 0` olan kademede Stripe'a hiç uğranmaz (bkz. billing.js).
  */
 export function planFor(lifetimeMemberCount, opts = pricing) {
-  if (lifetimeMemberCount < opts.lifetimeLimit) {
+  const used = lifetimeMemberCount;
+  const base = { currency: opts.currency, soldOut: false, used };
+
+  if (used < opts.freeLimit) {
     return {
+      ...base,
+      tier: "FREE",
       plan: "LIFETIME",
       mode: "payment",
+      free: true,
+      amountCents: 0,
+      priceId: null,
+      remaining: opts.freeLimit - used
+    };
+  }
+  if (used < opts.paidLimit) {
+    return {
+      ...base,
+      tier: "LIFETIME",
+      plan: "LIFETIME",
+      mode: "payment",
+      free: false,
       amountCents: opts.lifetimeCents,
       priceId: stripeConfig.priceLifetime,
-      currency: opts.currency,
-      soldOut: false,
-      remaining: opts.lifetimeLimit - lifetimeMemberCount
+      remaining: opts.paidLimit - used
     };
   }
   return {
-    plan: "LIFETIME",
-    mode: "payment",
-    amountCents: opts.lifetimeCents,
-    priceId: stripeConfig.priceLifetime,
-    currency: opts.currency,
-    soldOut: true,
+    ...base,
+    tier: "MONTHLY",
+    plan: "MONTHLY",
+    mode: "subscription",
+    free: false,
+    amountCents: opts.monthlyCents,
+    priceId: stripeConfig.priceMonthly,
     remaining: 0
   };
 }

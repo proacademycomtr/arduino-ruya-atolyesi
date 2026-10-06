@@ -19,48 +19,73 @@ async function login(email) {
   return res.body.token;
 }
 
-const opts = { lifetimeLimit: 1000, lifetimeCents: 100, monthlyCents: 300, currency: "usd" };
+const opts = { freeLimit: 1000, paidLimit: 2000, lifetimeCents: 100, monthlyCents: 300, currency: "usd" };
 
-test("fiyat kuralı: 1000 kişiden önce ömür boyu tek seferlik ödeme", () => {
+test("fiyat kuralı: ilk 1000 kişi ÜCRETSİZ ömür boyu (Stripe'a uğramaz)", () => {
   const a = planFor(0, opts);
+  assert.equal(a.tier, "FREE");
   assert.equal(a.plan, "LIFETIME");
   assert.equal(a.mode, "payment");
-  assert.equal(a.amountCents, 100);
+  assert.equal(a.free, true);
+  assert.equal(a.amountCents, 0);
+  assert.equal(a.priceId, null, "ücretsiz kademede Stripe fiyatı gerekmez");
   assert.equal(a.currency, "usd");
+  assert.equal(a.remaining, 1000);
 });
 
-test("fiyat kuralı: TEK FİYAT — sınır dolunca aylık plan yok, satış kapanır", () => {
+test("fiyat kuralı: 1001–2000 arası tek seferlik $1 ömür boyu", () => {
   const b = planFor(1000, opts);
-  assert.equal(b.mode, "payment", "abonelik moduna geçilmemeli");
-  assert.equal(b.amountCents, opts.lifetimeCents, "fiyat aynı kalır");
-  assert.equal(b.soldOut, true, "sınır dolunca kapı kapanmalı");
-  assert.equal(b.remaining, 0);
+  assert.equal(b.tier, "LIFETIME");
+  assert.equal(b.mode, "payment");
+  assert.equal(b.free, false);
+  assert.equal(b.amountCents, 100);
+  assert.equal(b.remaining, 1000, "1000 kişi ücretsiz doldu, 1000 kişi $1 kaldı");
+  assert.equal(planFor(1999, opts).remaining, 1, "son kişiye 1 kalmalı");
 });
 
-test("fiyat kuralı: kalan kontenjan doğru hesaplanır", () => {
-  assert.equal(planFor(0, opts).remaining, opts.lifetimeLimit);
-  assert.equal(planFor(999, opts).remaining, 1, "son kişiye 1 kalmalı");
-  assert.equal(planFor(999, opts).soldOut, false);
+test("fiyat kuralı: 2000 sonrası AYLIK aboneliğe geçilir, satış kapanmaz", () => {
+  const c = planFor(2000, opts);
+  assert.equal(c.tier, "MONTHLY");
+  assert.equal(c.mode, "subscription");
+  assert.equal(c.amountCents, 300, "aylık fiyat uygulanır");
+  assert.equal(c.plan, "MONTHLY");
+  assert.equal(c.soldOut, false, "kapı kapanmaz — aylık abonelik açıktır");
+  assert.equal(c.remaining, 0);
+  assert.equal(planFor(5000, opts).plan, "MONTHLY");
 });
 
-test("fiyat kuralı: her durumda LIFETIME döner (tek plan)", () => {
-  for (const n of [0, 1, 500, 999, 1000, 5000]) {
+test("fiyat kuralı: kademe sınırlarında kırılma noktası doğru", () => {
+  assert.equal(planFor(999, opts).tier, "FREE", "999. kişi hâlâ ücretsiz");
+  assert.equal(planFor(1000, opts).tier, "LIFETIME", "1000. kişi ücretli kademeye düşer");
+  assert.equal(planFor(1999, opts).tier, "LIFETIME");
+  assert.equal(planFor(2000, opts).tier, "MONTHLY");
+  // Ömür boyu kademelerde plan LIFETIME kalmalı.
+  for (const n of [0, 1, 500, 999, 1000, 1999]) {
     assert.equal(planFor(n, opts).plan, "LIFETIME");
-    assert.equal(planFor(n, opts).mode, "payment");
   }
 });
 
-test("fiyat kuralı: sınır altındaki son üye ömür boyu kalır", () => {
-  const c = planFor(999, opts);
-  assert.equal(c.plan, "LIFETIME");
-});
-
-test("Stripe yapılandırılmamışken checkout 503 döner (sessiz sahte ödeme yok)", async () => {
+test("Ücretsiz kontenjan açıkken checkout Stripe'sız üyelik verir", async () => {
+  // Ücretsiz kademede ödeme adımı YOKTUR; Stripe anahtarı olmasa da
+  // üyelik verilir (aksi hâlde lansman kapalı sunucuda kullanılamazdı).
   const user = await makeUser();
   const token = await login(user.email);
   const res = await request(app).post("/api/billing/checkout").set("Authorization", `Bearer ${token}`);
-  assert.equal(res.status, 503);
-  assert.equal(res.body.error, "stripe_not_configured");
+  assert.equal(res.status, 200);
+  assert.equal(res.body.free, true);
+  assert.equal(res.body.amountCents, 0);
+  const uye = await prisma.user.findUnique({ where: { id: user.id }, include: { membership: true } });
+  assert.equal(uye.membership.plan, "LIFETIME");
+  assert.equal(uye.membership.priceCents, 0, "ücretsiz üyelik 0 $ olarak kaydedilmeli");
+});
+
+test("Ücretsiz kontenjan varken ikinci kez checkout 409 döner", async () => {
+  const user = await makeUser();
+  const token = await login(user.email);
+  await request(app).post("/api/billing/checkout").set("Authorization", `Bearer ${token}`);
+  const ikinci = await request(app).post("/api/billing/checkout").set("Authorization", `Bearer ${token}`);
+  assert.equal(ikinci.status, 409);
+  assert.equal(ikinci.body.error, "already_member");
 });
 
 test("checkout oturumu her zaman sunucudaki fiyatı taşır, istemci fiyatı yok sayılır", async () => {

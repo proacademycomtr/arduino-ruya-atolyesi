@@ -6,7 +6,8 @@ import rateLimit from "express-rate-limit";
 import { config, missingRequiredEnv, pricing } from "./config.js";
 import { prisma } from "./db.js";
 import { attachUser } from "./auth.js";
-import { stripeConfigured } from "./stripe.js";
+import { stripeConfigured, planFor } from "./stripe.js";
+import { countLifetimeSeats } from "./seats.js";
 import { ensureBucket, storageConfigured } from "./storage.js";
 
 import authRoutes from "./routes/auth.js";
@@ -55,12 +56,16 @@ export function createApp() {
 
   app.get("/api/health", async (_req, res) => {
     let db = false;
+    let used = 0;
     try {
       await prisma.$queryRaw`SELECT 1`;
       db = true;
+      // v4.4.0: doluluk barı için lansman kontenjanı sayısı.
+      used = await countLifetimeSeats();
     } catch {
       db = false;
     }
+    const decision = planFor(used);
     res.status(db ? 200 : 503).json({
       ok: db,
       version: config.version,
@@ -69,8 +74,14 @@ export function createApp() {
       storage: storageConfigured(),
       wallEnabled: config.wallEnabled,
       pricing: {
+        // Kademe sınırları + anlık doluluk (doluluk barı bunu kullanır).
+        freeLimit: pricing.freeLimit,
+        paidLimit: pricing.paidLimit,
+        total: pricing.paidLimit,
+        used,
+        tier: decision.tier,
+        remaining: decision.remaining,
         lifetimeCents: pricing.lifetimeCents,
-        lifetimeLimit: pricing.lifetimeLimit,
         monthlyCents: pricing.monthlyCents,
         currency: pricing.currency
       }

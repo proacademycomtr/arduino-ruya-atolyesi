@@ -6,6 +6,16 @@
 import { chromium } from "playwright";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
+import { execFileSync } from "node:child_process";
+
+/* Denetim sınıf/arşiv panellerini de ölçmeli. Paneller API_BASE'li derlemede
+   ziyaretçi için KAPALI (menü yalnız giriş yapan kullanıcıda), bu yüzden denetim
+   da DEMO derlemesini kendi üretir — `scripts/e2e.mjs` ile aynı yaklaşım. */
+try {
+  execFileSync("python3", ["build.py"], { cwd: process.cwd(), stdio: "pipe" });
+} catch (e) {
+  console.warn("UYARI: build.py çalışmadı, mevcut dist kullanılıyor:", e.message);
+}
 
 const target = pathToFileURL(resolve(process.cwd(), "dist/index.html")).href;
 const VIEWPORTS = [
@@ -80,6 +90,14 @@ for (const vp of VIEWPORTS) {
 
   await measure("ana sayfa");
 
+  // v4.4.0: Menü görünürlüğü girişe bağlı (ziyaretçide hamburger gizli).
+  // Denetim panellerin DÜZENİNİ ölçtüğü için önce görünür olma izni ver.
+  const menuToggle = await page.$("#menuToggle");
+  if (menuToggle) {
+    await page.evaluate(() => { const t = document.getElementById("menuToggle"); if (t) t.hidden = false; });
+    await page.click("#menuToggle");
+    await page.waitForSelector("#archiveBtn:visible", { timeout: 5000 }).catch(() => {});
+  }
   await page.click("#classBtn");
   await page.waitForSelector("#subList .archive-item");
   await page.waitForTimeout(400);
@@ -87,6 +105,11 @@ for (const vp of VIEWPORTS) {
 
   await page.keyboard.press("Escape");
   await page.waitForTimeout(400);
+  if (menuToggle) {
+    await page.evaluate(() => { const t = document.getElementById("menuToggle"); if (t) t.hidden = false; });
+    await page.click("#menuToggle");
+    await page.waitForSelector("#archiveBtn:visible", { timeout: 5000 }).catch(() => {});
+  }
   await page.click("#archiveBtn");
   await page.waitForSelector("#archGrid .archive-item");
   await page.waitForTimeout(300);

@@ -14,7 +14,10 @@
  */
 import { chromium } from "playwright";
 
-const SITE = process.env.SITE || "http://127.0.0.1:8000/index.html";
+// Origin beyaz listesi (server/.env → APP_ORIGIN) `http://localhost:8000` içerir;
+// `127.0.0.1` GİRMEZ — health isteği CORS'a takılır ve tüm "sunucuya ulaşıldı"
+// kontrolleri sahte FAIL verir. Varsayılan bu yüzden `localhost`.
+const SITE = process.env.SITE || "http://localhost:8000/";
 // dist/config.js içindeki adresle aynı olmalı; sayfa içinden API'ye sormak için.
 const API_BASE = process.env.API_BASE || "http://127.0.0.1:4021";
 const email = `demo${Date.now().toString(36)}@example.com`;
@@ -23,6 +26,24 @@ const password = "deneme12345";
 const uye = {
   email: process.env.MEMBER_EMAIL || "deniz@example.com",
   password: process.env.MEMBER_PASSWORD || "demo1234"
+};
+// v4.4.0: ÜCRETSİZ kontenjan açıkken YENİ KAYIT anında üye olur. Bu yüzden
+// "üye olmayan" davranışları (kilitli prompt, paywall, yorum yok) artık yeni
+// kayıtla DEĞİL, seed'deki üye olmayan misafir hesabıyla denenir.
+const misafir = {
+  email: process.env.GUEST_EMAIL || "merhaba@example.com",
+  password: process.env.GUEST_PASSWORD || "demo1234"
+};
+
+/** Ziyaretçi/üye olmayan hesapla giriş yapar (modalı açar, login sekmesini seçer). */
+const loginAs = async (page, hesap) => {
+  await page.locator("#loginBtn").click();
+  await page.locator('[data-auth-tab="login"]').click();
+  await page.locator("#authEmail").fill(hesap.email);
+  await page.locator("#authPassword").fill(hesap.password);
+  await page.locator("#authForm button[type=submit]").click();
+  await page.waitForFunction(() => document.getElementById("authModal").hidden === true, { timeout: 10000 });
+  await page.waitForTimeout(500);
 };
 
 let browser;
@@ -59,19 +80,36 @@ try {
     const b = document.getElementById("authBtn");
     return b && b.dataset.state;
   }, { timeout: 10000 }).catch(() => {});
-  check("Başlıkta 🌍 Duvar düğmesi görünür", await wallBtn.isVisible());
+  // v4.4.0: ziyaretçi başlığında yalnız Demo Modu rozeti + Giriş Yap + Kaydol
+  // olur; Duvar ve hamburger menü girişten önce görünmez.
+  check("Ziyaretçi 🌍 Duvar'ı başlıkta görmez", await wallBtn.isHidden());
 
   // 1a) v4.2.0 — ziyaretçi (giriş yokken) durumu
   const joinBtn = page.locator("#joinBtn");
   const loginBtn = page.locator("#loginBtn");
   check("Ziyaretçiye 💎 Üye Ol düğmesi görünür", await joinBtn.isVisible());
   check("Ziyaretçiye 👤 Giriş Yap düğmesi görünür", await loginBtn.isVisible());
-  check("Üye Ol düğmesinde $1 yazıyor",
-    ((await joinBtn.textContent()) || "").includes("$1"),
+  // v4.4.0: ücretsiz kontenjan açıkken düğme kademeye göre "Ücretsiz" der.
+  check("Üye Ol düğmesi ücretsiz kademeyi yazıyor",
+    ((await joinBtn.textContent()) || "").includes("Ücretsiz"),
     (await joinBtn.textContent() || "").trim());
-  check("Lansman fiyatı $1 gösteriliyor",
-    ((await page.locator("#launchAmount").textContent()) || "").trim() === "$1",
+  check("Lansman fiyatı ücretsiz kademede 'Ücretsiz'",
+    ((await page.locator("#launchAmount").textContent()) || "").trim() === "Ücretsiz",
     (await page.locator("#launchAmount").textContent() || "").trim());
+  // Doluluk barı: kullanıcının istediği "barlı sayaç" — gerçek sayı göstermeli.
+  const barDurum = await page.evaluate(() => {
+    const box = document.getElementById("occupancyBox");
+    const fill = document.getElementById("occupancyFill");
+    const label = document.getElementById("occupancyLabel");
+    if (!box || !fill || !label) return null;
+    return { hidden: box.hidden, width: fill.style.width, label: label.textContent };
+  });
+  check("Doluluk barı görünür",
+    !!barDurum && !barDurum.hidden && /%$/.test(barDurum.width || ""),
+    barDurum ? `${barDurum.width} · ${barDurum.label}` : "öğe yok");
+  check("Doluluk sayacı gerçek kontenjanı yazıyor",
+    !!barDurum && /\d+\/\d+/.test(barDurum.label || ""),
+    barDurum ? barDurum.label : "");
   check("Lansman CTA bölümü görünür", await page.locator("#landingCta").isVisible());
   check("Özellik anlatımı görünür", await page.locator("#landingFeatures").isVisible());
   const ozellikSayisi = await page.locator(".feat-card").count();
@@ -88,11 +126,9 @@ try {
   });
   check("Demo Modu rozeti pointer-events: none", rozetTikanabilir === "none", rozetTikanabilir);
 
-  // 1c) Kilitli menüler: görünür ama kilitli işaretli.
-  // Kilitler `renderMenuLocks` ile çiziliyor, o da API'ye ulaşıldıktan SONRA
-  // (bootstrapApi) çalışıyor. Daha önce kontrol sayfa yüklenir yüklenmez
-  // soruyordu ve ağ yavaşsa kilitler henüz çizilmemiş olduğu için yanlış
-  // alarm veriyordu — aslında bir zamanlama yarışıydı, ürün hatası değil.
+  // 1c) v4.4.0: ZİYARETÇİ MENÜYÜ GÖRMEZ. Başlıkta yalnız Demo Modu rozeti,
+  // Giriş Yap ve Kaydol kalır; Kütüphane/Arşiv/Başarımlar/Sınıf/Ayarlar
+  // hamburger panelinin içinde ve panel ziyaretçide hiç açılmaz.
   await page.waitForFunction(
     () => ["libraryBtn", "archiveBtn", "badgesBtn", "classBtn"]
       .every((id) => document.getElementById(id)?.classList.contains("is-locked")),
@@ -103,22 +139,26 @@ try {
   check("Kilitli menüler işaretlendi",
     ["libraryBtn", "archiveBtn", "badgesBtn", "classBtn"].every((id) => kilitli.includes(id)),
     kilitli.join(",") || "yok");
-
-  // 1d) Kilitli menüye tıklayınca içeriye GİRİLMEMELİ.
-  // Düğme `disabled` DEĞİL (aksi hâlde giriş penceresi hiç açılamaz), bu
-  // yüzden gerçek tıklamayı `force` ile gönderiyoruz — kullanıcının
-  // gördüğü davranışın ta kendisi bu.
-  await page.locator("#archiveBtn").click({ force: true });
-  await page.locator("#authModal:not([hidden])").waitFor({ timeout: 10000 }).catch(() => {});
-  check("Kilitli menü giriş penceresini açtı",
-    await page.locator("#authModal:not([hidden])").isVisible());
-  check("Kilitli menü içeriği AÇILMADI",
-    await page.locator("#archiveModal").isHidden());
+  const menuGizli = await page.evaluate(() => ({
+    toggleHidden: document.getElementById("menuToggle")?.hidden !== false,
+    panelHidden: document.getElementById("headerMenu")?.hidden !== false,
+    arsivGorunur: (() => {
+      const el = document.getElementById("archiveBtn");
+      if (!el || !el.getClientRects().length) return false;
+      return true;
+    })(),
+  }));
+  check("Ziyaretçi hamburger menüyü görmedi",
+    menuGizli.toggleHidden && menuGizli.panelHidden && !menuGizli.arsivGorunur,
+    `toggle=${menuGizli.toggleHidden} panel=${menuGizli.panelHidden} arşiv=${menuGizli.arsivGorunur}`);
+  check("Ziyaretçi Demo Modu rozeti görüyor", await aiStatus.isVisible());
+  // 1d) Menü gizlendi ama İÇERİK kilidi sürmeli: doğrudan bölüme
+  // gidilemiyor olmalı. (`#kutuphane` renderMenuLocks ile gizlenir.)
+  const icerikGizli = await page.locator("#kutuphane").isHidden();
+  check("Kilitli bölümün içeriği gizli", icerikGizli);
   const adresKaymadi = await page.evaluate(() =>
     !location.hash.includes("kutuphane") && !location.hash.includes("arsiv"));
   check("Kilitli menü sayfayı kaydırmadı", adresKaymadi, await page.evaluate(() => location.hash));
-  await page.locator("#closeAuth").click({ timeout: 10000 }).catch(() => {});
-  await page.waitForTimeout(400);
 
   // API'ye ulaşıldı mı? (health yoklaması)
   await page.waitForFunction(() => {
@@ -127,6 +167,29 @@ try {
   }, { timeout: 8000 }).catch(() => {});
   const state = await authBtn.getAttribute("data-state");
   check("API'ye ulaşıldı (health)", state !== "offline", `data-state=${state}`);
+
+  // 1e) ZİYARETÇİ başlığı temiz olmalı: Duvar yok, hamburger menü yok ve
+  // Üye Ol / Giriş Yap TIKLANABİLİR olmalı (disabled değil).
+  const ziyaretciBasi = await page.evaluate(() => ({
+    duvar: document.getElementById("wallBtn")?.hidden !== false,
+    hamb: document.getElementById("menuToggle")?.hidden !== false,
+    panel: document.getElementById("headerMenu")?.hidden !== false,
+    joinPasif: document.getElementById("joinBtn")?.disabled === true,
+    loginPasif: document.getElementById("loginBtn")?.disabled === true,
+    kuthane: document.getElementById("kutuphane")?.hidden !== false,
+    asilMetin: (document.getElementById("launchNote")?.textContent || "").trim(),
+    inceMetin: (document.getElementById("launchFine")?.textContent || "").trim()
+  }));
+  check("Ziyaretçi Duvar'ı ve hamburger menüyü görmez",
+    ziyaretciBasi.duvar && ziyaretciBasi.hamb && ziyaretciBasi.panel,
+    `duvar=${ziyaretciBasi.duvar} hamburger=${ziyaretciBasi.hamb} panel=${ziyaretciBasi.panel}`);
+  check("Üye Ol / Giriş Yap düğmeleri aktif",
+    !ziyaretciBasi.joinPasif && !ziyaretciBasi.loginPasif,
+    `joinPasif=${ziyaretciBasi.joinPasif} loginPasif=${ziyaretciBasi.loginPasif}`);
+  check("Bileşen kütüphanesi giriş öncesi gizli", ziyaretciBasi.kuthane);
+  check("İstenmeyen açıklama metinleri kaldırıldı",
+    ziyaretciBasi.asilMetin === "" && ziyaretciBasi.inceMetin === "",
+    `note="${ziyaretciBasi.asilMetin}" fine="${ziyaretciBasi.inceMetin}"`);
 
   // 2) Kayıt — ziyaretçi CTA'sından değil, giriş düğmesinden
   await loginBtn.click();
@@ -143,8 +206,11 @@ try {
   // 3) Düğme durumu + kalan hak
   const label = (await authBtn.textContent()) || "";
   check("Düğme kullanıcı adını gösteriyor", label.includes("Tarayıcı Denemesi"), label);
+  // v4.4.0: Ücretsiz kontenjan açıkken kayıt OLUR OLMAZ üye olunur.
+  const stateKayit = await authBtn.getAttribute("data-state");
+  check("Kayıt olur olmaz ücretsiz üye oldu", stateKayit === "member", `data-state=${stateKayit}`);
   const title = await authBtn.getAttribute("title");
-  check("Kalan ücretsiz hak gösteriliyor", /1/.test(title || ""), title);
+  check("Üyeye sınırsız hak bildiriliyor", /sınırsız/.test(title || ""), title);
 
   // 3b) Giriş sonrası: landing gizlenmeli, menü kilitleri açılmalı
   const landingGizli = await page.locator("#landingCta").isHidden();
@@ -154,7 +220,22 @@ try {
   check("Giriş sonrası menü kilitleri açıldı", uzereKalan === 0, `${uzereKalan} kilitli`);
   check("Giriş sonrası Üye Ol düğmesi gizlendi", await page.locator("#joinBtn").isHidden());
 
-  // 4) Duvar — üye DEĞİL, prompt'lar kilitli olmalı
+  // 3c) v4.4.0: giriş yapınca hamburger menü belirir, Demo Modu rozeti gizlenir.
+  const girisSonrasiMenu = await page.evaluate(() => ({
+    toggleHidden: document.getElementById("menuToggle")?.hidden !== false,
+    badgeHidden: document.getElementById("aiStatus")?.hidden !== false,
+  }));
+  check("Giriş sonrası menü düğmesi geldi", !girisSonrasiMenu.toggleHidden,
+    `toggle gizli=${girisSonrasiMenu.toggleHidden}`);
+  check("Giriş sonrası Demo Modu rozeti gizlendi", girisSonrasiMenu.badgeHidden,
+    `rozet gizli=${girisSonrasiMenu.badgeHidden}`);
+  await page.locator("#menuToggle").click();
+  await page.locator("#headerMenu:not([hidden])").waitFor({ timeout: 5000 }).catch(() => {});
+  check("Menü paneli açıldı", await page.locator("#archiveBtn").isVisible());
+  await page.locator("#menuToggle").click();   // panel kapansın, sonraki adımları maskelemesin
+  await page.waitForTimeout(300);
+
+  // 4) Duvar — bu kullanıcı ÜYE (ücretsiz kontenjan) → prompt açık olmalı.
   await wallBtn.click();
   await page.locator("#wallModal:not([hidden])").waitFor({ timeout: 5000 });
   await page.waitForTimeout(1200);
@@ -162,7 +243,7 @@ try {
   const shown = await page.locator(".wall-prompt").count();
   check("Duvar açıldı ve kartlar yüklendi", (await page.locator(".wall-card").count()) > 0,
     `${await page.locator(".wall-card").count()} kart`);
-  check("Üye olmayan için prompt'lar kilitli", locked > 0 && shown === 0, `kilitli=${locked} açık=${shown}`);
+  check("Üye prompt'ları görebiliyor", shown > 0 && locked === 0, `kilitli=${locked} açık=${shown}`);
 
   await page.locator("#closeWall").click();
 
@@ -189,6 +270,13 @@ try {
   await page.locator("#closeProfile").click();
 
   // 5) Hak bitti → gerçek AI çağrısı paywall'a düşmeli
+  // ÜCRETSİZ KONTENJAN nedeniyle yeni kayıtlar artık üye ve üye sınırsız
+  // hakkı olduğundan paywall açılmaz. Kapı ancak ÜYE OLMAYAN hesapta
+  // görülebildiği için seed'deki misafir hesabına geçiyoruz.
+  await authBtn.click();
+  await page.locator("#authLogout").click();
+  await page.waitForTimeout(700);
+  await loginAs(page, misafir);
   // (Anahtar olmadan kapı devreye girmez; bu yüzden ayarı zorla yazıyoruz.)
   await page.evaluate(() => {
     localStorage.setItem("arduinoDreamLab.settings.v1", JSON.stringify({
@@ -199,10 +287,17 @@ try {
   await page.waitForTimeout(1500);
   await page.locator("#ideaInput").fill("Test için basit bir LED yanıp söner projesi");
   await page.locator("#generateBtn").click();
-  // 1. hak: AI'ya gider (anahtar sahte olduğu için hata → demo şablona düşer)
+  // 1. hak: AI'ya gider (anahtar sahte olduğu için hata → demo şablona düşer).
+  // Hak zaten 0 olabilir (seed'deki misafir hesabı bir önceki koşumda tüketilmiş
+  // olabilir); o zaman kapı İLK tıklamada açılır ve ikinci tıklama modal
+  // yüzünden zaman aşımına düşer. Bu yüzden ikinci tıklama koşullu.
   await page.waitForTimeout(2500);
-  await page.locator("#ideaInput").fill("Test için basit bir LED yanıp söner projesi");
-  await page.locator("#generateBtn").click();
+  const ilkTiktaAcildi = await page.locator("#paywallModal:not([hidden])")
+    .isVisible().catch(() => false);
+  if (!ilkTiktaAcildi) {
+    await page.locator("#ideaInput").fill("Test için basit bir LED yanıp söner projesi");
+    await page.locator("#generateBtn").click();
+  }
   await page.locator("#paywallModal:not([hidden])").waitFor({ timeout: 10000 });
   check("Ücretsiz hak bitince paywall açıldı", true);
   const priceText = (await page.locator(".paywall-price").textContent()) || "";
@@ -223,16 +318,19 @@ try {
     document.querySelectorAll(".header-actions .is-locked").length);
   check("Çıkışta menü kilitleri geri geldi", cikanKilit > 0, `${cikanKilit} kilitli`);
 
-  // 7) Üye olmayan başka bir profili aç ve takip et/bırak
-  await loginBtn.click();
-  await page.locator('[data-auth-tab="register"]').click();
-  await page.locator("#authName").fill("Takipçi Deneme");
-  await page.locator("#authEmail").fill(email.replace("@", "+t@"));
-  await page.locator("#authPassword").fill(password);
-  await page.locator("#authForm button[type=submit]").click();
-  await page.waitForFunction(() => document.getElementById("authModal").hidden === true, { timeout: 10000 });
+  // 7) Üye olmayan kullanıcı bir profili açıp takip eder.
+  // Yeni kayıt ÜYE yaptığı için (v4.4.0) üye-olmayan akışı misafir
+  // hesabıyla denenir.
+  await loginAs(page, misafir);
+  // Duvar başlıkta yalnız giriş yapan kullanıcıda görünür (v4.4.0);
+  // üye OLMAYAN hesapla açıp prompt'ların kilitli olduğunu burada doğruluyoruz.
+  check("Giriş sonrası 🌍 Duvar düğmesi göründü", await wallBtn.isVisible());
   await wallBtn.click();
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(1400);
+  const zKilit = await page.locator(".wall-locked").count();
+  const zAcik = await page.locator(".wall-prompt").count();
+  check("Üye olmayan duvarda prompt'ları göremiyor", zKilit > 0 && zAcik === 0,
+    `kilitli=${zKilit} açık=${zAcik}`);
   await page.locator(".wall-author").first().click();
   await page.locator("#followToggle").waitFor({ state: "visible", timeout: 6000 });
   await page.locator("#followToggle").click();

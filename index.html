@@ -37,14 +37,18 @@
           <span class="status-label">Demo Modu</span>
         </div>
         <button class="btn btn-ghost" id="wallBtn" type="button" title="Topluluk duvarı">🌍 Duvar</button>
-        <button class="btn btn-primary" id="joinBtn" type="button" title="İlk 1000 kişiye ömür boyu $1">💎 Üye Ol — $1</button>
+        <button class="btn btn-primary" id="joinBtn" type="button" title="İlk 1000 kişi ücretsiz, sonraki 1000 kişi $1">💎 Üye Ol</button>
         <button class="btn btn-ghost" id="loginBtn" type="button" title="Giriş yap">👤 Giriş Yap</button>
         <button class="btn btn-ghost" id="authBtn" type="button" title="Giriş yap / Üye ol">👤 Giriş</button>
-        <a class="btn btn-ghost" id="libraryBtn" href="#kutuphane">📚 Kütüphane</a>
-        <button class="btn btn-ghost" id="archiveBtn" type="button">🗂️ Arşiv<span class="count-badge" id="archiveCount">0</span></button>
-        <button class="btn btn-ghost" id="badgesBtn" type="button" title="Sertifikalar ve geri bildirimler">🏅 Başarımlar<span class="count-badge" id="badgesCount">0</span></button>
-        <button class="btn btn-ghost" id="classBtn" type="button" title="Öğrenci ilerlemesini takip et">🏫 Sınıf Modu</button>
-        <button class="btn btn-ghost" id="openSettings" type="button">⚙️ Ayarlar</button>
+        <button class="btn btn-ghost menu-toggle" id="menuToggle" type="button"
+                aria-label="Menüyü aç" title="Menü" aria-expanded="false" aria-controls="headerMenu" hidden>☰</button>
+        <nav class="header-menu" id="headerMenu" aria-label="Ana menü" hidden>
+          <a class="btn btn-ghost" id="libraryBtn" href="#kutuphane">📚 Kütüphane</a>
+          <button class="btn btn-ghost" id="archiveBtn" type="button">🗂️ Arşiv<span class="count-badge" id="archiveCount">0</span></button>
+          <button class="btn btn-ghost" id="badgesBtn" type="button" title="Sertifikalar ve geri bildirimler">🏅 Başarımlar<span class="count-badge" id="badgesCount">0</span></button>
+          <button class="btn btn-ghost" id="classBtn" type="button" title="Öğrenci ilerlemesini takip et">🏫 Sınıf Modu</button>
+          <button class="btn btn-ghost" id="openSettings" type="button">⚙️ Ayarlar</button>
+        </nav>
       </div>
     </div>
   </header>
@@ -87,24 +91,33 @@
              açılır. Fiyat sunucudan okunur, burada varsayılan metindir. -->
         <div class="landing-cta" id="landingCta" hidden>
           <div class="launch-price">
-            <span class="launch-badge">🚀 İLK 1000 KİŞİYE ÖZEL</span>
+            <span class="launch-badge" id="launchBadge">🚀 İLK 1000 KİŞİYE ÜCRETSİZ</span>
             <p class="launch-price-line">
-              <span class="launch-amount" id="launchAmount">$1</span>
-              <span class="launch-suffix">ömür boyu</span>
+              <span class="launch-amount" id="launchAmount">Ücretsiz</span>
+              <span class="launch-suffix" id="launchSuffix">ömür boyu</span>
             </p>
-            <p class="launch-note" id="launchNote">
-              Tek seferlik ödeme. Abonelik yok, sürpriz fatura yok.
-              1000 kişi dolunca fiyat değişir.
-            </p>
+            <!-- Doluluk barı: kontenjanı gösterir, teşvik eder. -->
+            <div class="occupancy" id="occupancyBox" role="progressbar"
+                 aria-label="Kontenjan doluluğu" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+              <div class="occupancy-track"><div class="occupancy-fill" id="occupancyFill" style="width:0%"></div></div>
+              <p class="occupancy-label" id="occupancyLabel"></p>
+            </div>
           </div>
           <div class="launch-actions">
             <button class="btn btn-primary btn-join-hero" id="joinBtnHero" type="button">
-              💎 Hemen $1 ile Ömür Boyu Üye Ol
+              🎁 Ücretsiz Üye Ol
             </button>
             <button class="btn btn-ghost" id="loginBtnHero" type="button">👤 Giriş Yap</button>
           </div>
-          <p class="launch-fine" id="launchFine">Kredi kartı bilgisi uygulamada tutulmaz — ödeme Stripe üzerinden güvenli alınır.</p>
         </div>
+
+        <!-- Ziyaretçiye özel değer şeridi: ilk ekranda ne kazandığını hızlıca özetler. -->
+        <ul class="hero-trust" id="heroTrust" hidden>
+          <li>🧩 Wokwi taslağı + .zip</li>
+          <li>📄 PDF sertifika</li>
+          <li>🎙️ Sesli rehber</li>
+          <li>🏫 Sınıf modu</li>
+        </ul>
       </div>
 
       <!-- ────────── ÖZELLİK ANLATIMI (sadece ziyaretçi) ────────── -->
@@ -159,13 +172,13 @@
         </div>
 
         <div class="landing-final">
-          <p class="landing-final-text">
-            İlk 1000 kişi için <strong>$1</strong>, sonrasında aylık. Bugün katıl, fiyat değişmeden yerini al.
+          <p class="landing-final-text" id="landingFinalText">
+            İlk 1000 kişi <strong>ücretsiz</strong>, sonraki 1000 kişi <strong>$1</strong> ömür boyu.
+            Bugün katıl, kontenjan dolmadan yerini al.
           </p>
           <button class="btn btn-primary btn-join-final" id="joinBtnFinal" type="button">
-            💎 $1 ile Üye Ol
+            🎁 Ücretsiz Üye Ol
           </button>
-          <p class="launch-fine">Ödeme Stripe üzerinden alınır. Kart bilgisi uygulamada saklanmaz.</p>
         </div>
       </section>
 

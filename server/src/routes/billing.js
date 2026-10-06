@@ -2,6 +2,7 @@ import express from "express";
 import { prisma } from "../db.js";
 import { isMember, requireAuth } from "../auth.js";
 import { constructEvent, getStripe, planFor, stripeConfigured } from "../stripe.js";
+import { countLifetimeSeats, grantFreeSeat } from "../seats.js";
 import { config, pricing } from "../config.js";
 
 const router = express.Router();
@@ -18,9 +19,7 @@ export function safeReturnUrl(raw) {
   }
 }
 
-async function countLifetimeMembers() {
-  return prisma.membership.count({ where: { plan: "LIFETIME", status: "ACTIVE" } });
-}
+// Kontenjan sayımı `seats.js`te toplandı (kayıt akışıyla paylaşılır).
 
 /**
  * Ödeme başarısını üyelik olarak işler. `providerRef` benzersiz olduğu için
@@ -88,16 +87,21 @@ export async function grantMembershipFromCheckout(session) {
 router.post("/checkout", requireAuth, async (req, res, next) => {
   try {
     if (isMember(req.user)) return res.status(409).json({ error: "already_member" });
+    // Kademe kararı Stripe'tan ÖNCE: ücretsiz kontenjan Stripe'a bağımlı değil.
+    const decision = planFor(await countLifetimeSeats());
+    if (decision.free) {
+      // ÜCRETSİZ kontenjan: ödeme adımı yok, üyelik anında verilir.
+      // (Kayıtta zaten verilmiş olmalı; burası yine de doğru davranır —
+      //  örn. kontenjan kayıttan sonra dolmuşsa kullanıcıyı bekletmez.)
+      const seat = await grantFreeSeat(req.user.id);
+      if (!seat.granted) {
+        return res.status(409).json({ error: "free_seats_taken", message: "Ücretsiz kontenjan doldu." });
+      }
+      const fresh = await prisma.user.findUnique({ where: { id: req.user.id }, include: { membership: true } });
+      return res.json({ free: true, plan: "LIFETIME", amountCents: 0, currency: decision.currency, membership: fresh?.membership || null });
+    }
     if (!stripeConfigured()) {
       return res.status(503).json({ error: "stripe_not_configured", message: "Ödeme altyapısı henüz yapılandırılmamış." });
-    }
-    const decision = planFor(await countLifetimeMembers());
-    if (decision.soldOut) {
-      // Kampanya kapandı: yanıltıcı bir “aylık” vaadi yerine açıkça kapatıyoruz.
-      return res.status(409).json({
-        error: "launch_sold_out",
-        message: "İlk 1000 kişilik lansman fiyatı doldu. Üyelik şu an kapalı."
-      });
     }
     if (!decision.priceId) {
       return res.status(503).json({
@@ -105,6 +109,7 @@ router.post("/checkout", requireAuth, async (req, res, next) => {
         message: `Stripe ${decision.plan} fiyatı tanımlı değil (STRIPE_PRICE_${decision.plan}).`
       });
     }
+    // 2000 sonrası: aylık abonelik (kademe 3).
     const returnUrl = safeReturnUrl(req.body?.returnUrl);
     const session = await getStripe().checkout.sessions.create({
       mode: decision.mode,

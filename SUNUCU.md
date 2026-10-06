@@ -126,11 +126,31 @@ Her iki yoldan sonra `GET /api/auth/me` çalıştırınca `isMember: true` ve
 üyelik planı `LIFETIME` görünmelidir. Aynı `verify` isteğini ikinci kez
 göndermek **ikinci ödeme kaydı oluşturmamalıdır** (`Payment.providerRef` tekil).
 
-### Fiyat kuralı
+### Fiyat kuralı (v4.4.0 — iki kademeli kontenjan)
 
-`config.js` → `PRICING_LIFETIME_LIMIT=1000`. Aktif ömür boyu üye sayısı 1000'den
-küçükse Checkout `mode=payment` (tek seferlik $1), değilse `mode=subscription`.
-**Fiyat ve plan yalnızca sunucudan gelir**; istemciden gelen tutar yok sayılır.
+| Kademe | Kişi | Ücret |
+|---|---|---|
+| 1 | ilk `PRICING_FREE_LIMIT` (1000) | **Ücretsiz** ömür boyu — Stripe'a uğramaz |
+| 2 | sonraki `PRICING_PAID_LIMIT − PRICING_FREE_LIMIT` (1000) | tek seferlik `PRICING_LIFETIME_CENTS` ($1) |
+| 3 | sonrası | `PRICING_MONTHLY_CENTS` ($1/ay) abonelik |
+
+- Kademe kararı **tek yerde** verilir: `server/src/stripe.js` → `planFor(used)`.
+  `used` = `LIFETIME` + `ACTIVE` üyelik sayısı (`server/src/seats.js` → `countLifetimeSeats`).
+  Ücretsiz üyelik de `LIFETIME` yazıldığı için koltuğu doldurur.
+- **Kademe 1'de `POST /api/auth/register` anında üyelik verir**; kullanıcı
+  Stripe'a hiç uğramaz ve üyelik `priceCents: 0` olarak kaydedilir.
+  `POST /api/billing/checkout` de aynı kademede `free: true` döner.
+- Ücretsiz koltuk dolunca kademe 2'ye geçilir: normal Checkout (`mode=payment`).
+  Ücretli koltuk da dolunca kademe 3 (`mode=subscription`) açılır — **kapı hiçbir
+  kademede kapanmaz** (`launch_sold_out` artık kullanılmıyor).
+- **Fiyat ve plan yalnızca sunucudan gelir**; istemciden gelen tutar yok sayılır.
+- `GET /api/health` → `pricing.freeLimit / paidLimit / total / used / tier / remaining`.
+  İstemci bu alanlarla lansman CTA'sındaki **doluluk barını** ve kademeye göre
+  değişen fiyat/rozet/düğme metinlerini çizer.
+
+> Bilinen sınır: ücretsiz koltuk sayımı ile ekleme iki ayrı adımdır; tam 1000.
+> sınırdaki eşzamanlı kayıtlarda kontenjan 1 kişi aşabilir. Kritikleşirse
+> koltuk için ayrı tablo + `SELECT … FOR UPDATE` gerekir.
 
 ---
 
@@ -241,7 +261,13 @@ gibi) — aksi hâlde CORS engeller ve düğmeler "sunucuya ulaşılamıyor" der
 Hazır olanlar: üyelik penceresi, üyelik kapısı + paywall, herkese açık duvar (prompt kilitli),
 paylaşım (fotoğraf + prompt), profil sayfası, takip/takipten çık, **takip akışı sekmesi**,
 **beğeni ve yorum**, **duvar/arşiv araması ve sıralaması**, **moderasyon (yorum gizleme,
-paylaşım kaldırma) ve şikâyet/raporlama**, **profil avatarı yükleme**, runtime yapılandırma.
+paylaşım kaldırma) ve şikâyet/raporlama**, **profil avatarı yükleme**, **hamburger menü +
+lansman doluluk barı**, runtime yapılandırma.
+
+> v4.4.0: başlıktaki menü artık ☰ panelinde ve **ziyaretçi menüyü göremez**
+> (yalnız Demo Modu rozeti + Giriş Yap + Kaydol görünür). Rozet giriş yapınca gizlenir.
+> Kayıt, ücretsiz kontenjan açıkken **anında üye yapar** — "üye olmayan" davranışları
+> `verify-member.mjs` içinde seed'deki `merhaba@example.com` ile denenir.
 
 **Henüz olmayanlar:**
 - E-posta doğrulama ve parola sıfırlama yok.

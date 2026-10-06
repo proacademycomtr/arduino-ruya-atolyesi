@@ -6847,6 +6847,23 @@ function requireLogin(action) {
 /** Üye menü düğmelerini kilitli/açık görünüme çevirir. */
 function renderMenuLocks() {
   const acik = canUseApp();
+  const girisYok = !isSignedIn();
+  // v4.4.0: MENÜ ve DUVAR yalnız GİRİŞ YAPAN kullanıcıda görünür.
+  // `canUseApp()` demo modda açık kalır (erişim izni), ama GÖRÜNÜRLÜK ayrı:
+  // siteyi ilk açan kişi pazarlama ekranı görmeli, dağınık başlık değil.
+  const menuToggleEl2 = $("menuToggle");
+  const headerMenuEl2 = $("headerMenu");
+  if (menuToggleEl2) menuToggleEl2.hidden = girisYok;
+  if (headerMenuEl2 && girisYok) {
+    headerMenuEl2.hidden = true;
+    if (menuToggleEl2) menuToggleEl2.setAttribute("aria-expanded", "false");
+  }
+  // Topluluk duvarı menünün içinde; ziyaretçiye başlıkta gösterilmez.
+  const wallEl = $("wallBtn");
+  if (wallEl) wallEl.hidden = girisYok;
+  // Demo Modu rozeti yalnız ziyaretçide görünür — giriş yapana "demo" denmez.
+  const badgeEl = $("aiStatus");
+  if (badgeEl) badgeEl.hidden = !girisYok;
   for (const id of GATED_MENU_IDS) {
     const el = $(id);
     if (!el) continue;
@@ -6856,17 +6873,16 @@ function renderMenuLocks() {
     // yalnız ekran okuyuculara bildirir; tıklamayı biz yakalarız.
     el.setAttribute("aria-disabled", acik ? "false" : "true");
   }
-  // Landing ve “Üye Ol / Giriş Yap” düğmeleri ZİYARETÇİYE aittir:
-  // sunucu olmasa da (demo) gösterilir, çünkü sunucu kapandığında
-  // üyelik alınamaz ama tanıtım sayfası her zaman değerlidir.
-  const girisYok = !isSignedIn();
-  for (const id of ["landingCta", "landingFeatures", "joinBtn", "loginBtn"]) {
+  // Landing ve “Üye Ol / Giriş Yap” düğmeleri ZİYARETÇİYE aittir.
+  for (const id of ["landingCta", "landingFeatures", "heroTrust", "joinBtn", "loginBtn"]) {
     const el = $(id);
     if (el) el.hidden = !girisYok;
   }
+  // Hero/CTA içindeki Giriş Yap + Üye Ol da ziyaretçiye ait — demo modda
+  // (canUseApp açıkken) gizlenip fiyat kutusunun içinde düğmesiz kalıyordu.
   for (const id of ["joinBtnHero", "joinBtnFinal", "loginBtnHero"]) {
     const el = $(id);
-    if (el) el.hidden = acik;   // hero içindekiler yalnız landing ile birlikte
+    if (el) el.hidden = !girisYok;
   }
   // authBtn: giriş yapınca kullanıcı adı → profil/çıkış düğmesidir ve
   // görünür KALMALIDIR; ziyaretçide yerini Üye Ol / Giriş Yap alır.
@@ -6874,24 +6890,97 @@ function renderMenuLocks() {
   if (authEl && API_BASE) authEl.hidden = girisYok;
   // Menü düğmesini kilitlemek YETMEZ: sayfadaki gerçek bölüm (ör. Bileşen
   // Kütüphanesi <section id="kutuphane">) kaydırılarak veya #kutuphane
-  // yazılarak erişilebilir. Menü kilidiyle birlikte İÇERİĞİ de gizliyoruz.
+  // yazılarak erişilebilir. İÇERİĞİ de girişe bağlıyoruz.
   const lib = $("kutuphane");
-  if (lib) lib.hidden = !acik;
-  // Ziyaretçiye "üye ol" görünür ama sunucu yoksa işe yaramaz — belli et.
-  for (const id of ["joinBtn", "joinBtnHero", "joinBtnFinal", "loginBtn", "loginBtnHero"]) {
-    const el = $(id);
-    if (!el) continue;
-    el.disabled = !API_BASE || !memberState.apiAvailable;
-  }
+  if (lib) lib.hidden = girisYok;
+  // “Üye Ol / Giriş Yap” her zaman TIKLANABİLİR: `disabled` olunca kullanıcı
+  // ne yapacağını anlamıyor. Sunucu yoksa düğme açılıp nedenini anlatır.
   renderLaunchPrice();
 }
 
-/** Fiyatı sunucudan okur; sunucu yoksa sabit varsayılanı kullanır. */
+/**
+ * Lansman fiyatını + DOLULUK BARINI çizer (v4.4.0).
+ *
+ * Kademe: ilk 1000 kişi ücretsiz → sonraki 1000 kişi $1 → sonrası $1/ay.
+ * Bar, kontenjanın ne kadar dolduğunu gösterir (teşvik amaçlı).
+ * Sunucu yoksa varsayılan olarak ücretsiz kademe gösterilir.
+ */
 function renderLaunchPrice() {
-  const el = $("launchAmount");
-  if (!el) return;
-  const p = memberState.health && memberState.health.pricing;
-  el.textContent = p && p.lifetimeCents ? fmtUsd(p.lifetimeCents) : "$1";
+  const en = getLang() === "en";
+  const p = (memberState.health && memberState.health.pricing) || {};
+  const freeLimit = p.freeLimit || 1000;
+  const paidLimit = p.paidLimit || 2000;
+  const used = Number.isFinite(p.used) ? p.used : 0;
+  const total = Number.isFinite(p.total) && p.total > 0 ? p.total : paidLimit;
+  const money = (c) => (c ? fmtUsd(c) : "$1");
+  const n = (v) => Number(v || 0).toLocaleString("tr-TR");
+
+  const tier = p.tier || (used < freeLimit ? "FREE" : used < paidLimit ? "LIFETIME" : "MONTHLY");
+  const freeLeft = Math.max(0, freeLimit - used);
+  const paidLeft = Math.max(0, paidLimit - used);
+  // Yüzde 0'a yuvarlanınca bar TAMAMEN boş görünüyordu (5/2000 → 0%).
+  // Tek kişilik dolulukta bile çubuk görünür kalsın diye alt sınır koyuyoruz;
+  // TAM sayı etikette yazdığı için yanıltıcı olmaz.
+  const rawPct = total > 0 ? (used / total) * 100 : 0;
+  const pct = used > 0 ? Math.max(2, Math.round(rawPct)) : 0;
+
+  // ── Fiyat satırı
+  const amount = $("launchAmount");
+  if (amount) {
+    amount.textContent = tier === "FREE"
+      ? (en ? "Free" : "Ücretsiz")
+      : tier === "MONTHLY" ? money(p.monthlyCents) + (en ? "/mo" : "/ay")
+      : money(p.lifetimeCents);
+  }
+  const suffix = $("launchSuffix");
+  if (suffix) suffix.textContent = tier === "MONTHLY" ? (en ? "per month" : "her ay") : (en ? "lifetime" : "ömür boyu");
+
+  const badge = $("launchBadge");
+  if (badge) {
+    badge.textContent = tier === "FREE" ? (en ? "🚀 FIRST 1000 ARE FREE" : "🚀 İLK 1000 KİŞİYE ÜCRETSİZ")
+      : tier === "MONTHLY" ? (en ? "🚀 LAUNCH QUOTA FULL" : "🚀 LANSMAN KONTENJANI DOLDU")
+      : (en ? "🚀 NEXT 1000 AT $1" : "🚀 SONRAKİ 1000 KİŞİYE $1");
+  }
+
+  // Açıklama paragrafları kaldırıldı (kullanıcı isteği): fiyat satırı + bar +
+  // düğme yeterli, uzun kademe metni pazarlama ekranını yavaşlatıyordu.
+
+  // ── Doluluk barı
+  // Sunucuya bağlanılamıyorsa SAYI UYDURULMAZ ve bar da gösterilmez —
+  // boş/uydurma bir çubuk etkiden çok güven kaybettiriyor.
+  const canli = Boolean(memberState.apiAvailable && memberState.health && memberState.health.pricing);
+  const box = $("occupancyBox");
+  if (box) {
+    box.hidden = !canli;
+    box.setAttribute("aria-valuenow", String(pct));
+    box.setAttribute("aria-valuetext", `${n(used)}/${n(total)}`);
+  }
+  const fill = $("occupancyFill");
+  if (fill) fill.style.width = pct + "%";
+  const label = $("occupancyLabel");
+  if (label) {
+    label.textContent = tier === "FREE"
+      ? (en ? `🔥 ${n(used)}/${n(total)} seats taken — ${n(freeLeft)} free seats left`
+            : `🔥 ${n(used)}/${n(total)} kontenjan doldu — ${n(freeLeft)} ücretsiz yer kaldı`)
+      : tier === "MONTHLY"
+        ? (en ? `✅ ${n(used)}/${n(total)} seats taken — membership continues at ${money(p.monthlyCents)}/mo`
+              : `✅ ${n(used)}/${n(total)} kontenjan doldu — üyelik ${money(p.monthlyCents)}/ay ile devam ediyor`)
+        : (en ? `⏳ Free seats gone — ${n(paidLeft)} of ${n(paidLimit - freeLimit)} $1 seats left`
+              : `⏳ Ücretsiz yerler doldu — ${n(paidLeft)} / ${n(paidLimit - freeLimit)} $1'lik yer kaldı`);
+  }
+
+  // ── Düğme etiketleri (kademeye göre)
+  const joinLabel = tier === "FREE" ? (en ? "🎁 Join Free" : "🎁 Ücretsiz Üye Ol")
+    : tier === "MONTHLY" ? (en ? `💎 Join — ${money(p.monthlyCents)}/mo` : `💎 Üye Ol — ${money(p.monthlyCents)}/ay`)
+    : (en ? `💎 Join — ${money(p.lifetimeCents)}` : `💎 Üye Ol — ${money(p.lifetimeCents)}`);
+  for (const id of ["joinBtn", "joinBtnHero", "joinBtnFinal"]) {
+    const el = $(id);
+    if (el) {
+      el.textContent = id === "joinBtn" && !en ? joinLabel : joinLabel;
+      el.title = tier === "FREE" ? (en ? "First 1000 members are free" : "İlk 1000 kişi ücretsiz")
+        : (en ? `One-time ${money(p.lifetimeCents)} for life` : `Tek seferlik ${money(p.lifetimeCents)} ömür boyu`);
+    }
+  }
 }
 
 /** "Üye Ol" → doğrudan üyelik penceresi (kampanyalı). */
@@ -6901,7 +6990,15 @@ function openJoinModal() {
     return;
   }
   authModalMode = "register";
-  renderAuthModal(t("İlk 1000 kişiye ömür boyu erişim $1."));
+  // Kademeye göre davet metni (v4.4.0).
+  const pj = (memberState.health && memberState.health.pricing) || {};
+  const tierJ = pj.tier || "FREE";
+  const enJ = getLang() === "en";
+  renderAuthModal(tierJ === "FREE"
+    ? (enJ ? "First 1000 members join free for life." : "İlk 1000 kişi ücretsiz ömür boyu üye olur.")
+    : tierJ === "MONTHLY"
+      ? (enJ ? "Launch quota is full — membership continues at $1/mo." : "Lansman kontenjanı doldu — üyelik $1/ay ile devam ediyor.")
+      : (enJ ? "One-time $1 for lifetime access." : "Tek seferlik $1 ile ömür boyu üyelik."));
   const m = $("authModal");
   if (m) m.hidden = false;
 }
@@ -8110,6 +8207,41 @@ for (const id of GATED_MENU_IDS) {
     requireLogin();
   }, true);
 }
+
+// ── v4.4.0: Başlık hamburger menüsü
+// Menü yalnız giriş yapan kullanıcıda belirir; ziyaretçi menüyü göremez
+// (açıklık renderMenuLocks içinde verilir). Panel AÇIK/KAPALI durumu burada.
+const headerMenuEl = $("headerMenu");
+const menuToggleEl = $("menuToggle");
+function setHeaderMenu(open) {
+  if (!headerMenuEl || !menuToggleEl) return;
+  // Menü yoksa (ziyaretçi) panel asla açılmamalı.
+  if (menuToggleEl.hidden) open = false;
+  headerMenuEl.hidden = !open;
+  menuToggleEl.setAttribute("aria-expanded", String(open));
+  menuToggleEl.setAttribute("aria-label", open ? t("Menüyü kapat") : t("Menüyü aç"));
+}
+if (menuToggleEl) {
+  menuToggleEl.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setHeaderMenu(Boolean(headerMenuEl && headerMenuEl.hidden));
+  });
+}
+if (headerMenuEl) {
+  // Panelden bir öğe seçilince panel kapansın (içerik açılırken arkada kalmasın).
+  headerMenuEl.addEventListener("click", (e) => {
+    if (e.target.closest("a, button")) setTimeout(() => setHeaderMenu(false), 0);
+  });
+}
+// Panelden başka bir yere tıklayınca kapansın.
+document.addEventListener("click", (e) => {
+  if (!headerMenuEl || headerMenuEl.hidden) return;
+  if (e.target.closest("#headerMenu, #menuToggle")) return;
+  setHeaderMenu(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") setHeaderMenu(false);
+});
 
 // ── Üye Ol / Giriş Yap düğmeleri (header + hero + kapanış CTA)
 for (const id of ["joinBtn", "joinBtnHero", "joinBtnFinal"]) {

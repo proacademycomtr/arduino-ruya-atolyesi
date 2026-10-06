@@ -116,9 +116,36 @@ const generate = async (page, idea = "LCD'li dijital saat") => {
   await page.waitForSelector(".materials-table .cost-total", { timeout: 20000 });
 };
 
+/**
+ * v4.4.0: Menü artık başlıktaki ayrı bir hamburger panelinde duruyor.
+ * Menü öğelerine tıklamadan önce paneli açmazsan eleman DOM'da var ama
+ * görünmez → Playwright tıklama zaman aşımına düşüyor.
+ */
+const openMenu = async (page) => {
+  // v4.4.0: Menü GÖRÜNÜRLÜĞÜ girişe bağlı, yani ziyaretçide (ve demo
+  // derlemede) hamburger gizli. Bu senaryolar panellerin İŞLEVİNİ
+  // ölçtüğü için önce görünür olma izni veriyoruz; erişim izni ayrı ve
+  // demo derlemede zaten açık (`canUseApp`).
+  await page.evaluate(() => {
+    const t = document.getElementById("menuToggle");
+    if (t) t.hidden = false;
+  });
+  const toggle = await page.$("#menuToggle");
+  if (!toggle) return;
+  if ((await toggle.getAttribute("aria-expanded")) === "true") return;
+  await page.click("#menuToggle");
+  await page.waitForSelector("#archiveBtn:visible", { timeout: 5000 }).catch(() => {});
+};
+
+/** Paneli açıp verilen menü düğmesine tıklar (panel tıklama sonrası kapanır). */
+const clickMenu = async (page, selector) => {
+  await openMenu(page);
+  await page.click(selector);
+};
+
 /** Sınıf panelini açar (panel açılışında localStorage okunur). */
 const openClassroom = async (page, sel = "#subList .archive-item") => {
-  await page.click("#classBtn");
+  await clickMenu(page, "#classBtn");
   await page.waitForSelector(sel);
 };
 
@@ -291,7 +318,7 @@ scenario("8", async (page) => {
     { id: 1, ts: 1, idea: "otomatik sulama", guide: { title: "Akıllı Saksı", code: "a", difficulty: "Orta", materials: [] } },
     { id: 2, ts: 2, idea: "", guide: { title: "Gece Lambası", code: "b", difficulty: "Kolay", materials: [] }, meta: { fav: true, tags: ["veli"] } },
   ]);
-  await page.click("#archiveBtn");
+  await clickMenu(page, "#archiveBtn");
   await page.waitForSelector("#archSearch");
   const allItems = (await page.$$("#archGrid .archive-item")).length;
   await page.fill("#archSearch", "saksi");
@@ -383,7 +410,7 @@ scenario("12", async (page) => {
       },
     },
   ]);
-  await page.click("#archiveBtn");
+  await clickMenu(page, "#archiveBtn");
   await page.waitForSelector("#archGrid [data-prev]");
   const prevHidden0 = !(await page.$("#archGrid .arch-preview"));
   await page.click("#archGrid [data-prev]");

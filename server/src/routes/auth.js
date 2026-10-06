@@ -9,6 +9,7 @@ import {
   requireAuth,
   verifyPassword
 } from "../auth.js";
+import { grantFreeSeat } from "../seats.js";
 
 const router = express.Router();
 
@@ -83,8 +84,13 @@ router.post("/register", async (req, res, next) => {
       data: { email, passwordHash: await hashPassword(password), displayName, handle, freePasses: 1 },
       include: { membership: true }
     });
+    // v4.4.0: İlk `freeLimit` (1000) kişi kayıt OLUR OLMAZ ücretsiz üye olur —
+    // Stripe'a hiç uğramaz. Koltuk kalmadıysa üyelik VERSİLMESİZ kalır ve
+    // kullanıcı $1 / $1/ay kademesine yönlendirilir.
+    await grantFreeSeat(user.id);
+    const fresh = await prisma.user.findUnique({ where: { id: user.id }, include: { membership: true } });
     const { token, expiresAt } = await createSession(user.id);
-    res.status(201).json({ token, expiresAt, ...mePayload(user), handle });
+    res.status(201).json({ token, expiresAt, ...mePayload(fresh || user), handle });
   } catch (e) {
     next(e);
   }

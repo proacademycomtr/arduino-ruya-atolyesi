@@ -17,9 +17,14 @@ test("sağlık kontrolü veritabanı ve yapılandırmayı raporlar", async () =>
   assert.equal(res.status, 200);
   assert.equal(res.body.ok, true);
   assert.equal(res.body.db, true);
-  assert.equal(res.body.version, "4.2.0");
+  assert.equal(res.body.version, "4.4.0");
   assert.equal(res.body.pricing.lifetimeCents, 100);
-  assert.equal(res.body.pricing.lifetimeLimit, 1000);
+  // v4.4.0: iki kademeli kontenjan + anlık doluluk (doluluk barı bunu okur).
+  assert.equal(res.body.pricing.freeLimit, 1000);
+  assert.equal(res.body.pricing.paidLimit, 2000);
+  assert.equal(res.body.pricing.total, 2000);
+  assert.equal(typeof res.body.pricing.used, "number");
+  assert.equal(res.body.pricing.tier, "FREE");
 });
 
 test("kayıt token döndürür ve kullanıcıyı oluşturur", async () => {
@@ -29,7 +34,11 @@ test("kayıt token döndürür ve kullanıcıyı oluşturur", async () => {
   assert.equal(res.status, 201);
   assert.ok(res.body.token, "token dönmeli");
   assert.equal(res.body.user.email, "yeni@example.com");
-  assert.equal(res.body.user.isMember, false);
+  // v4.4.0: Ücretsiz kontenjan açıkken kayıt OLUR OLMAZ ücretsiz üye olunur
+  // (Stripe'a uğramadan). Koltuk dolunca burası false döner ve $1 Checkout açılır.
+  assert.equal(res.body.user.isMember, true, "ücretsiz kontenjan üyelik vermeli");
+  assert.equal(res.body.membership.plan, "LIFETIME");
+  assert.equal(res.body.membership.priceCents, 0, "ücretsiz üyelik 0 $ olmalı");
   assert.equal(res.body.freePasses, 1);
   assert.ok(res.body.handle, " profil adresi üretilmeli");
 });
@@ -67,7 +76,9 @@ test("/me giriş yapmadan boş döner, token ile kullanıcıyı verir", async ()
   const res = await request(app).get("/api/auth/me").set("Authorization", `Bearer ${kayit.body.token}`);
   assert.equal(res.status, 200);
   assert.equal(res.body.user.email, "me@example.com");
-  assert.equal(res.body.membership, null);
+  // Ücretsiz kontenjan sayesinde kayıt anında üyelik oluşur (v4.4.0).
+  assert.equal(res.body.membership.plan, "LIFETIME");
+  assert.equal(res.body.membership.status, "ACTIVE");
 });
 
 test("çıkış jetonu geçersiz kılar", async () => {

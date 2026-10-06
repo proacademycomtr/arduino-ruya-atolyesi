@@ -1,6 +1,21 @@
 # Changelog
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
+## [4.4.0] - 2026-10-05
+
+- Yeni: 🎁 **İki kademeli lansman kontenjanı** — ilk **1000 kişi ÜCRETSİZ** ömür boyu üye olur (kayıt anında, Stripe'a uğramadan), sonraki **1000 kişi tek seferlik $1**, sonrası **$1/ay aylık abonelik**. `planFor` artık `FREE` / `LIFETIME` / `MONTHLY` kademeleri döner; kapı hiçbir kademede kapanmaz
+- Yeni: 📊 **Doluluk barı ve sayaç** — lansman CTA'sında `used/total` çubuğu ve kalan kontenjan metni (`🔥 437/2.000 kontenjan doldu — 563 ücretsiz yer kaldı`). `/api/health` artık `pricing.freeLimit`/`paidLimit`/`used`/`tier`/`remaining` döner; fiyat satırı, rozet ve Üye Ol düğmesi kademeye göre değişir
+- Yeni: ☰ **Hamburger menü** — başlıktaki 12 düğme tek satıra sığmıyordu; Kütüphane/Arşiv/Başarımlar/Sınıf Modu/Ayarlar ayrı bir panele alındı, panel dışında tıklayınca ve Esc ile kapanır
+- Değişti: **Ziyaretçi başlığı sadeleşti** — 🌍 Duvar ve hamburger menü girişten **önce görünmez**, kalan: tema, dil, Demo Modu rozeti, Giriş Yap, Kaydol. Bileşen kütüphanesi (`#kutuphane`) de girişe bağlandı. Menünün GÖRÜNÜRLÜĞÜ `isSignedIn()`, erişim izni ise `canUseApp()` ile ayrıldı (demo modda kapı yine açık kalır, testler paneli açabiliyor)
+- Düzeltme: **Üye Ol / Giriş Yap `disabled` geliyordu** (sunucu yokken) — tıklanamayınca kullanıcı ne yapacağını anlamıyordu. Artık her zaman tıklanabilir; sunucu yoksa düğme açılıp nedenini anlatıyor
+- Düzeltme: fiyat kutusundaki uzun kademeler açıklaması ve Stripe ince yazısı kaldırıldı (`launchNote`, `launchFine`, `occupancyFine`). Doluluk metni yalnız GERÇEK veri varken yazıyor — sunucuya bağlı değilken bar hiç görünmüyor (uydurma sayı yok)
+- Değişti: **Pazarlama ekranı** — başlık `3.4rem → 2.9rem` ile 2 satıra indi (CTA ilk ekranda kalıyor), devre arka planı ince + teal tonlu + yuvarlak uçlu hâle getirildi ve arkasına yumuşak teal ışıma eklendi
+- Değişti: **Demo Modu rozeti ziyaretçide görünür, giriş yapınca gizlenir** (giriş yapana "demo" denmez)
+- Düzeltme: **Adım Adım Yapım tik kutusu yazının üstüne biniyordu** — kutu `left: 3.55rem`'de, metin ise `3.4rem`'de başlıyordu. Artık adım numarasının HEMEN ALTINDA (`left: 1.175rem; top: 2.97rem`) ve kart için `min-height` eklendi
+- Değişti: **Pazarlama ekranı güçlendirildi** — hero'ya ziyaretçiye özel değer şeridi (`#heroTrust`: 🧩 Wokwi + .zip · 📄 PDF sertifika · 🎙️ Sesli rehber · 🏫 Sınıf modu), başlık degradesi yavaşça kayıyor, fiyat kutusu teal ışımalı, kontenjan rozeti nabız atıyor ve özellik kartları hover'da kalkıyor (`prefers-reduced-motion` ile kapanır)
+- Düzeltme: `scripts/verify-member.mjs` varsayılan adresi `127.0.0.1:8000` idi; CORS beyaz listesinde (`APP_ORIGIN`) yalnız `localhost:8000` olduğu için health isteği düşüyor ve 3 kontrol sahte FAIL veriyordu. Varsayılan `http://localhost:8000/` oldu — 89/89 yeşil
+- Test: sunucu testleri 109→114 (yeni `pricing.test.js` kademe sınırlarını `PRICING_FREE_LIMIT=2`/`PRICING_PAID_LIMIT=3` ile GERÇEK uçtan uca doğrular). `verify-member.mjs` üye-olmayan senaryolarını artık seed'deki `merhaba@example.com` ile koşar — çünkü yeni kayıt artık anında üye
+- Sürüm 4.4.0 olarak derlendi.
 ## [4.3.0] - 2026-10-05
 
 - Yeni: 🔎 **Duvar ve arşiv araması** — başlık, açıklama ve etiketlerde arama kutusu; Türkçe duyarlı (büyük/küçük harf, `ç ğ ı ö ş ü` ve aksan farkı sonucu değiştirmiyor). Metin kayıt anında katlanıp `Project.searchText` içine yazılıyor, sorgu da aynı katlamayla karşılaştırılıyor
