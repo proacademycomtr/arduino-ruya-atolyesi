@@ -1,6 +1,14 @@
 # Changelog
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
+## [4.4.1] - 2026-10-06
+
+- Düzeltme: **Tanımsız CSS değişkenleri yüzünden şeffaf arayüz** — `--card`, `--accent`, `--brand`, `--code-bg`, `--shadow-sm` hiçbir yerde tanımlanmamıştı; tarayıcı geçersiz bildirimi tüm kuralı yok sayıyordu. Etkilenen: **doluluk barının dolgusu** (`linear-gradient` `none`'a düşüyordu), 8 özellik kartı, hero değer şeridi çipleri, topluluk duvarı kartları/sekmeleri ve **hamburger menü paneli** (hero metni panelin içinden görünüyordu). Değişkenler karanlık ve açık temada `:root`'a tanımlandı
+- Test: **`tests/cssVars.test.js`** eklendi — `style.css` içindeki her `var(--x)` için tanımlama ya da fallback zorunlu; eski dosyayı gerçekten yakalıyor (135 → 138)
+- Düzeltme: **İngilizce modda karışık dil** — hero çipleri (`#heroTrust li`), özellik kartı başlıkları/paragrafları, giriş metni ve butonlar (`🎁 Ücretsiz Üye Ol`, `💎 Üye Ol`, fikir çipleri) Türkçe kalıyordu. `translateStatic` seçicisi genişletildi, çok satırlı HTML için normalize edilmiş anahtar araması eklendi, `I18N.en`'e 30+ yeni anahtar girdi; sayaçlı menü öğeleri (Arşiv/Başarımlar) metin düğümü üzerinden çevriliyor
+- Düzeltme: **Dil değişiminde fiyat kutusu güncellenmiyordu** — rozet/tutar/kademe metni ve Üye Ol düğmesi Türkçe kalıyordu; dil düğmesi artık `renderLaunchPrice()` çağırıyor (kademe bilgisiyle çizim sözlükten güvenilir)
+- Sürüm 4.4.1 olarak derlendi.
+
 ## [4.4.0] - 2026-10-05
 
 - Yeni: 🎁 **İki kademeli lansman kontenjanı** — ilk **1000 kişi ÜCRETSİZ** ömür boyu üye olur (kayıt anında, Stripe'a uğramadan), sonraki **1000 kişi tek seferlik $1**, sonrası **$1/ay aylık abonelik**. `planFor` artık `FREE` / `LIFETIME` / `MONTHLY` kademeleri döner; kapı hiçbir kademede kapanmaz

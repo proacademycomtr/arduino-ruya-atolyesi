@@ -5048,6 +5048,37 @@ const I18N = {
     // Header & genel
     "⚙️ Ayarlar": "⚙️ Settings", "📚 Kütüphane": "📚 Library", "🗂️ Arşiv": "🗂️ Archive",
     "Demo Modu": "Demo Mode", " Bağlı": " Connected",
+    // v4.4.1 — pazarlama ekranı + başlık metinleri (TR kaynakla birebir)
+    "💎 Üye Ol": "💎 Join",
+    "🎁 Ücretsiz Üye Ol": "🎁 Sign up free",
+    "🏅 Başarımlar": "🏅 Achievements",
+    "🧩 Wokwi taslağı + .zip": "🧩 Wokwi sketch + .zip",
+    "📄 PDF sertifika": "📄 PDF certificate",
+    "🎙️ Sesli rehber": "🎙️ Voice guide",
+    "🏫 Sınıf modu": "🏫 Classroom mode",
+    "Bir cümle yaz, elinde bitmiş proje olsun": "Write a sentence, ship a finished project",
+    "Arduino Rüya Atölyesi, aklındaki projeyi çalışan bir düzenekme dönüştürür: malzeme listesinden başlayıp Wokwi'de test edebileceğin .zip dosyasına kadar.": "Arduino Dream Workshop turns the idea in your head into a working rig — from the parts list to a .zip you can test in Wokwi.",
+    "Yapay zekâ ile rehber": "AI-guided build",
+    "Wokwi devre taslağı ve .zip": "Wokwi circuit sketch and .zip",
+    "Göz serbest sesli rehber": "Hands-free voice guide",
+    "Gerçek malzeme fiyatı": "Real parts pricing",
+    "Alışveriş listesi": "Shopping list",
+    "Başarı sertifikaları": "Achievement certificates",
+    "Sınıf modu": "Classroom mode",
+    "Portfolyo arşivi": "Portfolio archive",
+    "Projeni Türkçe bir cümleyle anlat; malzeme listesi, devre bağlantıları, adım adım yapım ve çalışan kod hazır gelsin.": "Describe your project in one sentence; get the parts list, wiring, step-by-step build guide and working code.",
+    "Devre şeması ve simülasyon dosyaları tek tıkla indirilir; Wokwi'de açıp çalıştırabilirsin.": "Circuit diagram and simulation files download in one click; open them in Wokwi and run.",
+    "\"Bana anlat\" ile adımları sana okur, ilerlemeni otomatik işaretler. Ellerin doluyken bile ilerleyebilirsin.": "\"Tell me\" reads the steps aloud and ticks your progress — even when your hands are full.",
+    "Türkiye perakende fiyatlarıyla parça bazında tahmin; hangi parçayı değiştirsen bütçe nasıl değişir, görünür.": "Part-by-part estimate with Turkish retail prices; swap a part and watch the budget change.",
+    "Toplu malzemeyi \"parça × adet — tutar\" biçiminde hazırlar; WhatsApp'tan tek dokunuşla markete gönderirsin.": "Batches parts as \"item × qty — total\" and sends the list to your market on WhatsApp in one tap.",
+    "Bitirdiğin her proje için PDF/Portfolyo sertifikası; bronz, gümüş ve altın rozetlerle ilerlemeni görünür kıl.": "A PDF/portfolio certificate for every project you finish; bronze, silver and gold badges show progress.",
+    "Öğretmen sınıf kodu üretir, öğrenciler ilerlemelerini dosyadan gönderir; panel, CSV ve PDF rapor tek yerde.": "Teachers generate a class code, students submit progress by file; dashboard, CSV and PDF reports in one place.",
+    "Tüm projelerin, sertifikaların ve raporların tek .zip dosyasında — okul teslimi ya da portfolyo için hazır.": "All your projects, certificates and reports in one .zip — ready for school or your portfolio.",
+    "🚗 Çizgi izleyen yarış arabası": "🚗 Line-following race car",
+    "🌡️ Odam için akıllı termostat": "🌡️ Smart thermostat for my room",
+    "🌱 Otomatik sulayan akıllı saksı": "🌱 Self-watering smart planter",
+    "🚨 Hareket algılayan güvenlik sistemi": "🚨 Motion-detecting security system",
+    "🦾 Basit robot kol": "🦾 Simple robot arm",
     // v4.0.0 — Üyelik, paywall, topluluk duvarı
     "👤 Giriş": "👤 Sign in",
     "🌍 Duvar": "🌍 Wall",
@@ -5471,6 +5502,10 @@ function applyLang(lang) {
   if (hs) hs.innerHTML = en
     ? 'Robot arm, smart greenhouse, line-following car… Describe your Arduino idea in one sentence. We\'ll prepare your <strong>materials list</strong>, <strong>circuit wiring</strong>, <strong>step-by-step build guide</strong> and <strong>working code</strong>.'
     : 'Robot kol, akıllı sera, çizgi izleyen araç… Aklındaki Arduino projesini tek cümleyle anlat. Sana <strong>malzeme listesi</strong>, <strong>devre bağlantıları</strong>, <strong>adım adım yapım rehberi</strong> ve <strong>çalışan kod</strong> hazırlayalım.';
+  const lf = $("landingFinalText");
+  if (lf) lf.innerHTML = en
+    ? 'First 1000 people <strong>free</strong>, next 1000 people <strong>$1</strong> for life. Join today — grab your spot before the quota fills.'
+    : 'İlk 1000 kişi <strong>ücretsiz</strong>, sonraki 1000 kişi <strong>$1</strong> ömür boyu. Bugün katıl, kontenjan dolmadan yerini al.';
   const sd = $("settingsDesc");
   if (sd) sd.innerHTML = en
     ? 'For live AI responses, enter an API key. The key is stored <strong>only in this browser</strong> and never sent to any server.'
@@ -5494,24 +5529,46 @@ function applyLang(lang) {
 }
 function translateStatic() {
   // İlk çağrıda orijinal (TR) metinleri sakla; sonra dile göre uygula
-  const sel = "button, a.btn, .chip, h2, h3, label, .status-label, .hint, .lib-sub, .chips-title, .hero-eyebrow, .step-card p, .field-hint";
+  const sel = "button, a.btn, .chip, h2, h3, label, .status-label, .hint, .lib-sub, .chips-title, .hero-eyebrow, .step-card p, .field-hint, .hero-trust li, .feat-card p, .landing-lead, .btn-text";
   document.querySelectorAll(sel).forEach((el) => {
     if (el.closest("#modelPicker") || el.hasAttribute("data-noi18n") || (el.dataset && el.dataset.noI18n)) return;
     if (el.children.length && !el.matches(".status-label, .hero-eyebrow, .chip")) return;
     if (el.querySelector("button, input, select, textarea, a")) return;
     if (el.dataset.i18nTr === undefined) el.dataset.i18nTr = el.textContent;
     const tr = el.dataset.i18nTr;
+    // Çok satırlı HTML içeriğinde (ör. .landing-lead) sözlük anahtarı tek
+    // satırdır: arama normalize edilmiş hâlde yapılır; TR metin OLDUĞU GİBİ
+    // geri yazılır (biçimlendirme boşlukları korunur).
+    const key = tr.replace(/\s+/g, " ").trim();
     if (getLang() === "en") {
-      const enT = I18N.en[tr.trim()];
+      const enT = I18N.en[key];
       if (enT) el.textContent = enT;
-    } else {
+    } else if (el.textContent !== tr) {
       el.textContent = tr;
     }
+  });
+  // Menüde sayaç <span> taşıyan öğeler (Arşiv/Başarımlar) children-guard'a
+  // takıldığı için hiç çevriliyordu: yalnız ilk metin düğümü çevrilir,
+  // sayaç span'i olduğu gibi kalır.
+  document.querySelectorAll(".header-menu .btn").forEach((el) => {
+    const tn = [...el.childNodes].find((n) => n.nodeType === 3 && n.nodeValue.trim());
+    if (!tn) return;
+    if (el.dataset.i18nNodeTr === undefined) el.dataset.i18nNodeTr = tn.nodeValue;
+    const orig = el.dataset.i18nNodeTr;
+    const nkey = orig.replace(/\s+/g, " ").trim();
+    const enT2 = getLang() === "en" ? I18N.en[nkey] : null;
+    if (getLang() !== "en") tn.nodeValue = orig;
+    else if (enT2) tn.nodeValue = enT2;
   });
 }
 
 langToggle.addEventListener("click", () => {
   applyLang(getLang() === "en" ? "tr" : "en");
+  // v4.4.1: fiyat kutusu (rozet/tutar/kademe + Üye Ol düğmesi) KADEME
+  // bilgisiyle çizilir; sözlük bunu yapamaz. Yalnız burada, çalışma
+  // zamanında çağrılır — applyLang'in ilk (init) çağrısı memberState'ten
+  // önce çalışır ve o an fiyat çizilemez (TDZ).
+  renderLaunchPrice();
 });
 
 /* ───────────────────── Sürüm Rozeti + Changelog Modalı ───────────────────── */
