@@ -1,6 +1,12 @@
 # Changelog
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
+## [4.6.0] - 2026-10-07
+
+- Yeni: 📊 **Üye paneli (dashboard)** — 👤 Üyelik penceresine **"📊 Panelim"** girişi; geniş modalde 5 kart: **Üyelik** (kademe + kalan hak + 1000'lik kontenjan barı + Üyeliğe Geç), **Profilim** (avatar, @handle, üye olma tarihi, Profili Aç / Çıkış), **Paylaşımlarım** (proje + beğeni + yorum sayaçları, Duvarı Aç), **Arşivim & Başarımlarım** (yerel sayaçlar + açma düğmeleri), **Kısayollar** (Yeni Proje, Ayarlar). Yalnız istemci; sunucu ucu eklenmedi (biyografi düzenleme ve `GET /api/projects?mine` sonraki adıma bırakıldı)
+- Test: **`tests/dashboard.test.js`** — `dashQuota` (hedef/kırpma/kalan/%2 alt sınırı) ve `dashTierLabel` (TR/EN kademe); 138 → **145**
+- Sürüm 4.6.0 olarak derlendi.
+
 ## [4.5.1] - 2026-10-07
 
 - Değişti: **Landing sayaç altındaki not kaldırıldı** — "İlk 1000 kişi ücretsiz — kayıt oldukça bar doluyor." satırı hem statik HTML'de hem `renderFinalCounter` içinde silindi (`.final-note` stili de yok)
