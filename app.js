@@ -2649,7 +2649,7 @@ function renderGuide(g, idea) {
       <button class="btn btn-ghost btn-small wokwi-btn" data-act="wokwi" type="button">⚡ ${t("Wokwi'de Dene")}</button>
       <button class="btn btn-ghost btn-small" data-act="wokwi-zip" type="button">📦 ${t("Wokwi Paketi (.zip)")}</button>
       <button class="btn btn-ghost btn-small" data-act="speak" type="button">${t("🔊 Bana Anlat")}</button>
-      <button class="btn btn-ghost btn-small wall-share-btn" data-act="wall-share" type="button">${t("🌍 Duvarı Paylaş")}</button>
+      <button class="btn btn-ghost btn-small wall-share-btn" data-act="wall-share" type="button">${t("🌍 Promptu Paylaş")}</button>
     </div>
     <div class="cert-row" id="certRow" hidden>
       <span class="cert-title">🎉 ${t("Tüm adımları tamamladın!")}</span>
@@ -5086,7 +5086,7 @@ const I18N = {
     // v4.0.0 — Üyelik, paywall, topluluk duvarı
     "👤 Giriş": "👤 Sign in",
     "🌍 Duvar": "🌍 Wall",
-    "🌍 Duvarı Paylaş": "🌍 Share to wall",
+    "🌍 Promptu Paylaş": "🌍 Share prompt",
     "👤 Üyelik": "👤 Membership",
     "🎟️ Üyeliğe Geç": "🎟️ Become a member",
     "🌍 Topluluk Duvarı": "🌍 Community Wall",
@@ -6984,10 +6984,6 @@ function renderFinalCounter() {
 
   const label = $("finalCountLabel");
   if (label) label.textContent = en ? "free spots left" : "ücretsiz yer kaldı";
-  const note = $("finalNote");
-  if (note) note.textContent = en
-    ? `First ${fmt(target)} people are free — the bar fills as members join.`
-    : `İlk ${fmt(target)} kişi ücretsiz — kayıt oldukça bar doluyor.`;
   const bar = $("finalBar");
   if (bar) {
     bar.setAttribute("aria-valuemax", String(target));

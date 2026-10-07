@@ -1681,7 +1681,6 @@ html[data-theme="light"] .occupancy-label { color: #4a5568; }
   box-shadow: 0 0 14px rgba(0, 209, 178, 0.5);
   transition: width 0.35s ease;
 }
-.final-note { margin: 0.55rem 0 0; font-size: 0.8rem; color: var(--text-dim); }
 @media (prefers-reduced-motion: reduce) { .final-bar-fill { transition: none !important; } }
 
 @media (max-width: 640px) {

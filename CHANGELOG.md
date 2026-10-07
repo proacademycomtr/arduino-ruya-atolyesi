@@ -1,6 +1,12 @@
 # Changelog
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
+## [4.5.1] - 2026-10-07
+
+- Değişti: **Landing sayaç altındaki not kaldırıldı** — "İlk 1000 kişi ücretsiz — kayıt oldukça bar doluyor." satırı hem statik HTML'de hem `renderFinalCounter` içinde silindi (`.final-note` stili de yok)
+- Değişti: **Rehberde paylaşım düğmesi** — rehber-actions satırındaki "🌍 Duvarı Paylaş" artık **"🌍 Promptu Paylaş"** (EN: "Share prompt")
+- Sürüm 4.5.1 olarak derlendi.
+
 ## [4.5.0] - 2026-10-06
 
 - Değişti: **Landing'de uzun kademeler metni kaldırıldı, yerine sayaç geldi** — özellik kartlarının altındaki "İlk 1000 kişi ücretsiz…" paragrafı yerine büyük **sayaç + 1000 kişilik kontenjan barı**. Sayaç **önce 1000'e kadar çıkar**, sonra kayıt olan kişi sayısı kadar azalarak **kalan yerde** durur; bar aynı anda dolu. Efekt bölüm ekrana girince başlar (`prefers-reduced-motion` ile anında son değer). Sunucu yoksa `used=0` (demo'da kayıt toplanmaz) — uydurma sayı yok. Bar hedefi `pricing.freeLimit` (1000)
