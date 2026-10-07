@@ -172,10 +172,19 @@
         </div>
 
         <div class="landing-final">
-          <p class="landing-final-text" id="landingFinalText">
-            İlk 1000 kişi <strong>ücretsiz</strong>, sonraki 1000 kişi <strong>$1</strong> ömür boyu.
-            Bugün katıl, kontenjan dolmadan yerini al.
-          </p>
+          <!-- v4.5.0: uzun kademeler metni yerine sayaç + 1000 kişilik bar.
+               Sayaç 1000'e kadar çıkıp kayıt sayısı kadar azalır; bar dolar. -->
+          <div class="final-counter" id="finalCounter">
+            <div class="final-count-row">
+              <span class="final-count" id="finalCount">0</span>
+              <span class="final-count-label" id="finalCountLabel">ücretsiz yer kaldı</span>
+            </div>
+            <div class="final-bar" id="finalBar" role="progressbar"
+                 aria-label="Ücretsiz kontenjan doluluğu" aria-valuemin="0" aria-valuemax="1000" aria-valuenow="0">
+              <div class="final-bar-fill" id="finalBarFill" style="width:0%"></div>
+            </div>
+            <p class="final-note" id="finalNote">İlk 1000 kişi ücretsiz — kayıt oldukça bar doluyor.</p>
+          </div>
           <button class="btn btn-primary btn-join-final" id="joinBtnFinal" type="button">
             🎁 Ücretsiz Üye Ol
           </button>

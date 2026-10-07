@@ -1652,13 +1652,44 @@ html[data-theme="light"] .occupancy-label { color: #4a5568; }
 .feat-card h3 { margin: 0.35rem 0 0.25rem; font-size: 1rem; }
 .feat-card p { margin: 0; font-size: 0.88rem; color: var(--text-dim); }
 .landing-final { margin-top: 1.6rem; text-align: center; }
-.landing-final-text { margin: 0 0 0.7rem; font-size: 1.02rem; }
+/* v4.5.0: sayaç — uzun kademeler metninin yerini alır */
+.final-counter { max-width: 26rem; margin: 0 auto 1.1rem; }
+.final-count-row { display: flex; align-items: baseline; justify-content: center; gap: 0.5rem; flex-wrap: wrap; }
+.final-count {
+  font-family: var(--font-display);
+  font-size: 2.7rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--teal);
+  text-shadow: 0 0 24px rgba(0, 209, 178, 0.4);
+  font-variant-numeric: tabular-nums;
+}
+.final-count-label { font-size: 0.95rem; font-weight: 600; color: var(--text-dim); }
+.final-bar {
+  height: 12px;
+  margin-top: 0.6rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.final-bar-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--teal), var(--accent));
+  box-shadow: 0 0 14px rgba(0, 209, 178, 0.5);
+  transition: width 0.35s ease;
+}
+.final-note { margin: 0.55rem 0 0; font-size: 0.8rem; color: var(--text-dim); }
+@media (prefers-reduced-motion: reduce) { .final-bar-fill { transition: none !important; } }
 
 @media (max-width: 640px) {
   .landing-cta { padding: 0.9rem 0.8rem; }
   .launch-amount { font-size: 2.6rem; }
   .launch-actions .btn { width: 100%; }
   .feat-grid { grid-template-columns: 1fr; }
+  .final-count { font-size: 2.2rem; }
 }
 .wall-social { display: flex; gap: 0.4rem; margin-top: 0.55rem; flex-wrap: wrap; }
 .wall-act {

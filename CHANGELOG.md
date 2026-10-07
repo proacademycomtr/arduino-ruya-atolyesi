@@ -1,6 +1,12 @@
 # Changelog
 
 Bu dosya `build.py` tarafından otomatik güncellenir.
+## [4.5.0] - 2026-10-06
+
+- Değişti: **Landing'de uzun kademeler metni kaldırıldı, yerine sayaç geldi** — özellik kartlarının altındaki "İlk 1000 kişi ücretsiz…" paragrafı yerine büyük **sayaç + 1000 kişilik kontenjan barı**. Sayaç **önce 1000'e kadar çıkar**, sonra kayıt olan kişi sayısı kadar azalarak **kalan yerde** durur; bar aynı anda dolu. Efekt bölüm ekrana girince başlar (`prefers-reduced-motion` ile anında son değer). Sunucu yoksa `used=0` (demo'da kayıt toplanmaz) — uydurma sayı yok. Bar hedefi `pricing.freeLimit` (1000)
+- Değişti: **Rehberin altındaki "🔄 Yeni Fikir Dene"** giriş yapmayan (demo) kullanıcıda artık **"🎁 Ücretsiz Üye Ol"** — rehber sonu pazarlama çıkışına dönüşür; üyede eskisi gibi "yeni fikir" kalır
+- Sürüm 4.5.0 olarak derlendi.
+
 ## [4.4.1] - 2026-10-06
 
 - Düzeltme: **Tanımsız CSS değişkenleri yüzünden şeffaf arayüz** — `--card`, `--accent`, `--brand`, `--code-bg`, `--shadow-sm` hiçbir yerde tanımlanmamıştı; tarayıcı geçersiz bildirimi tüm kuralı yok sayıyordu. Etkilenen: **doluluk barının dolgusu** (`linear-gradient` `none`'a düşüyordu), 8 özellik kartı, hero değer şeridi çipleri, topluluk duvarı kartları/sekmeleri ve **hamburger menü paneli** (hero metni panelin içinden görünüyordu). Değişkenler karanlık ve açık temada `:root`'a tanımlandı

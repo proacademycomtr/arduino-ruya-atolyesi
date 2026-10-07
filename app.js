@@ -2709,7 +2709,11 @@ function renderGuide(g, idea) {
     <pre class="code-block"><code id="${codeId}">${highlightArduino(g.code || "// Kod üretilemedi")}</code></pre>
 
     <div class="regenerate-row">
-      <button class="btn btn-primary" onclick="window.scrollTo({top:0,behavior:'smooth'}); setTimeout(()=>document.getElementById('ideaInput').focus(),600)"      type="button">${t("🔄 Yeni Fikir Dene")}</button>
+      ${isSignedIn()
+        ? `<button class="btn btn-primary" onclick="window.scrollTo({top:0,behavior:'smooth'}); setTimeout(()=>document.getElementById('ideaInput').focus(),600)" type="button">${t("🔄 Yeni Fikir Dene")}</button>`
+        // v4.5.0: giriş yapmayan (demo) kullanıcıda dönüşüm butonu — rehberin
+        // altı pazarlama çıkışına dönüşür, "yeni fikir" yerine Üye Ol basılır.
+        : `<button class="btn btn-primary" onclick="openJoinModal()" type="button">${t("🎁 Ücretsiz Üye Ol")}</button>`}
     </div>
   `;
 
@@ -5502,10 +5506,6 @@ function applyLang(lang) {
   if (hs) hs.innerHTML = en
     ? 'Robot arm, smart greenhouse, line-following car… Describe your Arduino idea in one sentence. We\'ll prepare your <strong>materials list</strong>, <strong>circuit wiring</strong>, <strong>step-by-step build guide</strong> and <strong>working code</strong>.'
     : 'Robot kol, akıllı sera, çizgi izleyen araç… Aklındaki Arduino projesini tek cümleyle anlat. Sana <strong>malzeme listesi</strong>, <strong>devre bağlantıları</strong>, <strong>adım adım yapım rehberi</strong> ve <strong>çalışan kod</strong> hazırlayalım.';
-  const lf = $("landingFinalText");
-  if (lf) lf.innerHTML = en
-    ? 'First 1000 people <strong>free</strong>, next 1000 people <strong>$1</strong> for life. Join today — grab your spot before the quota fills.'
-    : 'İlk 1000 kişi <strong>ücretsiz</strong>, sonraki 1000 kişi <strong>$1</strong> ömür boyu. Bugün katıl, kontenjan dolmadan yerini al.';
   const sd = $("settingsDesc");
   if (sd) sd.innerHTML = en
     ? 'For live AI responses, enter an API key. The key is stored <strong>only in this browser</strong> and never sent to any server.'
@@ -6962,6 +6962,95 @@ function renderMenuLocks() {
  * Bar, kontenjanın ne kadar dolduğunu gösterir (teşvik amaçlı).
  * Sunucu yoksa varsayılan olarak ücretsiz kademe gösterilir.
  */
+/* ────────── v4.5.0: Landing sayaç + 1000 kişilik bar ──────────
+   Uzun kademeler metninin yerine: sayaç ÖNCE hedefe (1000) kadar çıkar,
+   SONRA kayıt olan kişi sayısı kadar azalarak kalan yerde durur; bar aynı
+   anda dolar. Sunucu yoksa used=0'dır (demo'da kayıt toplanmaz) — uydurma
+   sayı gösterilmez. */
+let finalCounterRun = 0;
+let finalCounterRaf = 0;
+let finalCounterIo = null;
+function renderFinalCounter() {
+  const box = $("finalCounter");
+  if (!box) return;
+  const en = getLang() === "en";
+  const p = (memberState.health && memberState.health.pricing) || {};
+  const target = Number.isFinite(p.freeLimit) && p.freeLimit > 0 ? p.freeLimit : 1000;
+  const used = Number.isFinite(p.used) ? Math.max(0, Math.min(p.used, target)) : 0;
+  const remaining = target - used;
+  const loc = en ? "en-US" : "tr-TR";
+  const fmt = (v) => Math.round(v).toLocaleString(loc);
+  const pct = target > 0 ? (used > 0 ? Math.max(2, (used / target) * 100) : 0) : 0;
+
+  const label = $("finalCountLabel");
+  if (label) label.textContent = en ? "free spots left" : "ücretsiz yer kaldı";
+  const note = $("finalNote");
+  if (note) note.textContent = en
+    ? `First ${fmt(target)} people are free — the bar fills as members join.`
+    : `İlk ${fmt(target)} kişi ücretsiz — kayıt oldukça bar doluyor.`;
+  const bar = $("finalBar");
+  if (bar) {
+    bar.setAttribute("aria-valuemax", String(target));
+    bar.setAttribute("aria-valuenow", String(used));
+    bar.setAttribute("aria-label", en ? "Free quota fill" : "Ücretsiz kontenjan doluluğu");
+  }
+  const num = $("finalCount");
+  const fill = $("finalBarFill");
+  const settle = () => {
+    if (num) num.textContent = fmt(remaining);
+    if (fill) fill.style.width = pct + "%";
+  };
+  // Önce son durum yazılır (test/sandbox için), efekt aşağıda BAŞTAN oynar.
+  settle();
+
+  const reduced = typeof matchMedia === "function" &&
+    matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduced || typeof requestAnimationFrame !== "function") return;
+  const run = ++finalCounterRun;
+  if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(finalCounterRaf);
+  if (finalCounterIo) { try { finalCounterIo.disconnect(); } catch (_) { /* yoksay */ } finalCounterIo = null; }
+  const now = () => (typeof performance !== "undefined" && performance && performance.now)
+    ? performance.now() : Date.now();
+  const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+  const upMs = 1100, downMs = 750, t0 = now();
+  const step = () => {
+    if (run !== finalCounterRun) return; // yeni render eski animasyonu iptal etti
+    const el = now() - t0;
+    if (el < upMs) {
+      if (num) num.textContent = fmt(target * easeOut(el / upMs));
+      finalCounterRaf = requestAnimationFrame(step);
+      return;
+    }
+    const d = el - upMs;
+    if (d < downMs) {
+      const k = easeOut(d / downMs);
+      if (num) num.textContent = fmt(target + (remaining - target) * k);
+      if (fill) fill.style.width = (pct * k) + "%";
+      finalCounterRaf = requestAnimationFrame(step);
+      return;
+    }
+    settle();
+  };
+  const start = () => {
+    if (run !== finalCounterRun) return;
+    if (num) num.textContent = "0";
+    if (fill) fill.style.width = "0%";
+    finalCounterRaf = requestAnimationFrame(step);
+  };
+  // Bölüm sayfa ilk açılışta ekranın altında kalır; efekt GÖRÜNÜR olunca başlasın.
+  if (typeof IntersectionObserver === "function" && typeof box.getBoundingClientRect === "function") {
+    const r = box.getBoundingClientRect();
+    if (!r || r.bottom < 0 || r.top > (window.innerHeight || 0)) {
+      finalCounterIo = new IntersectionObserver((ents) => {
+        if (ents.some((e) => e.isIntersecting)) { finalCounterIo = null; start(); }
+      }, { threshold: 0.4 });
+      finalCounterIo.observe(box);
+      return;
+    }
+  }
+  start();
+}
+
 function renderLaunchPrice() {
   const en = getLang() === "en";
   const p = (memberState.health && memberState.health.pricing) || {};
@@ -7038,6 +7127,9 @@ function renderLaunchPrice() {
         : (en ? `One-time ${money(p.lifetimeCents)} for life` : `Tek seferlik ${money(p.lifetimeCents)} ömür boyu`);
     }
   }
+
+  // ── v4.5.0: landing sayaç + bar (metnin yerine) ──
+  renderFinalCounter();
 }
 
 /** "Üye Ol" → doğrudan üyelik penceresi (kampanyalı). */
