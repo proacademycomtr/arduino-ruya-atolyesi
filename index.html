@@ -9344,7 +9344,12 @@ function renderFinalCounter() {
   const now = () => (typeof performance !== "undefined" && performance && performance.now)
     ? performance.now() : Date.now();
   const easeOut = (x) => 1 - Math.pow(1 - x, 3);
-  const upMs = 1100, downMs = 750, t0 = now();
+  // t0 render anında DEĞİL start() içinde alınır: bölüm ekrana görünür olunca
+  // (IntersectionObserver) başlayan efekt, o andan itibaren oynamalı. Eskiden
+  // t0 render'da sabitleniyordu; kullanıcı sayfayı ~2 sn sonra kaydırınca
+  // upMs+downMs dolmuş oluyor ve sayaç hiç oynamadan son değere atlıyordu.
+  const upMs = 1100, downMs = 750;
+  let t0 = 0;
   const step = () => {
     if (run !== finalCounterRun) return; // yeni render eski animasyonu iptal etti
     const el = now() - t0;
@@ -9365,6 +9370,7 @@ function renderFinalCounter() {
   };
   const start = () => {
     if (run !== finalCounterRun) return;
+    t0 = now();
     if (num) num.textContent = "0";
     if (fill) fill.style.width = "0%";
     finalCounterRaf = requestAnimationFrame(step);
@@ -9374,7 +9380,12 @@ function renderFinalCounter() {
     const r = box.getBoundingClientRect();
     if (!r || r.bottom < 0 || r.top > (window.innerHeight || 0)) {
       finalCounterIo = new IntersectionObserver((ents) => {
-        if (ents.some((e) => e.isIntersecting)) { finalCounterIo = null; start(); }
+        if (ents.some((e) => e.isIntersecting)) {
+          // yalnız bir kez oynasın: çıkıp girince tekrarlanmasın
+          try { finalCounterIo.disconnect(); } catch (_) { /* yoksay */ }
+          finalCounterIo = null;
+          start();
+        }
       }, { threshold: 0.4 });
       finalCounterIo.observe(box);
       return;
