@@ -5095,6 +5095,32 @@ const I18N = {
     "Ücretsiz Üye Ol": "Sign up free",
     "Hesabımı Oluştur": "Create my account",
     "Çıkış Yap": "Sign out",
+    "Panelim": "Dashboard",
+    "Panele girmek için giriş yap.": "Log in to open your dashboard.",
+    "Panel yükleniyor…": "Loading dashboard…",
+    "Profilim": "My profile",
+    "Üyelik": "Membership",
+    "Üyelik durumu": "Membership status",
+    "Üye olma:": "Member since:",
+    "kalan ücretsiz proje hakkı": "free project passes left",
+    "Ücretsiz kontenjan doluluğu": "Free quota usage",
+    "yer kaldı": "spots left",
+    "Paylaşımlarım": "My shares",
+    "paylaşılan proje": "shared projects",
+    "beğeni": "likes",
+    "yorum": "comments",
+    "Arşivim & Başarımlarım": "My archive & achievements",
+    "arşivde proje": "projects in archive",
+    "rozet": "badges",
+    "Profili Aç": "Open profile",
+    "Duvarı Aç": "Open wall",
+    "Yeni Proje": "New project",
+    "Arşivi Aç": "Open archive",
+    "Başarımları Aç": "Open achievements",
+    "Kısayollar": "Shortcuts",
+    "Ayarlar": "Settings",
+    "Yeni fikir üret, ayarları düzenle, kaldığın yerden devam et.": "Generate a new idea, tweak settings, and pick up where you left off.",
+    "Üyeliğe Geç": "Upgrade",
     "Görünen ad": "Display name",
     "örn. Deniz Arduino": "e.g. Deniz Arduino",
     "E-posta": "Email",
@@ -5569,6 +5595,10 @@ langToggle.addEventListener("click", () => {
   // zamanında çağrılır — applyLang'in ilk (init) çağrısı memberState'ten
   // önce çalışır ve o an fiyat çizilemez (TDZ).
   renderLaunchPrice();
+  // v4.6.0: üye paneli açıkken içerik t() ile üretilir; statik sözlük yalnız
+  // birebir metin eşleşmesi yaptığı için panel dil değişince YENİDEN çizilir.
+  const dashEl = $("dashModal");
+  if (dashEl && !dashEl.hidden) renderDash(memberState.dashProfile || null);
 });
 
 /* ───────────────────── Sürüm Rozeti + Changelog Modalı ───────────────────── */
@@ -7430,6 +7460,7 @@ function renderAuthModal(message) {
     ${authStatusLine()}
     <div class="auth-actions">
       <button class="btn btn-ghost" id="authProfile" type="button">🧑‍🚀 ${esc(t("Profilim"))}</button>
+      <button class="btn btn-ghost" id="authDashboard" type="button">📊 ${esc(t("Panelim"))}</button>
       ${isMember() ? "" : `<button class="btn btn-primary" id="authUpgrade" type="button">💳 ${esc(t("Üyeliğe Geç — ") + priceLabel())}</button>`}
       <button class="btn btn-ghost" id="authLogout" type="button">${esc(t("Çıkış Yap"))}</button>
     </div>
@@ -7441,6 +7472,12 @@ function renderAuthModal(message) {
     const m = $("authModal");
     if (m) m.hidden = true;
     if (memberState.user) openProfile(memberState.user.handle);
+  });
+  const dash = $("authDashboard");
+  if (dash) dash.addEventListener("click", () => {
+    const m = $("authModal");
+    if (m) m.hidden = true;
+    openDashPanel();
   });
   const up = $("authUpgrade");
   if (up) up.addEventListener("click", startCheckout);
@@ -8093,6 +8130,153 @@ async function toggleFollow(btn) {
   }
 }
 
+/* ───────────────────── Üye paneli — dashboard (v4.6.0) ───────────────────── */
+
+/** Kademe etiketi — saf (test edilebilir). */
+function dashTierLabel(tier, en) {
+  if (tier === "LIFETIME") return en ? "💎 Lifetime ($1 once)" : "💎 Ömür boyu ($1 tek sefer)";
+  if (tier === "MONTHLY") return en ? "🔁 Monthly ($1/mo)" : "🔁 Aylık ($1/ay)";
+  return en ? "🎟️ Free" : "🎟️ Ücretsiz";
+}
+
+/**
+ * Kontenjan hesabı — saf (test edilebilir).
+ * Hedef: pricing.freeLimit (yoksa 1000), kullanılan [0, target] kırpılır,
+ * kalan = hedef - kullanılan. Doluluk yüzdesi: kullanımda yoksa %0 (uydurma
+ * yok); kullanımda olan çubuğun sıfırlanıp kaybolmaması için en az %2.
+ */
+function dashQuota(pricing) {
+  const p = pricing || {};
+  const target = Number.isFinite(p.freeLimit) && p.freeLimit > 0 ? p.freeLimit : 1000;
+  const used = Number.isFinite(p.used) ? Math.max(0, Math.min(p.used, target)) : 0;
+  const pct = used > 0 ? Math.max(2, Math.round((used / target) * 100)) : 0;
+  return { target, used, remaining: Math.max(0, target - used), pct };
+}
+
+/**
+ * Paneli açar (👤 Üyelik penceresindeki “📊 Panelim”).
+ * Sunucu yoksa ya da giriş yoksa mesajla karşılar; veri toplama hatalarında
+ * panel yine açılır (eksik kartlarla), sayfa çalışmaya devam eder.
+ */
+async function openDashPanel() {
+  if (!memberState.apiAvailable || !memberState.user) {
+    openAuthModal(t("Panele girmek için giriş yap."));
+    return;
+  }
+  const m = $("dashModal");
+  const body = $("dashBody");
+  if (!m || !body) return;
+  body.innerHTML = `<p class="field-hint">${esc(t("Panel yükleniyor…"))}</p>`;
+  m.hidden = false;
+  let profile = null;
+  try {
+    profile = await apiFetch("/api/users/" + encodeURIComponent(memberState.user.handle));
+  } catch (e) { /* profil çekilemezse panel eksik kartlarla açılır */ }
+  memberState.dashProfile = profile;
+  renderDash(profile);
+}
+
+/** Panelin 5 kartını çizer — üyelik, profil, paylaşımlar, yerel veri, kısayollar. */
+function renderDash(profile) {
+  const body = $("dashBody");
+  const u = memberState.user;
+  if (!body || !u) return;
+
+  const en = getLang() === "en";
+  const pricing = (memberState.health && memberState.health.pricing) || {};
+  const q = dashQuota(pricing);
+  const membership = memberState.membership || null;
+  const tier = (membership && membership.plan) || pricing.tier || "FREE";
+  const member = isMember();
+  const passes = Number.isFinite(u.freePasses) ? u.freePasses : (Number(memberState.freePasses) || 0);
+
+  const pu = (profile && profile.user) || u;
+  const shares = (profile && profile.projects) || [];
+  const likes = shares.reduce((s, x) => s + (Number(x.likeCount) || 0), 0);
+  const comments = shares.reduce((s, x) => s + (Number(x.commentCount) || 0), 0);
+  const shareCount = Number.isFinite(pu.projectCount) ? pu.projectCount : shares.length;
+  const archive = loadArchive();
+  const badges = loadBadges();
+  const joined = pu.createdAt ? new Date(pu.createdAt).toLocaleDateString(en ? "en-US" : "tr-TR") : "";
+
+  body.innerHTML = `
+    <div class="dash-grid">
+      <section class="dash-card">
+        <h3>🧑‍🚀 ${esc(t("Profilim"))}</h3>
+        <div class="dash-profile">
+          <div class="profile-avatar">${pu.avatarUrl ? `<img src="${esc(pu.avatarUrl)}" alt="" />` : "🧑‍🚀"}</div>
+          <div class="dash-id">
+            <p class="dash-name">${esc(pu.displayName || u.handle)}</p>
+            <p class="dash-handle">@${esc(u.handle)}</p>
+            ${joined ? `<p class="field-hint">${esc(t("Üye olma:"))} ${esc(joined)}</p>` : ""}
+          </div>
+        </div>
+        <div class="dash-btns">
+          <button class="btn btn-ghost btn-small" id="dashProfileBtn" type="button">${esc(t("Profili Aç"))}</button>
+          <button class="btn btn-ghost btn-small" id="dashLogoutBtn" type="button">${esc(t("Çıkış Yap"))}</button>
+        </div>
+      </section>
+
+      <section class="dash-card">
+        <h3>🎟️ ${esc(t("Üyelik"))}</h3>
+        <p class="dash-tier">${esc(dashTierLabel(tier, en))}</p>
+        <p class="dash-stat"><strong>${passes}</strong> ${esc(t("kalan ücretsiz proje hakkı"))}</p>
+        <div class="final-bar dash-bar" role="progressbar" aria-valuemin="0"
+             aria-valuemax="${q.target}" aria-valuenow="${q.used}"
+             aria-label="${esc(t("Ücretsiz kontenjan doluluğu"))}">
+          <div class="final-bar-fill" style="width:${q.pct}%"></div>
+        </div>
+        <p class="field-hint">${q.used}/${q.target} · ${q.remaining} ${esc(t("yer kaldı"))}</p>
+        ${member ? "" : `<button class="btn btn-primary btn-small" id="dashUpgradeBtn" type="button">💳 ${esc(t("Üyeliğe Geç"))} — ${esc(priceLabel())}</button>`}
+      </section>
+
+      <section class="dash-card">
+        <h3>🌍 ${esc(t("Paylaşımlarım"))}</h3>
+        <p class="dash-stat"><strong>${shareCount}</strong> ${esc(t("paylaşılan proje"))}</p>
+        <p class="dash-stat">❤️ <strong>${likes}</strong> ${esc(t("beğeni"))} · 💬 <strong>${comments}</strong> ${esc(t("yorum"))}</p>
+        <div class="dash-btns">
+          <button class="btn btn-ghost btn-small" id="dashWallBtn" type="button">${esc(t("Duvarı Aç"))}</button>
+          <button class="btn btn-ghost btn-small" id="dashNewShareBtn" type="button">${esc(t("Yeni Proje"))}</button>
+        </div>
+      </section>
+
+      <section class="dash-card">
+        <h3>🗂️ ${esc(t("Arşivim & Başarımlarım"))}</h3>
+        <p class="dash-stat"><strong>${archive.length}</strong> ${esc(t("arşivde proje"))}</p>
+        <p class="dash-stat">🏅 <strong>${badges.length}</strong> ${esc(t("rozet"))}</p>
+        <div class="dash-btns">
+          <button class="btn btn-ghost btn-small" id="dashArchiveBtn" type="button">${esc(t("Arşivi Aç"))}</button>
+          <button class="btn btn-ghost btn-small" id="dashBadgesBtn" type="button">${esc(t("Başarımları Aç"))}</button>
+        </div>
+      </section>
+
+      <section class="dash-card">
+        <h3>⚡ ${esc(t("Kısayollar"))}</h3>
+        <div class="dash-btns dash-shortcuts">
+          <button class="btn btn-primary btn-small" id="dashNewBtn" type="button">✨ ${esc(t("Yeni Proje"))}</button>
+          <button class="btn btn-ghost btn-small" id="dashSettingsBtn" type="button">⚙️ ${esc(t("Ayarlar"))}</button>
+        </div>
+        <p class="field-hint">${esc(t("Yeni fikir üret, ayarları düzenle, kaldığın yerden devam et."))}</p>
+      </section>
+    </div>`;
+
+  const wire = (id, fn) => { const el = $(id); if (el) el.addEventListener("click", fn); };
+  const close = () => { const m = $("dashModal"); if (m) m.hidden = true; };
+  wire("dashProfileBtn", () => { close(); openProfile(u.handle); });
+  wire("dashWallBtn", () => { close(); openWall(); });
+  wire("dashArchiveBtn", () => { close(); openArchiveModal(); });
+  wire("dashBadgesBtn", () => { close(); openBadgesModal(); });
+  wire("dashUpgradeBtn", () => { close(); startCheckout(); });
+  wire("dashLogoutBtn", () => { close(); doLogout(); });
+  wire("dashNewShareBtn", () => { close(); openShareModal(); });
+  wire("dashNewBtn", () => {
+    close();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setTimeout(() => { const el = $("ideaInput"); if (el) el.focus(); }, 600);
+  });
+  wire("dashSettingsBtn", () => { close(); const s = $("openSettings"); if (s) s.click(); });
+}
+
 /* ───────────────────── Şikâyet (raporlama) ───────────────────── */
 /** Gerekçe seçenekleri — sunucu da aynı listeyi doğrular. */
 const REPORT_REASONS = [
@@ -8258,6 +8442,7 @@ async function removeAvatar() {
 
 /* ───────────────────── Başlatma ───────────────────── */
 wireModal("authModal", "closeAuth");
+wireModal("dashModal", "closeDash");
 wireModal("paywallModal", "closePaywall");
 wireModal("wallModal", "closeWall", () => {
   const more = $("wallMore");

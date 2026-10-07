@@ -159,7 +159,9 @@ function loadCore() {
     "filterArchiveItems", "weeklyParticipationDetail",
     "weeklyBarsData", "panelWeeklySVG", "activeClassCode", "setActiveClassCode", "classSubs", "sortArchiveItems",
     "compareClasses", "classMetrics", "compareTableHTML", "compareBarsHTML", "classMetricValue", "studentTimeline", "timelineSummary", "groupSubsByClass", "archivePreviewData",
-    "buildAmbientPlan", "nextAmbientStep", "markAmbientStep", "orderPortfolioCerts"
+    "buildAmbientPlan", "nextAmbientStep", "markAmbientStep", "orderPortfolioCerts",
+    // v4.6.0 — üye paneli (dashboard)
+    "dashQuota", "dashTierLabel"
   ];
   // Sanal ortamda app.js tümüyle çalıştı; örneklemesi gerekenler const/let ise
   // ayrıca değerlendir. window üzerinde export edilenler zaten sandbox'ta.

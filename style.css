@@ -1729,6 +1729,22 @@ html[data-theme="light"] .occupancy-label { color: #4a5568; }
 .share-actions { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
 .wall-share-btn { border-style: dashed; }
 
+/* ────────── Üye paneli (v4.6.0) ────────── */
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.9rem; }
+.dash-card { background: var(--card); border: 1px solid var(--border); border-radius: 0.8rem; padding: 1rem; }
+.dash-card h3 { margin: 0 0 0.6rem; font-size: 1rem; }
+.dash-profile { display: flex; gap: 0.7rem; align-items: center; }
+.dash-profile .profile-avatar { width: 3.2rem; height: 3.2rem; font-size: 1.6rem; }
+.dash-id { min-width: 0; }
+.dash-name { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+.dash-handle { margin: 0.1rem 0 0; font-size: 0.85rem; color: var(--text-dim); }
+.dash-tier { margin: 0.1rem 0 0.5rem; font-size: 1.1rem; font-weight: 700; color: var(--accent); }
+.dash-stat { margin: 0.35rem 0; font-size: 0.9rem; color: var(--text-dim); }
+.dash-stat strong { color: var(--text); font-size: 1.15rem; }
+.dash-bar { margin-top: 0.5rem; }
+.dash-btns { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.7rem; }
+.dash-shortcuts { margin-top: 0.2rem; }
+
 @media (max-width: 900px) {
   .modal-wide { max-width: 100%; }
 }
